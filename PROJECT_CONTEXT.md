@@ -8,7 +8,7 @@
 - **Posición:** Proyecto 3 de 5 del portfolio Cloud, DevOps y SRE:
   - *Proyecto 1 (AI Inventory Tracker):* EKS, Go, DynamoDB Streams, ArgoCD GitOps, GitLab CI.
   - *Proyecto 2 (Automated Backup System):* AWS Backup Vault Lock (WORM), RDS, S3, EventBridge, GitHub Actions.
-  - *Proyecto 3 (Customer Inquiry Manager):* ECS Fargate Spot, RDS PostgreSQL, Amazon Bedrock (Converse API), S3 Multi-Tier Lifecycle, AWS PrivateLink (Zero-Internet Egress), AWS X-Ray, CloudWatch SLI/SLO, AWS CodePipeline/CodeBuild/CodeDeploy y Terraform modular.
+  - *Proyecto 3 (Customer Inquiry Manager):* ECS Fargate Spot, RDS PostgreSQL, Amazon Bedrock (Converse API), Amazon Cognito (Enforced TOTP MFA & RBAC), S3 Multi-Tier Lifecycle, AWS PrivateLink (Zero-Internet Egress), AWS X-Ray, CloudWatch SLI/SLO, AWS CodePipeline/CodeBuild/CodeDeploy y Terraform modular.
 
 ---
 
@@ -29,6 +29,11 @@
 5. **Separación Estricta de Roles IAM:**
    - *Task Execution Role:* Utilizado por el agente de ECS para inicializar el contenedor (descargar imágenes de ECR, autenticarse y escribir logs iniciales en CloudWatch).
    - *Task Role:* Utilizado por el código de la aplicación FastAPI dentro del contenedor (invocar Amazon Bedrock, escribir en S3, emitir métricas a CloudWatch y trazas a X-Ray).
+6. **Autenticación Empresarial Zero-Trust con MFA Forzado (Coste 0.00 €):**
+   - El acceso a la consola de operaciones y a los endpoints administrativos exige obligatoriamente **Amazon Cognito User Pools** con **MFA por Software Token (TOTP)** configurado en modo estricto (`mfa_configuration = "ON"`).
+   - Queda terminantemente prohibido el uso de SMS para MFA para evitar costes de telecomunicaciones y ataques de SIM swapping. TOTP opera bajo RFC 6238 a coste 0.00 € (incluido en las 50.000 MAUs del Free Tier).
+   - Control de Acceso Basado en Roles (**RBAC**): separación estricta entre `Tier1_Agents` (resolución y aprobación de sugerencias) y `Operations_Managers` (auditoría, reasignación y métricas de SLA).
+   - Tokens JWT (RS256) validados en memoria por FastAPI contra el JWKS de Cognito para latencias < 1 ms.
 
 ---
 
@@ -76,6 +81,27 @@ No se utiliza una única clase para todo. Se aplican reglas de ciclo de vida aut
 - **Consola 2025/2026:** En la consola moderna de Bedrock (`eu-west-1`), los modelos serverless tienen acceso habilitado automáticamente; no se requiere el formulario antiguo de "Request Model Access".
 - **Método de invocación:** API `converse()` enviando un `system prompt` estructurado y un esquema JSON forzado para extracción determinista (categoría, prioridad, urgencia [1-5], sentimiento, respuesta sugerida).
 
+#### G. Seguridad e Identidad: Amazon Cognito con MFA por Software Token (TOTP) Obligatorio
+- **Free Tier y FinOps:** 50.000 MAUs gratuitas de por vida (coste 0.00 €).
+- **MFA Enforced (`mfa_configuration = "ON"`):** Software Token (TOTP - RFC 6238) compatible con Google Authenticator, Microsoft Authenticator y 1Password. Cero llamadas o cargos de SMS/telecomunicaciones vía SNS.
+- **Flujo Criptográfico:**
+  - Desafío `SOFTWARE_TOKEN_MFA` tras autenticación inicial.
+  - Generación de secreto TOTP y código QR en el enrolamiento.
+  - Emisión de tokens JWT estándar (RS256) con claims de rol y expiración corta (1 hora).
+- **RBAC:** Grupos `Tier1_Agents` y `Operations_Managers`.
+- **Auditoría Human-in-the-Loop (HITL):** Cada aprobación o modificación de tickets persiste el `cognito_sub` del agente en PostgreSQL para trazabilidad completa.
+
+#### H. Consola Operativa: Enterprise Agent Triage Console (React 18/19 Vite)
+- **Naturaleza del Frontend:** Herramienta interna de alta densidad operativa construida con **React 18/19 (Vite)** (el estándar del 80%+ del mercado para consolas y backoffices).
+- **Patrón Single-Pass Production Asset:** Compilación en la fase 1 del Dockerfile (Node.js 20) y copiado de los estáticos resultantes a `/app/static/` en la fase 2 (`python:3.12-slim`). En producción en Fargate se ejecuta con **0 MB de sobrecoste de Node.js en runtime**.
+- **Diseño & UX:** Dark mode corporativo de alta densidad (estilo Linear/Datadog), badges cromáticos por severidad (P1 rojo, P2 ámbar, P3 azul, P4 verde), temporizadores regresivos en vivo de SLA y modal de enrolamiento TOTP con código QR.
+- **Funcionalidades Clave:**
+  - Login con desafío TOTP MFA (6 dígitos).
+  - Bandeja reactiva de tickets filtrable con ordenación por criticidad y cuenta regresiva de SLA.
+  - Vista dividida: detalles del cliente, análisis de sentimiento, detección de frustración, entidades detectadas y borrador de IA.
+  - Reclamo atómico de tickets con control de concurrencia optimista (evita colisiones entre agentes).
+  - Aprobación y edición del borrador en 1 clic (*Human-in-the-Loop*).
+
 ---
 
 ### 4. Estructura de Directorios del Repositorio
@@ -89,29 +115,44 @@ customer-inquiry-manager/
 │   ├── api/
 │   │   ├── v1/
 │   │   │   ├── endpoints/
-│   │   │   │   ├── inquiries.py      # POST /inquiries, GET /inquiries, PATCH
-│   │   │   │   └── attachments.py    # Presigned URLs y subida
+│   │   │   │   ├── auth.py           # Login, TOTP MFA challenge, verify y refresh
+│   │   │   │   ├── inquiries.py      # POST /inquiries, GET /inquiries, PATCH claim/resolve
+│   │   │   │   └── attachments.py    # Presigned URLs y subida S3
 │   │   │   └── router.py
 │   │   └── health.py                 # /health/live, /health/ready
 │   ├── core/
 │   │   ├── config.py                 # Pydantic BaseSettings
-│   │   ├── database.py               # SQLAlchemy async engine & sessionmaker
+│   │   ├── database.py               # SQLAlchemy async engine & sessionmaker (asyncpg)
+│   │   ├── security.py               # Verificación JWT Cognito (JWKS RS256) & RBAC
 │   │   └── telemetry.py              # X-Ray & CloudWatch EMF setup
-│   ├── models/                       # Modelos ORM SQLAlchemy
+│   ├── models/                       # Modelos ORM SQLAlchemy (JSONB + GIN)
 │   │   ├── inquiry.py
 │   │   └── audit.py
 │   ├── schemas/                      # Esquemas Pydantic v2
+│   │   ├── auth.py                   # Esquemas login, MFA y tokens
 │   │   ├── inquiry.py
 │   │   └── bedrock.py                # Schema forzado para la respuesta del LLM
 │   ├── services/                     # Lógica de negocio
-│   │   ├── bedrock_service.py        # Boto3 Bedrock Converse integration
+│   │   ├── bedrock_service.py        # Boto3 Bedrock Converse integration + Grounding
+│   │   ├── cognito_service.py        # Boto3 Cognito Admin & Auth integration
 │   │   └── s3_service.py             # Boto3 S3 upload & presigned URLs
 │   ├── tests/
 │   │   ├── test_inquiries.py
-│   │   └── test_bedrock_schema.py
-│   ├── Dockerfile                    # Multi-stage build (distroless/slim)
-│   ├── buildspec.yml                 # AWS CodeBuild (test + semgrep + trivy + docker build)
+│   │   ├── test_bedrock_schema.py
+│   │   └── test_auth.py
+│   ├── buildspec.yml                 # AWS CodeBuild (pytest + semgrep + trivy + docker build)
 │   └── requirements.txt
+├── frontend/                         # Consola de Operaciones React (Vite)
+│   ├── src/
+│   │   ├── components/               # TicketQueue, TicketDetail, TOTPModal, SLATimer
+│   │   ├── services/                 # API client, Cognito auth
+│   │   ├── App.tsx
+│   │   └── main.tsx
+│   ├── index.html
+│   ├── vite.config.ts
+│   └── package.json
+├── company_profile.json              # Anclaje de contexto (Grounding) agnóstico
+├── Dockerfile                        # Multi-stage: Stage 1 Node.js build -> Stage 2 Python 3.12-slim
 ├── terraform/
 │   ├── environments/
 │   │   └── dev/
@@ -122,6 +163,7 @@ customer-inquiry-manager/
 │   └── modules/
 │       ├── vpc/                      # 3-tier subnets + VPC Endpoints
 │       ├── security_groups/          # Reglas mínimas necesarias
+│       ├── cognito/                  # User Pool, TOTP MFA, Client & RBAC Groups
 │       ├── rds/                      # RDS Postgres + native Secrets Manager
 │       ├── s3/                       # Buckets + Lifecycle + KMS
 │       ├── ecs/                      # Cluster, Fargate Spot Task (App + X-Ray)
@@ -130,7 +172,8 @@ customer-inquiry-manager/
 │       ├── monitoring/               # CloudWatch Dashboards & X-Ray
 │       └── cicd/                     # CodePipeline, CodeBuild, CodeDeploy
 ├── scripts/
-│   ├── seed_inquiries.py             # Script para simular carga y generar trazas
+│   ├── seed_inquiries.py             # Test harness omnicanal (HMAC Stripe/Trustpilot)
+│   ├── k6-load-test.js               # Pruebas de estrés y autoescalado (15-50 VUs)
 │   ├── deploy.sh                     # Pipeline trigger / Terraform apply
 │   └── destroy.sh                    # Teardown verificado a 0.00 €
 ├── LICENSE
