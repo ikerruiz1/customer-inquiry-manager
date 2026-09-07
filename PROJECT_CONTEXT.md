@@ -112,18 +112,18 @@ Amazon SNS handles outbound asynchronous fan-out strictly to two designated targ
 
 Every flow connects exactly one origin node to one destination node. Each block is allocated a **single, unified color** in Excalidraw. Cryptographic, policy, and background storage transitions are distinguished using **dashed lines**.
 
-| Block | Functional Domain | Unified Color | Excalidraw Hex | Flow Range |
-| :--- | :--- | :--- | :---: | :---: |
-| **Block 1** | IaC, Policy-as-Code Governance & Remote State | **Brown / Copper** | `#9A3412` | 1 – 5 |
-| **Block 2** | CI/CD & DevSecOps (SAST, SCA, SBOM) | **Orange** | `#EA580C` | 6 – 15 |
-| **Block 3** | Fargate Bootstrapping, Private Connectivity & DB | **Purple** | `#7C3AED` | 16 – 20 |
-| **Block 4** | Perimeter Ingress, DNS, WAF & Authentication | **Royal Blue** | `#2563EB` | 21 – 29 |
-| **Block 5** | AI Inference with Guardrails, Attachments & KMS | **Emerald Green** | `#059669` | 30 – 33 |
-| **Block 6** | Asynchronous Dispatch & ChatOps | **Magenta / Pink** | `#DB2777` | 34 – 36 |
-| **Block 7** | Human-in-the-Loop Operations & Audited Closure | **Teal / Turquoise** | `#0D9488` | 37 – 38 |
-| **Block 8** | Distributed Telemetry & Observability | **Salmon** | `#FA8072` | 39 – 43 |
-| **Block 9** | Storage FinOps & S3/Glacier Lifecycle | **White** | `#FFFFFF` | 44 – 46 |
-| **Block 10**| Resilience & Load Testing | **Light Brown** | `#D97706` | 47 |
+| Block        | Functional Domain                                | Unified Color        | Excalidraw Hex | Flow Range |
+| :----------- | :----------------------------------------------- | :------------------- | :------------: | :--------: |
+| **Block 1**  | IaC, Policy-as-Code Governance & Remote State    | **Brown / Copper**   |   `#9A3412`    |   1 – 5    |
+| **Block 2**  | CI/CD & DevSecOps (SAST, SCA, SBOM)              | **Orange**           |   `#EA580C`    |   6 – 15   |
+| **Block 3**  | Fargate Bootstrapping, Private Connectivity & DB | **Purple**           |   `#7C3AED`    |  16 – 20   |
+| **Block 4**  | Perimeter Ingress, DNS, WAF & Authentication     | **Royal Blue**       |   `#2563EB`    |  21 – 29   |
+| **Block 5**  | AI Inference with Guardrails, Attachments & KMS  | **Emerald Green**    |   `#059669`    |  30 – 33   |
+| **Block 6**  | Asynchronous Dispatch & ChatOps                  | **Magenta / Pink**   |   `#DB2777`    |  34 – 36   |
+| **Block 7**  | Human-in-the-Loop Operations & Audited Closure   | **Teal / Turquoise** |   `#0D9488`    |  37 – 38   |
+| **Block 8**  | Distributed Telemetry & Observability            | **Salmon**           |   `#FA8072`    |  39 – 43   |
+| **Block 9**  | Storage FinOps & S3/Glacier Lifecycle            | **White**            |   `#FFFFFF`    |  44 – 46   |
+| **Block 10** | Resilience & Load Testing                        | **Light Brown**      |   `#D97706`    |     47     |
 
 ---
 
