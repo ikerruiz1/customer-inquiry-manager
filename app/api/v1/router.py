@@ -1,6 +1,6 @@
 """API v1 master router assembling all domain endpoints."""
 from fastapi import APIRouter
-from app.api.v1.endpoints import inquiries, webhooks, auth, attachments
+from app.api.v1 import inquiries, webhooks, auth, attachments
 
 api_router = APIRouter()
 

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.api.v1.endpoints.inquiries import process_and_persist_inquiry
+from app.api.v1.inquiries import process_and_persist_inquiry
 from app.schemas.inquiry import InquiryCreate, InquiryResponse, ChannelEnum
 from app.services.bedrock_service import BedrockService, get_bedrock_service
 from app.services.sns_service import SNSService, get_sns_service

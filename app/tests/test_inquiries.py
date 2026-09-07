@@ -2,7 +2,7 @@
 import pytest
 from datetime import datetime, timezone
 from httpx import AsyncClient
-from app.api.v1.endpoints.inquiries import calculate_sla
+from app.api.v1.inquiries import calculate_sla
 
 
 def test_itil_sla_matrix_calculation():

@@ -24,28 +24,31 @@ An enterprise-grade, cloud-native customer inquiry ingestion, AI triage, and Hum
 customer-inquiry-manager/
 ├── app/                              # FastAPI Backend Application
 │   ├── api/v1/                       # API v1 Versioned Endpoints
-│   │   ├── endpoints/
-│   │   │   ├── auth.py               # Cognito login & TOTP MFA verification
-│   │   │   ├── inquiries.py          # Triage, priority queue, atomic claim, HITL resolve
-│   │   │   ├── webhooks.py           # Inbound Email, Form, Trustpilot, Google Reviews, Billing
-│   │   │   └── attachments.py        # S3 presigned upload & download URLs
-│   │   └── router.py                 # Master API v1 router aggregation
+│   │   ├── auth.py                   # Cognito login & TOTP MFA verification
+│   │   ├── inquiries.py              # Triage, priority queue, atomic claim, HITL resolve
+│   │   ├── webhooks.py               # Inbound Email, Form, Trustpilot, Google Reviews, Billing
+│   │   ├── attachments.py            # S3 presigned upload & download URLs
+│   │   ├── router.py                 # Router aggregation
+│   │   └── __init__.py               # Canonical API router export
 │   ├── core/                         # Core Configurations & Security
 │   │   ├── config.py                 # Pydantic Settings v2
 │   │   ├── database.py               # SQLAlchemy 2.0 async engine & sessionmaker
 │   │   ├── security.py               # Cognito RS256 JWKS & RBAC dependencies
 │   │   └── telemetry.py              # AWS X-Ray SDK & CloudWatch EMF metrics
 │   ├── models/                       # SQLAlchemy ORM Models
-│   │   └── inquiry.py                # Inquiry & AuditLog models with B-Tree and GIN indexes
+│   │   ├── inquiry.py                # Inquiry & AuditLog models with B-Tree and GIN indexes
+│   │   └── __init__.py               # Clean model re-exports
 │   ├── schemas/                      # Pydantic v2 Validation Schemas
 │   │   ├── auth.py                   # Login & TOTP challenge schemas
 │   │   ├── bedrock.py                # Strict Bedrock Converse extraction schema
-│   │   └── inquiry.py                # Inquiries, queues, and audit log schemas
+│   │   ├── inquiry.py                # Inquiries, queues, and audit log schemas
+│   │   └── __init__.py               # Clean schema re-exports
 │   ├── services/                     # AWS Service Adapters
 │   │   ├── bedrock_service.py        # Amazon Bedrock Converse API client & Guardrails
 │   │   ├── cognito_service.py        # Amazon Cognito TOTP authentication
 │   │   ├── s3_service.py             # S3 presigned URL generation
-│   │   └── sns_service.py            # Outbound SNS customer receipts & Ops alerts
+│   │   ├── sns_service.py            # Outbound SNS customer receipts & Ops alerts
+│   │   └── __init__.py               # Clean service re-exports
 │   ├── health.py                     # Container /health/live and /health/ready probes
 │   ├── main.py                       # FastAPI entrypoint, lifespan context & CORS
 │   └── tests/                        # Automated Pytest Suite (100% Pass Rate)
@@ -67,6 +70,9 @@ customer-inquiry-manager/
 │   └── package.json
 ├── static/                           # Embedded standalone operations dashboard
 │   └── index.html
+├── docs/                             # Authoritative Documentation & Decision Memory
+│   ├── PROJECT_CONTEXT.md            # 3-Tier topology blueprint & 47 chronological flows
+│   └── ARCHITECTURE_DECISIONS_AND_QA.md # Historical ledger of engineering debates & resolutions
 ├── company_profile.json              # Domain grounding document (ITIL matrix & refund policies)
 ├── Dockerfile                        # Multi-stage build: Node builder -> Python 3.12 runner
 ├── buildspec.yml                     # AWS CodeBuild spec (Pytest, Semgrep SAST, KICS, Trivy, Syft)
@@ -80,9 +86,8 @@ customer-inquiry-manager/
 │   ├── deploy-infra.sh               # 1-Click deployment bootstrap
 │   └── teardown-infra.sh             # 1-Click clean teardown (0.00 € residual cost)
 ├── requirements.txt                  # Locked Python dependencies
-├── AGENTS.md                         # Persistent workspace rules & directives
-├── ARCHITECTURE_DECISIONS_AND_QA.md  # Historical ledger of engineering debates & resolutions
-└── PROJECT_CONTEXT.md                # 3-Tier topology blueprint & 47 chronological flows
+├── LICENSE
+└── AGENTS.md                         # Persistent workspace rules & directives
 ```
 
 ---
