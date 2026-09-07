@@ -1,0 +1,110 @@
+# ==============================================================================
+# CloudWatch Monitoring, Alarms, Dashboards, and Outbound SNS Topics
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Outbound SNS Topics
+# ------------------------------------------------------------------------------
+resource "aws_sns_topic" "ticket_events" {
+  name = "${var.project_name}-${var.environment}-ticket-events"
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ticket-events"
+  }
+}
+
+resource "aws_sns_topic" "ops_alerts" {
+  name = "${var.project_name}-${var.environment}-ops-critical-alerts"
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-ops-alerts"
+  }
+}
+
+# ------------------------------------------------------------------------------
+# 2. CloudWatch Alarms
+# ------------------------------------------------------------------------------
+resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
+  alarm_name          = "${var.project_name}-${var.environment}-alb-high-5xx"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "HTTPCode_Target_5XX_Count"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 10
+  alarm_description   = "Triggered when ALB returns more than 10 5XX errors across 2 evaluation periods"
+  alarm_actions       = [aws_sns_topic.ops_alerts.arn]
+
+  dimensions = {
+    LoadBalancer = var.alb_arn_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
+  alarm_name          = "${var.project_name}-${var.environment}-ecs-cpu-high"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 3
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+  alarm_description   = "Triggers scaling or investigation when CPU utilization exceeds 80%"
+  alarm_actions       = [aws_sns_topic.ops_alerts.arn]
+
+  dimensions = {
+    ClusterName = var.ecs_cluster_name
+    ServiceName = var.ecs_service_name
+  }
+}
+
+# ------------------------------------------------------------------------------
+# 3. CloudWatch Central Operations Dashboard
+# ------------------------------------------------------------------------------
+resource "aws_cloudwatch_dashboard" "operations" {
+  dashboard_name = "${var.project_name}-${var.environment}-operations-dashboard"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["CustomerInquiryManager", "TicketsTriaged", "Priority", "P1"],
+            [".", ".", "Priority", "P2"],
+            [".", ".", "Priority", "P3"],
+            [".", ".", "Priority", "P4"]
+          ]
+          view    = "timeSeries"
+          stacked = true
+          region  = "eu-west-1"
+          title   = "Inquiries Triaged by ITIL Priority (CloudWatch EMF)"
+          period  = 300
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ServiceName", var.ecs_service_name, "ClusterName", var.ecs_cluster_name],
+            [".", "MemoryUtilization", ".", ".", ".", "."]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = "eu-west-1"
+          title   = "ECS Fargate Spot Resource Utilization"
+          period  = 60
+        }
+      }
+    ]
+  })
+}

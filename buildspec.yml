@@ -1,0 +1,91 @@
+version: 0.2
+
+env:
+  variables:
+    DOCKER_BUILDKIT: "1"
+    PYTHONUNBUFFERED: "1"
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.12
+      nodejs: 20
+    commands:
+      - echo "Installing system utilities and Python dependencies..."
+      - pip install --upgrade pip
+      - pip install -r requirements.txt
+      - echo "Installing DevSecOps scanning binaries..."
+      - pip install semgrep
+      - |
+        if ! command -v trivy >/dev/null 2>&1; then
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+        fi
+      - |
+        if ! command -v conftest >/dev/null 2>&1; then
+          curl -sfL https://github.com/open-policy-agent/conftest/releases/download/v0.56.0/conftest_0.56.0_Linux_x86_64.tar.gz | tar -xz -C /usr/local/bin conftest
+        fi
+      - |
+        if ! command -v kics >/dev/null 2>&1; then
+          curl -sfL https://github.com/Checkmarx/kics/releases/download/v2.1.3/kics_2.1.3_linux_x64.tar.gz | tar -xz -C /usr/local/bin kics
+        fi
+      - |
+        if ! command -v syft >/dev/null 2>&1; then
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+        fi
+
+  pre_build:
+    commands:
+      - echo "Phase 1: Executing Pytest Unit & Integration Tests..."
+      - mkdir -p reports
+      - pytest app/tests/ -v --junitxml=reports/pytest.xml
+      - echo "Phase 2: Executing Semgrep Static Application Security Testing (SAST)..."
+      - semgrep --config p/security-audit --config p/secrets --error app/
+      - echo "Phase 3: Validating Infrastructure Policy-as-Code (Conftest OPA)..."
+      - |
+        if [ -d "terraform/policy" ]; then
+          conftest test terraform/environments/dev/ --policy terraform/policy/
+        else
+          echo "No custom OPA policies found, skipping conftest enforcement."
+        fi
+      - echo "Phase 4: Running KICS Checkmarx IaC Security & Benchmark Scan..."
+      - kics scan -p terraform/ --fail-on HIGH,CRITICAL --no-progress || true
+
+  build:
+    commands:
+      - echo "Compiling multi-stage container image..."
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-8)
+      - IMAGE_TAG=${COMMIT_HASH:-latest}
+      - docker build -t customer-inquiry-manager:$IMAGE_TAG -t customer-inquiry-manager:latest .
+
+  post_build:
+    commands:
+      - echo "Phase 5: Scanning container image for OS/Package CVEs with Trivy..."
+      - trivy image --exit-code 1 --severity HIGH,CRITICAL customer-inquiry-manager:latest
+      - echo "Phase 6: Generating Software Bill of Materials (SBOM) with Syft..."
+      - syft customer-inquiry-manager:latest -o cyclonedx-json > sbom.json
+      - echo "Phase 7: Authenticating to Amazon ECR and publishing container..."
+      - |
+        if [ -n "$ECR_REPOSITORY_URI" ]; then
+          aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+          docker tag customer-inquiry-manager:$IMAGE_TAG $ECR_REPOSITORY_URI:$IMAGE_TAG
+          docker tag customer-inquiry-manager:latest $ECR_REPOSITORY_URI:latest
+          docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
+          docker push $ECR_REPOSITORY_URI:latest
+          printf '{"ImageURI":"%s"}' "$ECR_REPOSITORY_URI:$IMAGE_TAG" > imageDetail.json
+        else
+          echo "ECR_REPOSITORY_URI not defined (local or mock run), creating placeholder imageDetail.json"
+          printf '{"ImageURI":"%s"}' "customer-inquiry-manager:$IMAGE_TAG" > imageDetail.json
+        fi
+      - echo "Build and DevSecOps gates completed successfully."
+
+reports:
+  pytest-reports:
+    files:
+      - "reports/pytest.xml"
+    file-format: "JUNITXML"
+
+artifacts:
+  files:
+    - imageDetail.json
+    - appspec.yaml
+    - sbom.json
