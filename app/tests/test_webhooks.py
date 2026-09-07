@@ -5,7 +5,7 @@ import json
 import pytest
 from httpx import AsyncClient
 from app.core.config import settings
-from app.api.v1.endpoints.webhooks import verify_hmac_sha256
+from app.api.v1.webhooks import verify_hmac_sha256
 
 
 def test_verify_hmac_sha256_cryptographic_validation():
