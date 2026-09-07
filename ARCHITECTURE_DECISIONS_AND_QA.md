@@ -12,42 +12,155 @@ Whenever working on code, infrastructure, or interview preparation, refer to thi
 
 ### Quick Index of Architectural Debates & Decisions
 
-1. [Compute Selection: ECS Fargate Spot vs. Amazon EKS](#q1-why-ecs-fargate-spot-instead-of-amazon-eks)
-2. [Platform Engineering vs. Workload: Was Kubernetes in Project 1 Overengineering?](#q2-was-kubernetes-in-project-1-overengineering-should-it-have-more-microservices)
-3. [The Sidecar Pattern: Core Definition, Mechanics, and Network Namespaces](#q3-what-is-a-sidecar-container-and-how-does-it-differ-from-a-kubernetes-pod)
-4. [Sidecar Usage Across the Portfolio: Why Project 3 and Not Projects 1 & 2?](#q4-why-use-a-sidecar-in-project-3-and-not-in-project-1-or-project-2)
-5. [Sidecar Alternatives & Enterprise Realities: Why Reject Fluent Bit, Envoy, and Datadog?](#q5-what-other-sidecars-exist-and-why-is-aws-x-ray-mandatory-for-genai)
-6. [Diagram Structure in Project 1 vs. Project 3: Namespaces vs. MicroVM Tasks](#q6-was-the-diagram-structure-in-project-1-wrong-compared-to-project-3)
-7. [ECR Regional Repository vs. ECR VPC Endpoint: Push vs. Pull Dual Routing](#q7-why-route-to-both-regional-ecr-and-ecr-vpc-endpoint-privatelink)
-8. [Ingress Architecture: The Role of Internet Gateway (IGW)](#q8-why-is-the-internet-gateway-igw-not-an-intermediate-hop)
-9. [Identity Clarification: "Support Agent" vs. Generic "User"](#q9-who-is-the-user-node-is-it-an-external-customer-or-an-internal-operator)
-10. [Omnichannel Ingress: The 4 Inbound Sources and Elimination of Direct Email Ingress](#q10-why-was-direct-mail-to-app-ingress-eliminated-in-favor-of-webhooks)
-11. [Outbound Events: Differentiating Inbound Webhooks from Outbound SNS Notifications](#q11-why-was-sns-to-webhooks-eliminated-from-outbound-events)
-12. [Flow Chronology & KMS Reordering: Transversal Security vs. End-of-Life Actions](#q12-why-were-kms-flows-reordered-instead-of-remaining-at-the-end-of-the-sequence)
-13. [Visual Governance in Excalidraw: Unified Single-Color Blocks](#q13-why-enforce-a-single-unified-color-per-architectural-block)
-14. [FinOps Multi-Tier Storage: Granular Glacier Transitions and Data Minimization](#q14-why-separate-s3-glacier-instant-retrieval-from-flexible-retrieval)
-15. [Observability Depth: Visualizing ECS Fargate Auto-Scaling and Metric Dashboards](#q15-is-observability-poorer-in-ecs-fargate-than-in-eks-how-do-we-visualize-scaling)
-16. [Database Isolation: Dedicated Database Subnets with Local-Only Routing](#q16-why-provision-isolated-database-subnets-with-no-internet-or-nat-routes)
-17. [Repository Structure & Idiomatic Layout: AI Inventory Tracker (EKS/Go) vs. Customer Inquiry Manager (ECS/Python)](#q17-why-does-the-directory-structure-differ-from-ai-inventory-tracker-will-an-evaluator-view-this-negatively)
-18. [ECS Module Scope: Why Manage Cluster, Task Definition, and Service Inside `terraform/modules/ecs/`?](#q18-why-manage-ecs-inside-terraformmodulesecs-instead-of-having-a-separate-deployment-directory-like-k8s)
-19. [AI Security & DevSecOps: Integrating Prompt Injection Defense, PII Masking, and Supply Chain Security without Overengineering](#q19-how-do-we-address-devsecops-and-ai-security-requirements-without-introducing-overengineering)
-20. [Architectural & Feature Delta: Does Implementing Bedrock Guardrails and DevSecOps Modify Topology or Business Scope?](#q20-does-incorporating-ai-security-and-devsecops-alter-the-architecture-technologies-or-features)
-21. [Senior Cybersecurity & AI Security Matrix: Comprehensive Competency Mapping Across Portfolio Projects](#q21-senior-cybersecurity--ai-security-matrix-mapping-enterprise-competencies-across-the-portfolio)
-22. [IaC Security in Production: Why Every Terraform Repository Requires Scanning & Where It Belongs (PR Gate vs. Application Build)](#q22-why-is-iac-security-scanning-mandatory-for-every-production-repository-and-where-should-it-run)
-23. [IaC Security Tooling Evaluation: Comparing Checkov, Trivy Config, KICS (Checkmarx), and OPA/Conftest](#q23-iac-security-tooling-evaluation-comparing-checkov-trivy-config-kics-and-opaconftest)
-24. [Reddit Trivy Security Incident Analysis, Container vs. IaC Decoupling, and Definitive Selection of KICS (Checkmarx) & Conftest (OPA) over Checkov & TFLint](#q24-reddit-trivy-security-incident-analysis-container-vs-iac-decoupling-and-definitive-selection-of-kics-checkmarx--conftest-opa-over-checkov--tflint)
-25. [Expanding the Master Architecture Execution Map from 45 to 47 Chronological Flows for Explicit Policy-as-Code (Conftest OPA) and IaC Security (KICS Checkmarx) Modeling](#q25-expanding-the-master-architecture-execution-map-from-45-to-47-chronological-flows-for-explicit-policy-as-code-conftest-opa-and-iac-security-kics-checkmarx-modeling)
-26. [Definitive Cybersecurity & DevSecOps Mapping against Senior Job Requirements (P1 vs. P3 vs. Future Project), Rigorous Technical Rationales, and Honest Tool Evaluation (Architectural Shift vs. Resume Vendor Diversification)](#q26-definitive-cybersecurity--devsecops-mapping-against-senior-job-requirements-p1-vs-p3-vs-future-project-rigorous-technical-rationales-and-honest-tool-evaluation-architectural-shift-vs-resume-vendor-diversification)
-27. [Omnichannel Ingestion Architecture: The 4 Inbound Webhook Sources (SES, Web Form, Trustpilot, Stripe) & Canonical Normalization](#q27-omnichannel-ingestion-architecture-the-4-inbound-webhook-sources-ses-web-form-trustpilot-stripe--canonical-normalization)
-28. [Web Operations Console vs. Desktop Fat Client: Why the Industry Uses Cloud Web Interfaces with Zero-Trust Authentication](#q28-web-operations-console-vs-desktop-fat-client-why-the-industry-uses-cloud-web-interfaces-with-zero-trust-authentication)
-29. [Enterprise Authentication & Multi-Factor Security: Amazon Cognito with Enforced RFC 6238 Software Token TOTP MFA](#q29-enterprise-authentication--multi-factor-security-amazon-cognito-with-enforced-rfc-6238-software-token-totp-mfa)
-30. [In-Context Grounding vs. Fine-Tuning: Why Model Retraining is an Anti-Pattern for AI Triage & The Role of `company_profile.json`](#q30-in-context-grounding-vs-fine-tuning-why-model-retraining-is-an-anti-pattern-for-ai-triage--the-role-of-company_profilejson)
-31. [Atomic Multi-Attribute Triage: Why Single-Pass Inference Trumps Sequential Multi-Call Pipelines](#q31-atomic-multi-attribute-triage-why-single-pass-inference-trumps-sequential-multi-call-pipelines)
-32. [Department Categorization Taxonomies & Precedence Rules: Resolving Conflicting Symptoms vs. Underlying Root Cause](#q32-department-categorization-taxonomies--precedence-rules-resolving-conflicting-symptoms-vs-underlying-root-cause)
-33. [Deterministic SLA Calculation: The ITIL Impact x Urgency Matrix & Why LLMs Must Never Calculate Temporal Deadlines](#q33-deterministic-sla-calculation-the-itil-impact-x-urgency-matrix--why-llms-must-never-calculate-temporal-deadlines)
-34. [Dual-Vector Sentiment & Frustration Analysis: Quantitative Scoring, Churn Detection, and Automatic Priority Escalation](#q34-dual-vector-sentiment--frustration-analysis-quantitative-scoring-churn-detection-and-automatic-priority-escalation)
-35. [Automated Key Entity Extraction (NER): PostgreSQL JSONB Storage with Generalized Inverted (GIN) Indexing](#q35-automated-key-entity-extraction-ner-postgresql-jsonb-storage-with-generalized-inverted-gin-indexing)
-36. [The Clarification Protocol: Handling Vague, Chaotic, or Incomplete Inquiries Without Model Hallucination](#q36-the-clarification-protocol-handling-vague-chaotic-or-incomplete-inquiries-without-model-hallucination)
+- [ARCHITECTURE DECISIONS \& TECHNICAL Q\&A LEDGER](#architecture-decisions--technical-qa-ledger)
+  - [Project: Customer Inquiry Manager (Enterprise AI Customer Inquiry \& Ticket Triage Platform)](#project-customer-inquiry-manager-enterprise-ai-customer-inquiry--ticket-triage-platform)
+    - [Purpose of this Document](#purpose-of-this-document)
+    - [Quick Index of Architectural Debates \& Decisions](#quick-index-of-architectural-debates--decisions)
+- [ARCHITECTURE DECISIONS \& TECHNICAL Q\&A LEDGER](#architecture-decisions--technical-qa-ledger-1)
+  - [Project: Customer Inquiry Manager (Enterprise AI Customer Inquiry \& Ticket Triage Platform)](#project-customer-inquiry-manager-enterprise-ai-customer-inquiry--ticket-triage-platform-1)
+    - [Purpose of this Document](#purpose-of-this-document-1)
+    - [Quick Index of Architectural Debates \& Decisions](#quick-index-of-architectural-debates--decisions-1)
+    - [Q1: Why ECS Fargate Spot instead of Amazon EKS?](#q1-why-ecs-fargate-spot-instead-of-amazon-eks)
+      - [Question:](#question)
+      - [Answer \& Technical Defense:](#answer--technical-defense)
+    - [Q2: Was Kubernetes in Project 1 overengineering? Should it have more microservices?](#q2-was-kubernetes-in-project-1-overengineering-should-it-have-more-microservices)
+      - [Question:](#question-1)
+      - [Answer \& Technical Defense:](#answer--technical-defense-1)
+    - [Q3: What is a Sidecar Container, and how does it differ from a Kubernetes Pod?](#q3-what-is-a-sidecar-container-and-how-does-it-differ-from-a-kubernetes-pod)
+      - [Question:](#question-2)
+      - [Answer \& Technical Defense:](#answer--technical-defense-2)
+    - [Q4: Why use a Sidecar in Customer Inquiry Manager and not in Project 1 (AI Inventory Tracker)?](#q4-why-use-a-sidecar-in-customer-inquiry-manager-and-not-in-project-1-ai-inventory-tracker)
+      - [Question:](#question-3)
+      - [Answer \& Technical Defense:](#answer--technical-defense-3)
+    - [Q5: What other sidecars exist, and why is AWS X-Ray mandatory for GenAI?](#q5-what-other-sidecars-exist-and-why-is-aws-x-ray-mandatory-for-genai)
+      - [Question:](#question-4)
+      - [Answer \& Technical Defense:](#answer--technical-defense-4)
+    - [Q6: Was the diagram structure in Project 1 wrong compared to Project 3?](#q6-was-the-diagram-structure-in-project-1-wrong-compared-to-project-3)
+      - [Question:](#question-5)
+      - [Answer \& Technical Defense:](#answer--technical-defense-5)
+    - [Q7: Why route to both Regional ECR and ECR VPC Endpoint (PrivateLink)?](#q7-why-route-to-both-regional-ecr-and-ecr-vpc-endpoint-privatelink)
+      - [Question:](#question-6)
+      - [Answer \& Technical Defense:](#answer--technical-defense-6)
+    - [Q8: Why is the Internet Gateway (IGW) not an intermediate hop?](#q8-why-is-the-internet-gateway-igw-not-an-intermediate-hop)
+      - [Question:](#question-7)
+      - [Answer \& Technical Defense:](#answer--technical-defense-7)
+    - [Q9: Who is the "User" node? Is it an external customer or an internal operator?](#q9-who-is-the-user-node-is-it-an-external-customer-or-an-internal-operator)
+      - [Question:](#question-8)
+      - [Answer \& Technical Defense:](#answer--technical-defense-8)
+    - [Q10: Why was direct Mail-to-App ingress eliminated in favor of Webhooks?](#q10-why-was-direct-mail-to-app-ingress-eliminated-in-favor-of-webhooks)
+      - [Question:](#question-9)
+      - [Answer \& Technical Defense:](#answer--technical-defense-9)
+    - [Q11: Why was `SNS ➔ Webhooks` eliminated from outbound events?](#q11-why-was-sns--webhooks-eliminated-from-outbound-events)
+      - [Question:](#question-10)
+      - [Answer \& Technical Defense:](#answer--technical-defense-10)
+    - [Q12: Why were KMS flows reordered instead of remaining at the end of the sequence?](#q12-why-were-kms-flows-reordered-instead-of-remaining-at-the-end-of-the-sequence)
+      - [Question:](#question-11)
+      - [Answer \& Technical Defense:](#answer--technical-defense-11)
+    - [Q13: Why enforce a single unified color per architectural block?](#q13-why-enforce-a-single-unified-color-per-architectural-block)
+      - [Question:](#question-12)
+      - [Answer \& Technical Defense:](#answer--technical-defense-12)
+    - [Q14: Why separate S3 Glacier Instant Retrieval from Flexible Retrieval?](#q14-why-separate-s3-glacier-instant-retrieval-from-flexible-retrieval)
+      - [Question:](#question-13)
+      - [Answer \& Technical Defense:](#answer--technical-defense-13)
+    - [Q15: Is observability poorer in ECS Fargate than in EKS? How do we visualize scaling?](#q15-is-observability-poorer-in-ecs-fargate-than-in-eks-how-do-we-visualize-scaling)
+      - [Question:](#question-14)
+      - [Answer \& Technical Defense:](#answer--technical-defense-14)
+    - [Q16: Why provision Isolated Database Subnets with no Internet or NAT routes?](#q16-why-provision-isolated-database-subnets-with-no-internet-or-nat-routes)
+      - [Question:](#question-15)
+      - [Answer \& Technical Defense:](#answer--technical-defense-15)
+    - [Q17: Why does the directory structure differ from AI Inventory Tracker? Will an evaluator view this negatively?](#q17-why-does-the-directory-structure-differ-from-ai-inventory-tracker-will-an-evaluator-view-this-negatively)
+      - [Question:](#question-16)
+      - [Answer \& Technical Defense:](#answer--technical-defense-16)
+    - [Q18: Why manage ECS inside `terraform/modules/ecs/` instead of having a separate deployment directory like `k8s/`?](#q18-why-manage-ecs-inside-terraformmodulesecs-instead-of-having-a-separate-deployment-directory-like-k8s)
+      - [Question:](#question-17)
+      - [Answer \& Technical Defense:](#answer--technical-defense-17)
+    - [Q19: How do we address DevSecOps and AI Security requirements without introducing overengineering?](#q19-how-do-we-address-devsecops-and-ai-security-requirements-without-introducing-overengineering)
+      - [Question:](#question-18)
+      - [Answer \& Technical Defense:](#answer--technical-defense-18)
+    - [Q20: Does incorporating AI Security and DevSecOps alter the architecture, technologies, or features?](#q20-does-incorporating-ai-security-and-devsecops-alter-the-architecture-technologies-or-features)
+      - [Question:](#question-19)
+      - [Answer \& Technical Defense:](#answer--technical-defense-19)
+    - [Q21: Senior Cybersecurity \& AI Security Matrix: Mapping Enterprise Competencies Across the Portfolio](#q21-senior-cybersecurity--ai-security-matrix-mapping-enterprise-competencies-across-the-portfolio)
+      - [Question:](#question-20)
+      - [Answer \& Technical Defense:](#answer--technical-defense-20)
+    - [Q22: Why is IaC security scanning mandatory for every production repository and where should it run?](#q22-why-is-iac-security-scanning-mandatory-for-every-production-repository-and-where-should-it-run)
+      - [Question:](#question-21)
+      - [Answer \& Technical Defense:](#answer--technical-defense-21)
+    - [Q23: IaC Security Tooling Evaluation: Comparing Checkov, Trivy Config, KICS, and OPA/Conftest](#q23-iac-security-tooling-evaluation-comparing-checkov-trivy-config-kics-and-opaconftest)
+      - [Question:](#question-22)
+      - [Answer \& Technical Defense:](#answer--technical-defense-22)
+    - [Q24: Reddit Trivy Security Incident Analysis, Container vs. IaC Decoupling, and Definitive Selection of KICS (Checkmarx) \& Conftest (OPA) over Checkov \& TFLint](#q24-reddit-trivy-security-incident-analysis-container-vs-iac-decoupling-and-definitive-selection-of-kics-checkmarx--conftest-opa-over-checkov--tflint)
+      - [Question:](#question-23)
+      - [Answer \& Technical Defense:](#answer--technical-defense-23)
+    - [Q25: Expanding the Master Architecture Execution Map from 45 to 47 Chronological Flows for Explicit Policy-as-Code (Conftest OPA) and IaC Security (KICS Checkmarx) Modeling](#q25-expanding-the-master-architecture-execution-map-from-45-to-47-chronological-flows-for-explicit-policy-as-code-conftest-opa-and-iac-security-kics-checkmarx-modeling)
+      - [Question:](#question-24)
+      - [Answer \& Technical Defense:](#answer--technical-defense-24)
+    - [Q26: Definitive Cybersecurity \& DevSecOps Mapping against Senior Job Requirements (P1 vs. P3 vs. Future Project), Rigorous Technical Rationales, and Honest Tool Evaluation (Architectural Shift vs. Resume Vendor Diversification)](#q26-definitive-cybersecurity--devsecops-mapping-against-senior-job-requirements-p1-vs-p3-vs-future-project-rigorous-technical-rationales-and-honest-tool-evaluation-architectural-shift-vs-resume-vendor-diversification)
+      - [Question:](#question-25)
+      - [Answer \& Technical Defense:](#answer--technical-defense-25)
+    - [Q27: Omnichannel Ingestion Architecture: The 4 Inbound Webhook Sources (SES, Web Form, Trustpilot, Stripe) \& Canonical Normalization](#q27-omnichannel-ingestion-architecture-the-4-inbound-webhook-sources-ses-web-form-trustpilot-stripe--canonical-normalization)
+      - [Question:](#question-26)
+      - [Answer \& Technical Defense:](#answer--technical-defense-26)
+    - [Q28: Web Operations Console vs. Desktop Fat Client: Why the Industry Uses Cloud Web Interfaces with Zero-Trust Authentication](#q28-web-operations-console-vs-desktop-fat-client-why-the-industry-uses-cloud-web-interfaces-with-zero-trust-authentication)
+      - [Question:](#question-27)
+      - [Answer \& Technical Defense:](#answer--technical-defense-27)
+    - [Q29: Enterprise Authentication \& Multi-Factor Security: Amazon Cognito with Enforced RFC 6238 Software Token TOTP MFA](#q29-enterprise-authentication--multi-factor-security-amazon-cognito-with-enforced-rfc-6238-software-token-totp-mfa)
+      - [Question:](#question-28)
+      - [Answer \& Technical Defense:](#answer--technical-defense-28)
+    - [Q30: In-Context Grounding vs. Fine-Tuning: Why Model Retraining is an Anti-Pattern for AI Triage \& The Role of `company_profile.json`](#q30-in-context-grounding-vs-fine-tuning-why-model-retraining-is-an-anti-pattern-for-ai-triage--the-role-of-company_profilejson)
+      - [Question:](#question-29)
+      - [Answer \& Technical Defense:](#answer--technical-defense-29)
+    - [Q31: Atomic Multi-Attribute Triage: Why Single-Pass Inference Trumps Sequential Multi-Call Pipelines](#q31-atomic-multi-attribute-triage-why-single-pass-inference-trumps-sequential-multi-call-pipelines)
+      - [Question:](#question-30)
+      - [Answer \& Technical Defense:](#answer--technical-defense-30)
+    - [Q32: Department Categorization Taxonomies \& Precedence Rules: Resolving Conflicting Symptoms vs. Underlying Root Cause](#q32-department-categorization-taxonomies--precedence-rules-resolving-conflicting-symptoms-vs-underlying-root-cause)
+      - [Question:](#question-31)
+      - [Answer \& Technical Defense:](#answer--technical-defense-31)
+    - [Q33: Deterministic SLA Calculation: The ITIL Impact x Urgency Matrix \& Why LLMs Must Never Calculate Temporal Deadlines](#q33-deterministic-sla-calculation-the-itil-impact-x-urgency-matrix--why-llms-must-never-calculate-temporal-deadlines)
+      - [Question:](#question-32)
+      - [Answer \& Technical Defense:](#answer--technical-defense-32)
+    - [Q34: Dual-Vector Sentiment \& Frustration Analysis: Quantitative Scoring, Churn Detection, and Automatic Priority Escalation](#q34-dual-vector-sentiment--frustration-analysis-quantitative-scoring-churn-detection-and-automatic-priority-escalation)
+      - [Question:](#question-33)
+      - [Answer \& Technical Defense:](#answer--technical-defense-33)
+    - [Q35: Automated Key Entity Extraction (NER): PostgreSQL JSONB Storage with Generalized Inverted (GIN) Indexing](#q35-automated-key-entity-extraction-ner-postgresql-jsonb-storage-with-generalized-inverted-gin-indexing)
+      - [Question:](#question-34)
+      - [Answer \& Technical Defense:](#answer--technical-defense-34)
+    - [Q36: The Clarification Protocol: Handling Vague, Chaotic, or Incomplete Inquiries Without Model Hallucination](#q36-the-clarification-protocol-handling-vague-chaotic-or-incomplete-inquiries-without-model-hallucination)
+      - [Question:](#question-35)
+      - [Answer \& Technical Defense:](#answer--technical-defense-35)
+    - [Q37: Suggested Response Draft Architecture: The 4 Dynamic Response Strategies \& Agent Copilot Guidance Notes](#q37-suggested-response-draft-architecture-the-4-dynamic-response-strategies--agent-copilot-guidance-notes)
+      - [Question:](#question-36)
+      - [Answer \& Technical Defense:](#answer--technical-defense-36)
+    - [Q38: High-Performance Prioritized Queue: Multi-Criteria Tie-Breaking \& Partial Composite B-Tree Indexing in PostgreSQL](#q38-high-performance-prioritized-queue-multi-criteria-tie-breaking--partial-composite-b-tree-indexing-in-postgresql)
+      - [Question:](#question-37)
+      - [Answer \& Technical Defense:](#answer--technical-defense-37)
+    - [Q39: Human-in-the-Loop Category Overrides: Immutable Audit Trails for SOC 2 Compliance \& MLOps Calibration Datasets](#q39-human-in-the-loop-category-overrides-immutable-audit-trails-for-soc-2-compliance--mlops-calibration-datasets)
+      - [Question:](#question-38)
+      - [Answer \& Technical Defense:](#answer--technical-defense-38)
+    - [Q40: Multi-Agent Concurrency \& Collision Prevention: Atomic SQL State Transitions vs. WebSockets Overhead](#q40-multi-agent-concurrency--collision-prevention-atomic-sql-state-transitions-vs-websockets-overhead)
+      - [Question:](#question-39)
+      - [Answer \& Technical Defense:](#answer--technical-defense-39)
+    - [Q41: Split-Screen Live Demo Verification: Demonstrating Multi-Agent Claiming \& ACID Consistency in 45 Seconds](#q41-split-screen-live-demo-verification-demonstrating-multi-agent-claiming--acid-consistency-in-45-seconds)
+      - [Question:](#question-40)
+      - [Answer \& Technical Defense:](#answer--technical-defense-40)
+    - [Q42: Business-Agnostic CLI Test Harness (`seed_inquiries.py`) with Real Cryptographic Signatures vs. SRE Load Testing (`k6-load-test.js`)](#q42-business-agnostic-cli-test-harness-seed_inquiriespy-with-real-cryptographic-signatures-vs-sre-load-testing-k6-load-testjs)
+      - [Question:](#question-41)
+      - [Answer \& Technical Defense:](#answer--technical-defense-41)
+    - [Q43: Executive Analytics, GenAI Unit Economics, and SRE Observability: Measuring Real Cost per Ticket (~0.00025 €), MTTR Reduction, and Model Acceptance Rate](#q43-executive-analytics-genai-unit-economics-and-sre-observability-measuring-real-cost-per-ticket-000025--mttr-reduction-and-model-acceptance-rate)
+      - [Question:](#question-42)
+      - [Answer \& Technical Defense:](#answer--technical-defense-42)
+    - [Q44: Dual Public Review Ingestion Architecture: Supporting Both Trustpilot and Google Reviews as Optional Pluggable Webhook Providers](#q44-dual-public-review-ingestion-architecture-supporting-both-trustpilot-and-google-reviews-as-optional-pluggable-webhook-providers)
+      - [Question:](#question-43)
+      - [Answer \& Technical Defense:](#answer--technical-defense-43)
+    - [Q45: Zero-Secrets Policy Across CI/CD, Source Code, and IaC: Eliminating Hardcoded Credentials via Secrets Manager, IAM OIDC, and ECS Native Injection](#q45-zero-secrets-policy-across-cicd-source-code-and-iac-eliminating-hardcoded-credentials-via-secrets-manager-iam-oidc-and-ecs-native-injection)
+      - [Question:](#question-44)
+      - [Answer \& Technical Defense:](#answer--technical-defense-44)
+    - [Q46: CI/CD Architectural Trade-offs: AWS Developer Suite (CodePipeline, CodeBuild, CodeDeploy) vs. GitHub Actions — Industry Reality, Compliance, and Portfolio Strategy](#q46-cicd-architectural-trade-offs-aws-developer-suite-codepipeline-codebuild-codedeploy-vs-github-actions--industry-reality-compliance-and-portfolio-strategy)
+      - [Question:](#question-45)
+      - [Answer \& Technical Defense:](#answer--technical-defense-45)
+    - [Q47: Mapping GitHub Actions to the AWS Developer Suite: CodePipeline Stages, CodeBuild Buildspecs, CodeDeploy AppSpecs, and Native PR Webhook Status Reporting](#q47-mapping-github-actions-to-the-aws-developer-suite-codepipeline-stages-codebuild-buildspecs-codedeploy-appspecs-and-native-pr-webhook-status-reporting)
+      - [Question:](#question-46)
+      - [Answer \& Technical Defense:](#answer--technical-defense-46)
 # ARCHITECTURE DECISIONS & TECHNICAL Q&A LEDGER
 ## Project: Customer Inquiry Manager (Enterprise AI Customer Inquiry & Ticket Triage Platform)
 
@@ -62,51 +175,155 @@ Whenever working on code, infrastructure, or interview preparation, refer to thi
 
 ### Quick Index of Architectural Debates & Decisions
 
-1. [Compute Selection: ECS Fargate Spot vs. Amazon EKS](#q1-why-ecs-fargate-spot-instead-of-amazon-eks)
-2. [Platform Engineering vs. Workload: Was Kubernetes in Project 1 Overengineering?](#q2-was-kubernetes-in-project-1-overengineering-should-it-have-more-microservices)
-3. [The Sidecar Pattern: Core Definition, Mechanics, and Network Namespaces](#q3-what-is-a-sidecar-container-and-how-does-it-differ-from-a-kubernetes-pod)
-4. [Sidecar Usage Across the Portfolio: Why Project 3 and Not Projects 1 & 2?](#q4-why-use-a-sidecar-in-project-3-and-not-in-project-1-or-project-2)
-5. [Sidecar Alternatives & Enterprise Realities: Why Reject Fluent Bit, Envoy, and Datadog?](#q5-what-other-sidecars-exist-and-why-is-aws-x-ray-mandatory-for-genai)
-6. [Diagram Structure in Project 1 vs. Project 3: Namespaces vs. MicroVM Tasks](#q6-was-the-diagram-structure-in-project-1-wrong-compared-to-project-3)
-7. [ECR Regional Repository vs. ECR VPC Endpoint: Push vs. Pull Dual Routing](#q7-why-route-to-both-regional-ecr-and-ecr-vpc-endpoint-privatelink)
-8. [Ingress Architecture: The Role of Internet Gateway (IGW)](#q8-why-is-the-internet-gateway-igw-not-an-intermediate-hop)
-9. [Identity Clarification: "Support Agent" vs. Generic "User"](#q9-who-is-the-user-node-is-it-an-external-customer-or-an-internal-operator)
-10. [Omnichannel Ingress: The 4 Inbound Sources and Elimination of Direct Email Ingress](#q10-why-was-direct-mail-to-app-ingress-eliminated-in-favor-of-webhooks)
-11. [Outbound Events: Differentiating Inbound Webhooks from Outbound SNS Notifications](#q11-why-was-sns-to-webhooks-eliminated-from-outbound-events)
-12. [Flow Chronology & KMS Reordering: Transversal Security vs. End-of-Life Actions](#q12-why-were-kms-flows-reordered-instead-of-remaining-at-the-end-of-the-sequence)
-13. [Visual Governance in Excalidraw: Unified Single-Color Blocks](#q13-why-enforce-a-single-unified-color-per-architectural-block)
-14. [FinOps Multi-Tier Storage: Granular Glacier Transitions and Data Minimization](#q14-why-separate-s3-glacier-instant-retrieval-from-flexible-retrieval)
-15. [Observability Depth: Visualizing ECS Fargate Auto-Scaling and Metric Dashboards](#q15-is-observability-poorer-in-ecs-fargate-than-in-eks-how-do-we-visualize-scaling)
-16. [Database Isolation: Dedicated Database Subnets with Local-Only Routing](#q16-why-provision-isolated-database-subnets-with-no-internet-or-nat-routes)
-17. [Repository Structure & Idiomatic Layout: AI Inventory Tracker (EKS/Go) vs. Customer Inquiry Manager (ECS/Python)](#q17-why-does-the-directory-structure-differ-from-ai-inventory-tracker-will-an-evaluator-view-this-negatively)
-18. [ECS Module Scope: Why Manage Cluster, Task Definition, and Service Inside `terraform/modules/ecs/`?](#q18-why-manage-ecs-inside-terraformmodulesecs-instead-of-having-a-separate-deployment-directory-like-k8s)
-19. [AI Security & DevSecOps: Integrating Prompt Injection Defense, PII Masking, and Supply Chain Security without Overengineering](#q19-how-do-we-address-devsecops-and-ai-security-requirements-without-introducing-overengineering)
-20. [Architectural & Feature Delta: Does Implementing Bedrock Guardrails and DevSecOps Modify Topology or Business Scope?](#q20-does-incorporating-ai-security-and-devsecops-alter-the-architecture-technologies-or-features)
-21. [Senior Cybersecurity & AI Security Matrix: Comprehensive Competency Mapping Across Portfolio Projects](#q21-senior-cybersecurity--ai-security-matrix-mapping-enterprise-competencies-across-the-portfolio)
-22. [IaC Security in Production: Why Every Terraform Repository Requires Scanning & Where It Belongs (PR Gate vs. Application Build)](#q22-why-is-iac-security-scanning-mandatory-for-every-production-repository-and-where-should-it-run)
-23. [IaC Security Tooling Evaluation: Comparing Checkov, Trivy Config, KICS (Checkmarx), and OPA/Conftest](#q23-iac-security-tooling-evaluation-comparing-checkov-trivy-config-kics-and-opaconftest)
-24. [Reddit Trivy Security Incident Analysis, Container vs. IaC Decoupling, and Definitive Selection of KICS (Checkmarx) & Conftest (OPA) over Checkov & TFLint](#q24-reddit-trivy-security-incident-analysis-container-vs-iac-decoupling-and-definitive-selection-of-kics-checkmarx--conftest-opa-over-checkov--tflint)
-25. [Expanding the Master Architecture Execution Map from 45 to 47 Chronological Flows for Explicit Policy-as-Code (Conftest OPA) and IaC Security (KICS Checkmarx) Modeling](#q25-expanding-the-master-architecture-execution-map-from-45-to-47-chronological-flows-for-explicit-policy-as-code-conftest-opa-and-iac-security-kics-checkmarx-modeling)
-26. [Definitive Cybersecurity & DevSecOps Mapping against Senior Job Requirements (P1 vs. P3 vs. Future Project), Rigorous Technical Rationales, and Honest Tool Evaluation (Architectural Shift vs. Resume Vendor Diversification)](#q26-definitive-cybersecurity--devsecops-mapping-against-senior-job-requirements-p1-vs-p3-vs-future-project-rigorous-technical-rationales-and-honest-tool-evaluation-architectural-shift-vs-resume-vendor-diversification)
-27. [Omnichannel Ingestion Architecture: The 4 Inbound Webhook Sources (SES, Web Form, Trustpilot, Stripe) & Canonical Normalization](#q27-omnichannel-ingestion-architecture-the-4-inbound-webhook-sources-ses-web-form-trustpilot-stripe--canonical-normalization)
-28. [Web Operations Console vs. Desktop Fat Client: Why the Industry Uses Cloud Web Interfaces with Zero-Trust Authentication](#q28-web-operations-console-vs-desktop-fat-client-why-the-industry-uses-cloud-web-interfaces-with-zero-trust-authentication)
-29. [Enterprise Authentication & Multi-Factor Security: Amazon Cognito with Enforced RFC 6238 Software Token TOTP MFA](#q29-enterprise-authentication--multi-factor-security-amazon-cognito-with-enforced-rfc-6238-software-token-totp-mfa)
-30. [In-Context Grounding vs. Fine-Tuning: Why Model Retraining is an Anti-Pattern for AI Triage & The Role of `company_profile.json`](#q30-in-context-grounding-vs-fine-tuning-why-model-retraining-is-an-anti-pattern-for-ai-triage--the-role-of-company_profilejson)
-31. [Atomic Multi-Attribute Triage: Why Single-Pass Inference Trumps Sequential Multi-Call Pipelines](#q31-atomic-multi-attribute-triage-why-single-pass-inference-trumps-sequential-multi-call-pipelines)
-32. [Department Categorization Taxonomies & Precedence Rules: Resolving Conflicting Symptoms vs. Underlying Root Cause](#q32-department-categorization-taxonomies--precedence-rules-resolving-conflicting-symptoms-vs-underlying-root-cause)
-33. [Deterministic SLA Calculation: The ITIL Impact x Urgency Matrix & Why LLMs Must Never Calculate Temporal Deadlines](#q33-deterministic-sla-calculation-the-itil-impact-x-urgency-matrix--why-llms-must-never-calculate-temporal-deadlines)
-34. [Dual-Vector Sentiment & Frustration Analysis: Quantitative Scoring, Churn Detection, and Automatic Priority Escalation](#q34-dual-vector-sentiment--frustration-analysis-quantitative-scoring-churn-detection-and-automatic-priority-escalation)
-35. [Automated Key Entity Extraction (NER): PostgreSQL JSONB Storage with Generalized Inverted (GIN) Indexing](#q35-automated-key-entity-extraction-ner-postgresql-jsonb-storage-with-generalized-inverted-gin-indexing)
-36. [The Clarification Protocol: Handling Vague, Chaotic, or Incomplete Inquiries Without Model Hallucination](#q36-the-clarification-protocol-handling-vague-chaotic-or-incomplete-inquiries-without-model-hallucination)
-37. [Suggested Response Draft Architecture: The 4 Dynamic Response Strategies & Agent Copilot Guidance Notes](#q37-suggested-response-draft-architecture-the-4-dynamic-response-strategies--agent-copilot-guidance-notes)
-38. [High-Performance Prioritized Queue: Multi-Criteria Tie-Breaking & Partial Composite B-Tree Indexing in PostgreSQL](#q38-high-performance-prioritized-queue-multi-criteria-tie-breaking--partial-composite-b-tree-indexing-in-postgresql)
-39. [Human-in-the-Loop Category Overrides: Immutable Audit Trails for SOC 2 Compliance & MLOps Calibration Datasets](#q39-human-in-the-loop-category-overrides-immutable-audit-trails-for-soc-2-compliance--mlops-calibration-datasets)
-40. [Multi-Agent Concurrency & Collision Prevention: Atomic SQL State Transitions vs. WebSockets Overhead](#q40-multi-agent-concurrency--collision-prevention-atomic-sql-state-transitions-vs-websockets-overhead)
-41. [Split-Screen Live Demo Verification: Demonstrating Multi-Agent Claiming & ACID Consistency in 45 Seconds](#q41-split-screen-live-demo-verification-demonstrating-multi-agent-claiming--acid-consistency-in-45-seconds)
-42. [Business-Agnostic CLI Test Harness (`seed_inquiries.py`) with Real Cryptographic Signatures vs. SRE Load Testing (`k6-load-test.js`)](#q42-business-agnostic-cli-test-harness-seed_inquiriespy-with-real-cryptographic-signatures-vs-sre-load-testing-k6-load-testjs)
-43. [Executive Analytics, GenAI Unit Economics, and SRE Observability: Measuring Real Cost per Ticket (~0.00025 €), MTTR Reduction, and Model Acceptance Rate](#q43-executive-analytics-genai-unit-economics-and-sre-observability-measuring-real-cost-per-ticket-000025--mttr-reduction-and-model-acceptance-rate)
-44. [Dual Public Review Ingestion Architecture: Supporting Both Trustpilot and Google Reviews as Optional Pluggable Webhook Providers](#q44-dual-public-review-ingestion-architecture-supporting-both-trustpilot-and-google-reviews-as-optional-pluggable-webhook-providers)
-45. [Zero-Secrets Policy Across CI/CD, Source Code, and IaC: Eliminating Hardcoded Credentials via Secrets Manager, IAM OIDC, and ECS Native Injection](#q45-zero-secrets-policy-across-cicd-source-code-and-iac-eliminating-hardcoded-credentials-via-secrets-manager-iam-oidc-and-ecs-native-injection)
+- [ARCHITECTURE DECISIONS \& TECHNICAL Q\&A LEDGER](#architecture-decisions--technical-qa-ledger)
+  - [Project: Customer Inquiry Manager (Enterprise AI Customer Inquiry \& Ticket Triage Platform)](#project-customer-inquiry-manager-enterprise-ai-customer-inquiry--ticket-triage-platform)
+    - [Purpose of this Document](#purpose-of-this-document)
+    - [Quick Index of Architectural Debates \& Decisions](#quick-index-of-architectural-debates--decisions)
+- [ARCHITECTURE DECISIONS \& TECHNICAL Q\&A LEDGER](#architecture-decisions--technical-qa-ledger-1)
+  - [Project: Customer Inquiry Manager (Enterprise AI Customer Inquiry \& Ticket Triage Platform)](#project-customer-inquiry-manager-enterprise-ai-customer-inquiry--ticket-triage-platform-1)
+    - [Purpose of this Document](#purpose-of-this-document-1)
+    - [Quick Index of Architectural Debates \& Decisions](#quick-index-of-architectural-debates--decisions-1)
+    - [Q1: Why ECS Fargate Spot instead of Amazon EKS?](#q1-why-ecs-fargate-spot-instead-of-amazon-eks)
+      - [Question:](#question)
+      - [Answer \& Technical Defense:](#answer--technical-defense)
+    - [Q2: Was Kubernetes in Project 1 overengineering? Should it have more microservices?](#q2-was-kubernetes-in-project-1-overengineering-should-it-have-more-microservices)
+      - [Question:](#question-1)
+      - [Answer \& Technical Defense:](#answer--technical-defense-1)
+    - [Q3: What is a Sidecar Container, and how does it differ from a Kubernetes Pod?](#q3-what-is-a-sidecar-container-and-how-does-it-differ-from-a-kubernetes-pod)
+      - [Question:](#question-2)
+      - [Answer \& Technical Defense:](#answer--technical-defense-2)
+    - [Q4: Why use a Sidecar in Customer Inquiry Manager and not in Project 1 (AI Inventory Tracker)?](#q4-why-use-a-sidecar-in-customer-inquiry-manager-and-not-in-project-1-ai-inventory-tracker)
+      - [Question:](#question-3)
+      - [Answer \& Technical Defense:](#answer--technical-defense-3)
+    - [Q5: What other sidecars exist, and why is AWS X-Ray mandatory for GenAI?](#q5-what-other-sidecars-exist-and-why-is-aws-x-ray-mandatory-for-genai)
+      - [Question:](#question-4)
+      - [Answer \& Technical Defense:](#answer--technical-defense-4)
+    - [Q6: Was the diagram structure in Project 1 wrong compared to Project 3?](#q6-was-the-diagram-structure-in-project-1-wrong-compared-to-project-3)
+      - [Question:](#question-5)
+      - [Answer \& Technical Defense:](#answer--technical-defense-5)
+    - [Q7: Why route to both Regional ECR and ECR VPC Endpoint (PrivateLink)?](#q7-why-route-to-both-regional-ecr-and-ecr-vpc-endpoint-privatelink)
+      - [Question:](#question-6)
+      - [Answer \& Technical Defense:](#answer--technical-defense-6)
+    - [Q8: Why is the Internet Gateway (IGW) not an intermediate hop?](#q8-why-is-the-internet-gateway-igw-not-an-intermediate-hop)
+      - [Question:](#question-7)
+      - [Answer \& Technical Defense:](#answer--technical-defense-7)
+    - [Q9: Who is the "User" node? Is it an external customer or an internal operator?](#q9-who-is-the-user-node-is-it-an-external-customer-or-an-internal-operator)
+      - [Question:](#question-8)
+      - [Answer \& Technical Defense:](#answer--technical-defense-8)
+    - [Q10: Why was direct Mail-to-App ingress eliminated in favor of Webhooks?](#q10-why-was-direct-mail-to-app-ingress-eliminated-in-favor-of-webhooks)
+      - [Question:](#question-9)
+      - [Answer \& Technical Defense:](#answer--technical-defense-9)
+    - [Q11: Why was `SNS ➔ Webhooks` eliminated from outbound events?](#q11-why-was-sns--webhooks-eliminated-from-outbound-events)
+      - [Question:](#question-10)
+      - [Answer \& Technical Defense:](#answer--technical-defense-10)
+    - [Q12: Why were KMS flows reordered instead of remaining at the end of the sequence?](#q12-why-were-kms-flows-reordered-instead-of-remaining-at-the-end-of-the-sequence)
+      - [Question:](#question-11)
+      - [Answer \& Technical Defense:](#answer--technical-defense-11)
+    - [Q13: Why enforce a single unified color per architectural block?](#q13-why-enforce-a-single-unified-color-per-architectural-block)
+      - [Question:](#question-12)
+      - [Answer \& Technical Defense:](#answer--technical-defense-12)
+    - [Q14: Why separate S3 Glacier Instant Retrieval from Flexible Retrieval?](#q14-why-separate-s3-glacier-instant-retrieval-from-flexible-retrieval)
+      - [Question:](#question-13)
+      - [Answer \& Technical Defense:](#answer--technical-defense-13)
+    - [Q15: Is observability poorer in ECS Fargate than in EKS? How do we visualize scaling?](#q15-is-observability-poorer-in-ecs-fargate-than-in-eks-how-do-we-visualize-scaling)
+      - [Question:](#question-14)
+      - [Answer \& Technical Defense:](#answer--technical-defense-14)
+    - [Q16: Why provision Isolated Database Subnets with no Internet or NAT routes?](#q16-why-provision-isolated-database-subnets-with-no-internet-or-nat-routes)
+      - [Question:](#question-15)
+      - [Answer \& Technical Defense:](#answer--technical-defense-15)
+    - [Q17: Why does the directory structure differ from AI Inventory Tracker? Will an evaluator view this negatively?](#q17-why-does-the-directory-structure-differ-from-ai-inventory-tracker-will-an-evaluator-view-this-negatively)
+      - [Question:](#question-16)
+      - [Answer \& Technical Defense:](#answer--technical-defense-16)
+    - [Q18: Why manage ECS inside `terraform/modules/ecs/` instead of having a separate deployment directory like `k8s/`?](#q18-why-manage-ecs-inside-terraformmodulesecs-instead-of-having-a-separate-deployment-directory-like-k8s)
+      - [Question:](#question-17)
+      - [Answer \& Technical Defense:](#answer--technical-defense-17)
+    - [Q19: How do we address DevSecOps and AI Security requirements without introducing overengineering?](#q19-how-do-we-address-devsecops-and-ai-security-requirements-without-introducing-overengineering)
+      - [Question:](#question-18)
+      - [Answer \& Technical Defense:](#answer--technical-defense-18)
+    - [Q20: Does incorporating AI Security and DevSecOps alter the architecture, technologies, or features?](#q20-does-incorporating-ai-security-and-devsecops-alter-the-architecture-technologies-or-features)
+      - [Question:](#question-19)
+      - [Answer \& Technical Defense:](#answer--technical-defense-19)
+    - [Q21: Senior Cybersecurity \& AI Security Matrix: Mapping Enterprise Competencies Across the Portfolio](#q21-senior-cybersecurity--ai-security-matrix-mapping-enterprise-competencies-across-the-portfolio)
+      - [Question:](#question-20)
+      - [Answer \& Technical Defense:](#answer--technical-defense-20)
+    - [Q22: Why is IaC security scanning mandatory for every production repository and where should it run?](#q22-why-is-iac-security-scanning-mandatory-for-every-production-repository-and-where-should-it-run)
+      - [Question:](#question-21)
+      - [Answer \& Technical Defense:](#answer--technical-defense-21)
+    - [Q23: IaC Security Tooling Evaluation: Comparing Checkov, Trivy Config, KICS, and OPA/Conftest](#q23-iac-security-tooling-evaluation-comparing-checkov-trivy-config-kics-and-opaconftest)
+      - [Question:](#question-22)
+      - [Answer \& Technical Defense:](#answer--technical-defense-22)
+    - [Q24: Reddit Trivy Security Incident Analysis, Container vs. IaC Decoupling, and Definitive Selection of KICS (Checkmarx) \& Conftest (OPA) over Checkov \& TFLint](#q24-reddit-trivy-security-incident-analysis-container-vs-iac-decoupling-and-definitive-selection-of-kics-checkmarx--conftest-opa-over-checkov--tflint)
+      - [Question:](#question-23)
+      - [Answer \& Technical Defense:](#answer--technical-defense-23)
+    - [Q25: Expanding the Master Architecture Execution Map from 45 to 47 Chronological Flows for Explicit Policy-as-Code (Conftest OPA) and IaC Security (KICS Checkmarx) Modeling](#q25-expanding-the-master-architecture-execution-map-from-45-to-47-chronological-flows-for-explicit-policy-as-code-conftest-opa-and-iac-security-kics-checkmarx-modeling)
+      - [Question:](#question-24)
+      - [Answer \& Technical Defense:](#answer--technical-defense-24)
+    - [Q26: Definitive Cybersecurity \& DevSecOps Mapping against Senior Job Requirements (P1 vs. P3 vs. Future Project), Rigorous Technical Rationales, and Honest Tool Evaluation (Architectural Shift vs. Resume Vendor Diversification)](#q26-definitive-cybersecurity--devsecops-mapping-against-senior-job-requirements-p1-vs-p3-vs-future-project-rigorous-technical-rationales-and-honest-tool-evaluation-architectural-shift-vs-resume-vendor-diversification)
+      - [Question:](#question-25)
+      - [Answer \& Technical Defense:](#answer--technical-defense-25)
+    - [Q27: Omnichannel Ingestion Architecture: The 4 Inbound Webhook Sources (SES, Web Form, Trustpilot, Stripe) \& Canonical Normalization](#q27-omnichannel-ingestion-architecture-the-4-inbound-webhook-sources-ses-web-form-trustpilot-stripe--canonical-normalization)
+      - [Question:](#question-26)
+      - [Answer \& Technical Defense:](#answer--technical-defense-26)
+    - [Q28: Web Operations Console vs. Desktop Fat Client: Why the Industry Uses Cloud Web Interfaces with Zero-Trust Authentication](#q28-web-operations-console-vs-desktop-fat-client-why-the-industry-uses-cloud-web-interfaces-with-zero-trust-authentication)
+      - [Question:](#question-27)
+      - [Answer \& Technical Defense:](#answer--technical-defense-27)
+    - [Q29: Enterprise Authentication \& Multi-Factor Security: Amazon Cognito with Enforced RFC 6238 Software Token TOTP MFA](#q29-enterprise-authentication--multi-factor-security-amazon-cognito-with-enforced-rfc-6238-software-token-totp-mfa)
+      - [Question:](#question-28)
+      - [Answer \& Technical Defense:](#answer--technical-defense-28)
+    - [Q30: In-Context Grounding vs. Fine-Tuning: Why Model Retraining is an Anti-Pattern for AI Triage \& The Role of `company_profile.json`](#q30-in-context-grounding-vs-fine-tuning-why-model-retraining-is-an-anti-pattern-for-ai-triage--the-role-of-company_profilejson)
+      - [Question:](#question-29)
+      - [Answer \& Technical Defense:](#answer--technical-defense-29)
+    - [Q31: Atomic Multi-Attribute Triage: Why Single-Pass Inference Trumps Sequential Multi-Call Pipelines](#q31-atomic-multi-attribute-triage-why-single-pass-inference-trumps-sequential-multi-call-pipelines)
+      - [Question:](#question-30)
+      - [Answer \& Technical Defense:](#answer--technical-defense-30)
+    - [Q32: Department Categorization Taxonomies \& Precedence Rules: Resolving Conflicting Symptoms vs. Underlying Root Cause](#q32-department-categorization-taxonomies--precedence-rules-resolving-conflicting-symptoms-vs-underlying-root-cause)
+      - [Question:](#question-31)
+      - [Answer \& Technical Defense:](#answer--technical-defense-31)
+    - [Q33: Deterministic SLA Calculation: The ITIL Impact x Urgency Matrix \& Why LLMs Must Never Calculate Temporal Deadlines](#q33-deterministic-sla-calculation-the-itil-impact-x-urgency-matrix--why-llms-must-never-calculate-temporal-deadlines)
+      - [Question:](#question-32)
+      - [Answer \& Technical Defense:](#answer--technical-defense-32)
+    - [Q34: Dual-Vector Sentiment \& Frustration Analysis: Quantitative Scoring, Churn Detection, and Automatic Priority Escalation](#q34-dual-vector-sentiment--frustration-analysis-quantitative-scoring-churn-detection-and-automatic-priority-escalation)
+      - [Question:](#question-33)
+      - [Answer \& Technical Defense:](#answer--technical-defense-33)
+    - [Q35: Automated Key Entity Extraction (NER): PostgreSQL JSONB Storage with Generalized Inverted (GIN) Indexing](#q35-automated-key-entity-extraction-ner-postgresql-jsonb-storage-with-generalized-inverted-gin-indexing)
+      - [Question:](#question-34)
+      - [Answer \& Technical Defense:](#answer--technical-defense-34)
+    - [Q36: The Clarification Protocol: Handling Vague, Chaotic, or Incomplete Inquiries Without Model Hallucination](#q36-the-clarification-protocol-handling-vague-chaotic-or-incomplete-inquiries-without-model-hallucination)
+      - [Question:](#question-35)
+      - [Answer \& Technical Defense:](#answer--technical-defense-35)
+    - [Q37: Suggested Response Draft Architecture: The 4 Dynamic Response Strategies \& Agent Copilot Guidance Notes](#q37-suggested-response-draft-architecture-the-4-dynamic-response-strategies--agent-copilot-guidance-notes)
+      - [Question:](#question-36)
+      - [Answer \& Technical Defense:](#answer--technical-defense-36)
+    - [Q38: High-Performance Prioritized Queue: Multi-Criteria Tie-Breaking \& Partial Composite B-Tree Indexing in PostgreSQL](#q38-high-performance-prioritized-queue-multi-criteria-tie-breaking--partial-composite-b-tree-indexing-in-postgresql)
+      - [Question:](#question-37)
+      - [Answer \& Technical Defense:](#answer--technical-defense-37)
+    - [Q39: Human-in-the-Loop Category Overrides: Immutable Audit Trails for SOC 2 Compliance \& MLOps Calibration Datasets](#q39-human-in-the-loop-category-overrides-immutable-audit-trails-for-soc-2-compliance--mlops-calibration-datasets)
+      - [Question:](#question-38)
+      - [Answer \& Technical Defense:](#answer--technical-defense-38)
+    - [Q40: Multi-Agent Concurrency \& Collision Prevention: Atomic SQL State Transitions vs. WebSockets Overhead](#q40-multi-agent-concurrency--collision-prevention-atomic-sql-state-transitions-vs-websockets-overhead)
+      - [Question:](#question-39)
+      - [Answer \& Technical Defense:](#answer--technical-defense-39)
+    - [Q41: Split-Screen Live Demo Verification: Demonstrating Multi-Agent Claiming \& ACID Consistency in 45 Seconds](#q41-split-screen-live-demo-verification-demonstrating-multi-agent-claiming--acid-consistency-in-45-seconds)
+      - [Question:](#question-40)
+      - [Answer \& Technical Defense:](#answer--technical-defense-40)
+    - [Q42: Business-Agnostic CLI Test Harness (`seed_inquiries.py`) with Real Cryptographic Signatures vs. SRE Load Testing (`k6-load-test.js`)](#q42-business-agnostic-cli-test-harness-seed_inquiriespy-with-real-cryptographic-signatures-vs-sre-load-testing-k6-load-testjs)
+      - [Question:](#question-41)
+      - [Answer \& Technical Defense:](#answer--technical-defense-41)
+    - [Q43: Executive Analytics, GenAI Unit Economics, and SRE Observability: Measuring Real Cost per Ticket (~0.00025 €), MTTR Reduction, and Model Acceptance Rate](#q43-executive-analytics-genai-unit-economics-and-sre-observability-measuring-real-cost-per-ticket-000025--mttr-reduction-and-model-acceptance-rate)
+      - [Question:](#question-42)
+      - [Answer \& Technical Defense:](#answer--technical-defense-42)
+    - [Q44: Dual Public Review Ingestion Architecture: Supporting Both Trustpilot and Google Reviews as Optional Pluggable Webhook Providers](#q44-dual-public-review-ingestion-architecture-supporting-both-trustpilot-and-google-reviews-as-optional-pluggable-webhook-providers)
+      - [Question:](#question-43)
+      - [Answer \& Technical Defense:](#answer--technical-defense-43)
+    - [Q45: Zero-Secrets Policy Across CI/CD, Source Code, and IaC: Eliminating Hardcoded Credentials via Secrets Manager, IAM OIDC, and ECS Native Injection](#q45-zero-secrets-policy-across-cicd-source-code-and-iac-eliminating-hardcoded-credentials-via-secrets-manager-iam-oidc-and-ecs-native-injection)
+      - [Question:](#question-44)
+      - [Answer \& Technical Defense:](#answer--technical-defense-44)
+    - [Q46: CI/CD Architectural Trade-offs: AWS Developer Suite (CodePipeline, CodeBuild, CodeDeploy) vs. GitHub Actions — Industry Reality, Compliance, and Portfolio Strategy](#q46-cicd-architectural-trade-offs-aws-developer-suite-codepipeline-codebuild-codedeploy-vs-github-actions--industry-reality-compliance-and-portfolio-strategy)
+      - [Question:](#question-45)
+      - [Answer \& Technical Defense:](#answer--technical-defense-45)
+    - [Q47: Mapping GitHub Actions to the AWS Developer Suite: CodePipeline Stages, CodeBuild Buildspecs, CodeDeploy AppSpecs, and Native PR Webhook Status Reporting](#q47-mapping-github-actions-to-the-aws-developer-suite-codepipeline-stages-codebuild-buildspecs-codedeploy-appspecs-and-native-pr-webhook-status-reporting)
+      - [Question:](#question-46)
+      - [Answer \& Technical Defense:](#answer--technical-defense-46)
 
 ---
 
@@ -184,20 +401,17 @@ $$\text{ECS Task (AWS)} \equiv \text{Pod (Kubernetes)}$$
 
 ---
 
-### Q4: Why use a Sidecar in Project 3 and not in Project 1 or Project 2?
+### Q4: Why use a Sidecar in Customer Inquiry Manager and not in Project 1 (AI Inventory Tracker)?
 
 #### Question:
-> *"Why did we use a sidecar container in Customer Inquiry Manager, but didn't use one in Project 1 (AI Inventory Tracker) or Project 2 (Automated Backup System)?"*
+> *"Why did we use a sidecar container in Customer Inquiry Manager, but didn't use one in Project 1 (AI Inventory Tracker)?"*
 
 #### Answer & Technical Defense:
 1. **In Project 1 (`AI Inventory Tracker` - EKS):**
    - We managed an **EC2 Node Group** (virtual servers).
    - In Kubernetes with EC2 nodes, telemetry agents (like Fluent Bit) are deployed as a **`DaemonSet`** (one pod per node, collecting logs from all pods on that host).
    - Centralizing telemetry at the node level saves memory compared to duplicating agents inside every application pod. Thus, no pod-level sidecar was needed.
-2. **In Project 2 (`Automated Backup System` - Serverless Backup):**
-   - Project 2 is an **event-driven serverless architecture** (AWS Backup, Vault Lock, EventBridge, S3, RDS).
-   - No persistent compute cluster (neither ECS nor EKS) existed. Without containers or shared network namespaces, the sidecar pattern cannot exist.
-3. **In Project 3 (`Customer Inquiry Manager` - ECS Fargate):**
+2. **In Project 2 (`Customer Inquiry Manager` - ECS Fargate):**
    - **Fargate is Serverless:** AWS manages the underlying EC2 host and isolates each Task inside a Firecracker MicroVM. Users cannot access the host machine to run a cluster-wide DaemonSet.
    - Therefore, the **only physical mechanism** to run an auxiliary process (like `aws-xray-daemon`) alongside the application is to package it as a secondary container inside the same Task Definition (the Sidecar Pattern).
 
@@ -549,10 +763,9 @@ Observability in this project is actually **more production-realistic** than in 
    - **Vector Database Poisoning / RAG Security:** Rejected. Customer Inquiry Manager performs classification and triage grounded by `company_profile.json` within the system prompt. It does not run a dynamic Retrieval-Augmented Generation (RAG) pipeline over a vector database (such as pgvector or OpenSearch Serverless). Introducing a vector database solely to demonstrate RAG security would be artificial overengineering.
 
 5. **Cross-Project Portfolio Coverage (The Holistic Candidate Defense):**
-   - In an interview for a role like Paradigma Digital's Senior Cybersecurity Engineer, the candidate demonstrates the full requirements matrix across the complete 5-project portfolio:
-     - *Project 1 (AI Inventory Tracker):* Advanced Kubernetes Security, Pod Security Standards, NetworkPolicies, Distroless nonroot images, OIDC federation.
-     - *Project 2 (Automated Backup System):* Immutable WORM storage (AWS Backup Vault Lock Compliance Mode), Ransomware resilience, Automated DR verification, and IaC security validation (Checkov + TFLint).
-     - *Project 3 (Customer Inquiry Manager):* AI Security (Amazon Bedrock Guardrails against Prompt Injection & PII leakage, OWASP Top 10 for LLMs), DevSecOps pipeline gates (Semgrep SAST, Trivy SCA, SBOM), Zero-Internet Egress (PrivateLink), and Cognito TOTP MFA.
+   - In an interview for a role like Paradigma Digital's Senior Cybersecurity Engineer, the candidate demonstrates the full requirements matrix across the two core flagship portfolio projects:
+     - *Project 1 (AI Inventory Tracker):* Advanced Kubernetes Security, Pod Security Standards, NetworkPolicies, Distroless nonroot images, GitLab CI, and declarative ArgoCD GitOps.
+     - *Project 2 (Customer Inquiry Manager):* Generative AI Security (Amazon Bedrock Guardrails against Prompt Injection & PII leakage, OWASP Top 10 for LLMs), DevSecOps pipeline gates (Semgrep SAST, Trivy SCA, SBOM), Zero-Internet Egress (PrivateLink), and Cognito TOTP MFA.
 
 ---
 
@@ -578,7 +791,7 @@ Observability in this project is actually **more production-realistic** than in 
    - **Application Code (FastAPI / Boto3):** Exactly one dictionary parameter passed to the existing Boto3 invocation in `app/services/bedrock_service.py`:
      ```python
      response = bedrock_client.converse(
-         modelId="anthropic.claude-3-5-sonnet-20240620-v1:0",
+         modelId="anthropic.claude-haiku-4-5-20251001-v1:0",
          messages=messages,
          system=system_prompts,
          guardrailConfig={
@@ -737,7 +950,7 @@ Observability in this project is actually **more production-realistic** than in 
 3. **Definitive Decision 2: Replacing Checkov with KICS by Checkmarx (IaC Security & Compliance):**
    - **Role:** Static Infrastructure as Code (IaC) Security & Misconfiguration Scanner.
    - **Execution Location:** GitHub Actions PR Gate (`.github/workflows/pr-verify.yml`) and Pre-Flight Script (`scripts/deploy-infra.sh`).
-   - **Why Replace Checkov?** Checkov is already implemented in **Project 1 (`ai-inventory-tracker`)** and **Project 2 (`automated-backup-system`)**. Repeating Checkov in Project 3 creates portfolio redundancy and misses the opportunity to showcase enterprise vendor breadth.
+   - **Why Replace Checkov?** Checkov is already implemented in **Project 1 (`ai-inventory-tracker`)**. Repeating Checkov in Project 2 creates portfolio redundancy and misses the opportunity to showcase enterprise vendor breadth.
    - **Why KICS by Checkmarx?**
      - **Enterprise Vendor Prestige:** Checkmarx is a premier Gartner Magic Quadrant leader in Application Security Testing (AST), heavily demanded by enterprise consultancies (e.g., Paradigma Digital, Accenture, Santander).
      - **Comprehensive Policy Engine:** Ships with over 2,000 queries validating against CIS AWS Foundations Benchmark, SOC 2, HIPAA, and PCI-DSS across Terraform, Dockerfile, and CloudFormation.
@@ -1347,3 +1560,162 @@ Observability in this project is actually **more production-realistic** than in 
      }
      ```
    - AWS generates, stores in Secrets Manager, encrypts with a Customer Managed KMS Key (CMK), and rotates the master database password automatically without human intervention or plaintext exposure in `terraform.tfstate`.
+
+---
+
+### Q46: CI/CD Architectural Trade-offs: AWS Developer Suite (CodePipeline, CodeBuild, CodeDeploy) vs. GitHub Actions — Industry Reality, Compliance, and Portfolio Strategy
+
+#### Question:
+> *"What is the engineering justification for deploying the AWS CI/CD suite (CodePipeline, CodeBuild, CodeDeploy) instead of GitHub Actions? What are the honest industry trade-offs (including developer sentiment on r/aws and r/devops), when do real-world enterprises choose one over the other, and what do senior hiring managers expect to see in this project?"*
+
+#### Answer & Technical Defense:
+
+1. **The Industry & Community Reality (Honest Assessment):**
+   - **Developer Sentiment (r/aws, r/devops):** In startups, scale-ups, and modern web software engineering, 80–90% of developers strongly prefer **GitHub Actions** (or GitLab CI). The developer experience (DX) of GitHub Actions is demonstrably superior: instantaneous runner startup, rich local debugging (`act`), intuitive YAML syntax, unified Pull Request status checks directly within GitHub, fast dependency caching (`actions/cache`), and an ecosystem of thousands of open-source actions.
+   - Conversely, the AWS Developer Tools suite (CodePipeline, CodeBuild, CodeDeploy) is frequently criticized on developer forums for sluggish initial provisioning times (CodeBuild container cold-starts require 30–60 seconds), verbose IAM role mappings, fragmented multi-service console navigation, and verbose Terraform HCL boilerplate. Furthermore, AWS officially deprecated AWS CodeCommit for new customers in July 2024, confirming that Git version control belongs on GitHub/GitLab.
+   - **The Critical Question:** If GitHub Actions offers a superior developer experience, why does AWS CI/CD remain heavily utilized across Fortune 500 enterprises, and why is it implemented in this architecture?
+
+2. **Why Enterprises Choose the AWS CI/CD Suite (Non-Negotiable Enterprise Mandates):**
+   - **A. Private VPC Isolation & Zero-Egress Build Environments (Compliance & FedRAMP/HIPAA/PCI-DSS):**
+     - In banking, healthcare, government, and defense environments, security regulations prohibit proprietary source code, internal proprietary binaries, and compiled artifacts from being processed on third-party SaaS multi-tenant runners hosted outside the corporate network perimeter.
+     - **AWS CodeBuild natively attaches to Private Subnets within a VPC**. It runs with zero internet access, pulling base images, dependencies, and sending artifacts strictly over AWS PrivateLink Interface Endpoints (`ecr.api`, `ecr.dkr`, `s3`, `secretsmanager`).
+     - Achieving equivalent network isolation with GitHub Actions mandates deploying and managing **Self-Hosted Runners** (e.g., Actions Runner Controller - ARC on Kubernetes or EC2 auto-scaling groups), which introduces significant operational overhead, patching burdens, and infrastructure costs.
+   - **B. Native AWS IAM Security Boundary & Single CloudTrail Audit Trail:**
+     - CodePipeline, CodeBuild, and CodeDeploy operate entirely within the AWS Identity and Access Management (IAM) control plane via native execution roles. No external authentication tokens, API keys, or OIDC trust boundaries need to be configured.
+     - Every single build phase, artifact generation, and deployment shift is immutably recorded in **AWS CloudTrail** and encrypted at rest with **AWS KMS Customer Managed Keys (CMK)**, providing a frictionless audit trail for SOC 2 Type II and ISO 27001 compliance.
+   - **C. Native ECS Blue/Green Deployments with AWS CodeDeploy:**
+     - CodeDeploy provides an out-of-the-box, production-grade deployment state machine specifically engineered for Amazon ECS.
+     - It natively integrates with Application Load Balancer Target Groups (Production Listener vs. Test Listener), executes automated traffic shifting algorithms (`Canary10Percent5Minutes`, `Linear10PercentEvery1Minute`), and continuously monitors CloudWatch Alarms.
+     - If HTTP 5xx error rates, target response times, or container crash loops breach configured thresholds during the canary window, CodeDeploy triggers an **instant automated rollback** with zero human intervention.
+     - Replicating this state machine in GitHub Actions requires hundreds of lines of brittle custom bash scripts or complex step functions invoking the AWS CLI in polling loops.
+
+3. **Strategic Portfolio Positioning (Dual Flagship Architecture):**
+   - **Demonstrating 360-Degree CI/CD Versatility Across Projects:**
+     - *Project 1 (AI Inventory Tracker):* CNCF Kubernetes, Helm, GitLab CI, and declarative GitOps with ArgoCD. (Demonstrates modern cloud-native GitOps and GitLab).
+     - *Project 2 (Customer Inquiry Manager):* AWS Native Developer Tools Suite (CodePipeline, CodeBuild, CodeDeploy) with ECS Fargate Spot Blue/Green rollouts. (Demonstrates cloud-provider native automation in high-compliance, zero-egress enterprise environments).
+     - *Future Dedicated Project (e.g., Project 3/4):* Will showcase pure GitHub Actions with IAM OIDC Federation.
+   - If an engineer uses GitHub Actions for every project, interviewers perceive a tool monoculture. Demonstrating mastery of the AWS Developer Tools suite proves that the candidate is immediately productive in traditional enterprise, banking, and government AWS environments where third-party CI/CD tools are prohibited by corporate security policy.
+
+4. **Eliminating the Two-Tier Split-Brain Anti-Pattern (Unifying 100% in AWS):**
+   - Running both GitHub Actions (for PRs) and AWS CodePipeline (for deployments) on the same repository is an operational anti-pattern that creates dual configuration maintenance, fragmented developer experience, and environment drift.
+   - **The Architectural Resolution:** The architecture unifies 100% under the **AWS Developer Tools Suite**:
+     - `.github/workflows/` is eliminated entirely.
+     - **PR Gate:** Managed natively by **AWS CodeBuild** using GitHub webhooks via AWS CodeStar Connections. CodeBuild executes `terraform validate`, Conftest (OPA Rego), KICS (Checkmarx), and Pytest, reporting the build status directly to the GitHub Pull Request via the GitHub Commit Status API.
+     - **Production Release:** Managed by **AWS CodePipeline**, orchestrating CodeBuild (Docker compilation, Semgrep SAST, Trivy CVE scanning, Syft SBOM generation, and ECR push) and **AWS CodeDeploy** (ECS Blue/Green canary traffic shifting).
+
+5. **What Senior Interviewers and Hiring Managers Expect to See:**
+   - **Terraform Declarations (`terraform/modules/cicd/`):** Interviewers want to see that CodePipeline, CodeBuild project configurations, CodeDeploy deployment groups, and least-privilege IAM roles are defined declaratively as code, rather than created manually via the AWS Management Console.
+   - **Pipeline Specifications (`buildspec.yml` & `appspec.yaml`):** Reviewers look for structured phases (`install`, `pre_build`, `build`, `post_build`), container security gating (Trivy failing the build on critical CVEs), and dynamic artifact passing.
+   - **Architectural Trade-off Articulation:** An interviewer will ask: *"Why did you choose CodePipeline over GitHub Actions here?"* The expected answer is not dogmatic defense, but a clear architectural trade-off analysis: acknowledging GitHub Actions' superior DX for general web workloads, while justifying CodePipeline through VPC build isolation, native IAM/CloudTrail compliance, and CodeDeploy's native ECS canary rollback capabilities.
+
+---
+
+### Q47: Mapping GitHub Actions to the AWS Developer Suite: CodePipeline Stages, CodeBuild Buildspecs, CodeDeploy AppSpecs, and Native PR Webhook Status Reporting
+
+#### Question:
+> *"How do GitHub Actions concepts and workflows map to the AWS Developer Suite (CodePipeline, CodeBuild, CodeDeploy)? What replaces `.github/workflows/` files, how do buildspecs and appspecs work, and how does CodeBuild handle Pull Request validation and GitHub status checks natively?"*
+
+#### Answer & Technical Defense:
+
+1. **Conceptual 1-to-1 Mapping Matrix:**
+
+| GitHub Actions Concept | AWS Developer Suite Equivalent | Function & Responsibility in Architecture |
+| :--- | :--- | :--- |
+| **Workflow (`.github/workflows/*.yml`)** | **AWS CodePipeline** (`aws_codepipeline`) | The high-level pipeline orchestrator that defines sequential or parallel **Stages** (Source ➔ Build ➔ Deploy) and transitions between them. |
+| **Job Runner (`runs-on: ubuntu-latest`)** | **AWS CodeBuild** (`aws_codebuild_project`) | The ephemeral compute environment (Docker container) that executes shell commands, runs tests, performs scans, and compiles Docker images. |
+| **Step Instructions (`run: pytest ...`)** | **`buildspec.yml`** | The declarative YAML specification inside CodeBuild containing execution **phases** (`install`, `pre_build`, `build`, `post_build`). |
+| **Workflow Trigger (`on: pull_request`)** | **AWS CodeBuild Webhook** (`aws_codebuild_webhook`) | Event listener on GitHub repository triggered on `PULL_REQUEST_CREATED`, `PULL_REQUEST_UPDATED`, and `PULL_REQUEST_REOPENED`. |
+| **Commit Status Check (Green Checkmark on PR)** | **GitHub Commit Status API via CodeBuild** | CodeBuild automatically reports execution results (`PENDING`, `SUCCESS`, `FAILURE`) back to GitHub commit SHA to block merge if tests fail. |
+| **Deployment Action (`aws-actions/...`)** | **AWS CodeDeploy & `appspec.yaml`** | The deployment controller managing ECS Fargate task replacement, ALB Target Group switching, and canary progressive traffic shifting. |
+| **Artifact Passing between Jobs** | **S3 Artifact Bucket + KMS CMK** | CodePipeline automatically persists, zips, encrypts, and passes build artifacts (`imagedefinitions.json`, `appspec.yaml`) between stages. |
+
+2. **The Structure of `buildspec.yml` (Replacing GitHub Actions Steps):**
+   In AWS CodeBuild, execution is structured into lifecycle phases rather than arbitrary step lists:
+   ```yaml
+   version: 0.2
+
+   phases:
+     install:
+       runtime-versions:
+         python: 3.12
+         nodejs: 20
+       commands:
+         - echo "Installing security scanners and validation binaries..."
+         - curl -s https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+         - pip install -r requirements.txt semgrep conftest
+
+     pre_build:
+       commands:
+         - echo "Executing Unit Tests and Policy-as-Code Gates..."
+         - pytest app/tests/ -v --junitxml=reports/pytest.xml
+         - semgrep --config p/security-audit --error
+         - conftest test terraform/
+         - kics scan -p terraform/ --fail-on HIGH,CRITICAL
+
+     build:
+       commands:
+         - echo "Compiling Multi-Stage Docker Container..."
+         - docker build -t $ECR_REPOSITORY_URI:latest -t $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION .
+
+     post_build:
+       commands:
+         - echo "Executing Container Vulnerability Scanning & SBOM Generation..."
+         - trivy image --exit-code 1 --severity HIGH,CRITICAL $ECR_REPOSITORY_URI:latest
+         - syft $ECR_REPOSITORY_URI:latest -o cyclonedx-json > sbom.json
+         - echo "Authenticating to ECR and Pushing Image..."
+         - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_REPOSITORY_URI
+         - docker push $ECR_REPOSITORY_URI:latest
+         - docker push $ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION
+         - printf '{"ImageURI":"%s"}' "$ECR_REPOSITORY_URI:$CODEBUILD_RESOLVED_SOURCE_VERSION" > imageDetail.json
+
+   reports:
+     pytest-reports:
+       files:
+         - "reports/pytest.xml"
+       file-format: "JUNITXML"
+
+   artifacts:
+     files:
+       - imageDetail.json
+       - appspec.yaml
+       - taskdef.json
+   ```
+
+3. **Native GitHub Pull Request Integration via AWS CodeBuild:**
+   - GitHub Actions is **not required** to achieve Pull Request verification and status reporting in GitHub.
+   - CodeBuild provides native bidirectional GitHub integration via **AWS CodeStar Connections**:
+     ```hcl
+     resource "aws_codebuild_webhook" "pr_webhook" {
+       project_name = aws_codebuild_project.pr_gate.name
+       build_type   = "BUILD"
+       filter_group {
+         filter {
+           type    = "EVENT"
+           pattern = "PULL_REQUEST_CREATED, PULL_REQUEST_UPDATED, PULL_REQUEST_REOPENED"
+         }
+       }
+     }
+     ```
+   - When a developer opens or updates a Pull Request:
+     1. GitHub emits an event via the CodeStar webhook to AWS CodeBuild.
+     2. CodeBuild launches an isolated container running `buildspec-pr.yml` (executing Terraform format/validation, Conftest OPA, KICS Checkmarx, Semgrep SAST, and Pytest).
+     3. CodeBuild updates the GitHub Pull Request UI in real-time with the commit status (`context: "AWS CodeBuild eu-west-1 (pr-gate)"`).
+     4. GitHub's branch protection rules mandate this check to pass with status `SUCCESS` before merging into `main`.
+
+4. **The Role of `appspec.yaml` in Amazon ECS Blue/Green Deployments:**
+   - In GitHub Actions, ECS deployments typically rely on basic rolling updates (`aws ecr put-image` + `aws ecs update-service --force-new-deployment`).
+   - In AWS CodeDeploy, deployment behavior is governed by `appspec.yaml`, which explicitly configures the Blue/Green traffic controller:
+     ```yaml
+     version: 0.0
+     Resources:
+       - TargetService:
+           Type: AWS::ECS::Service
+           Properties:
+             TaskDefinition: <TASK_DEFINITION>
+             LoadBalancerInfo:
+               ContainerName: "app"
+               ContainerPort: 8000
+     Hooks:
+       - AfterAllowTestTraffic: "arn:aws:lambda:...:function:ValidateTestTargetGroup"
+     ```
+   - CodeDeploy deploys new tasks to a **Green Target Group** on the ALB, directs test traffic to evaluate health probes, gradually shifts live traffic using canary routing, and triggers automatic rollbacks if CloudWatch alarms fire.

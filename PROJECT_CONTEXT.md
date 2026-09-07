@@ -8,10 +8,9 @@
 > **Architectural Ledger & Q&A Memory:** For the exhaustive chronological ledger of design debates, technical inquiries, and architectural justifications, refer to [ARCHITECTURE_DECISIONS_AND_QA.md](file:///c:/Dev/Cloud/customer-inquiry-manager/customer-inquiry-manager/ARCHITECTURE_DECISIONS_AND_QA.md).
 
 - **Objective:** Architect, deploy, and operate an enterprise-grade customer inquiry ingestion, AI-powered intelligent triage, and automated SLA calculation platform on AWS.
-- **Positioning:** Project 3 of 5 within the Cloud, DevOps, and SRE Professional Portfolio:
+- **Positioning:** Project 2 within the Core Cloud, DevOps, and SRE Professional Portfolio (Dual Flagship Architecture):
   - *Project 1 (AI Inventory Tracker):* EKS, Go, DynamoDB Streams, ArgoCD GitOps, GitLab CI. (Demonstrates CNCF standards, multi-tenant Kubernetes platform engineering, and declarative GitOps reconciliation).
-  - *Project 2 (Automated Backup System):* AWS Backup Vault Lock (WORM compliance), RDS, S3, EventBridge, GitHub Actions. (Demonstrates automated disaster recovery, compliance auditing, and event-driven serverless maintenance).
-  - *Project 3 (Customer Inquiry Manager):* ECS Fargate Spot, RDS PostgreSQL, Amazon Bedrock (Converse API), Amazon Cognito (Enforced TOTP MFA & RBAC), S3 Multi-Tier Lifecycle, AWS PrivateLink (Zero-Internet Egress), AWS X-Ray, CloudWatch SLI/SLO, AWS CodePipeline/CodeBuild/CodeDeploy, and Modular Terraform. (Demonstrates serverless container orchestration, strict network isolation, generative AI engineering, and FinOps lifecycle optimization).
+  - *Project 2 (Customer Inquiry Manager):* ECS Fargate Spot, RDS PostgreSQL, Amazon Bedrock (Converse API), Amazon Cognito (Enforced TOTP MFA & RBAC), S3 Multi-Tier Lifecycle, AWS PrivateLink (Zero-Internet Egress), AWS X-Ray, CloudWatch SLI/SLO, and Modular Terraform. (Demonstrates serverless container orchestration, strict network isolation, generative AI engineering, FinOps lifecycle optimization, and enterprise DevSecOps).
 
 ---
 
@@ -291,7 +290,7 @@ Every flow connects exactly one origin node to one destination node. Each block 
 #### Block 5: AI Inference, Attachments & KMS Encryption (Color: Emerald Green `#059669`)
 
 ##### Flow 30: `App (FastAPI)` ➔ `VPC Endpoint: Bedrock` *(Emerald Green - Solid)*
-* **Action:** FastAPI invokes `bedrock-runtime:Converse` passing `guardrailConfig` via Interface Endpoint to Claude 3.5 Sonnet / Haiku. **Amazon Bedrock Guardrails** evaluates Prompt Attack filters (Prompt Injection / Jailbreak) and PII redaction rules (DLP) before foundation model execution.
+* **Action:** FastAPI invokes `bedrock-runtime:Converse` passing `guardrailConfig` via Interface Endpoint to **Claude Haiku 4.5** (`eu.anthropic.claude-haiku-4-5-20251001-v1:0` / `anthropic.claude-haiku-4-5-20251001-v1:0`) or **Amazon Nova 2 Lite** (`eu.amazon.nova-2-lite-v1:0` / `amazon.nova-2-lite-v1:0`). **Amazon Bedrock Guardrails** evaluates Prompt Attack filters (Prompt Injection / Jailbreak) and PII redaction rules (DLP) before foundation model execution.
 * **Rationale:** Executes intent classification, sentiment analysis, urgency rating (1–5), churn detection, and response drafting in a single sub-second call while mitigating OWASP Top 10 for LLMs risks.
 * **Precedence:** Executes once input payload is validated in memory, before database persistence.
 
@@ -440,7 +439,6 @@ customer-inquiry-manager/
 │   │   ├── test_inquiries.py
 │   │   ├── test_bedrock_schema.py
 │   │   └── test_auth.py
-│   ├── buildspec.yml                 # AWS CodeBuild spec (pytest + semgrep + trivy + sbom + docker build)
 │   └── requirements.txt
 ├── frontend/                         # React 18/19 Operations Console (Vite SPA)
 │   ├── src/
@@ -453,6 +451,8 @@ customer-inquiry-manager/
 │   └── package.json
 ├── company_profile.json              # Domain grounding context document
 ├── Dockerfile                        # Multi-stage: Stage 1 Node.js build -> Stage 2 Python 3.12-slim
+├── buildspec.yml                     # AWS CodeBuild spec (PR validation & Container build/test/scan)
+├── appspec.yaml                      # AWS CodeDeploy spec (ECS Fargate Blue/Green traffic routing)
 ├── terraform/
 │   ├── environments/
 │   │   └── dev/
@@ -470,15 +470,12 @@ customer-inquiry-manager/
 │       ├── alb/                      # Public ALB, Target Groups, ACM TLS, Health Checks
 │       ├── iam/                      # Task Execution Role vs Task Role
 │       ├── monitoring/               # CloudWatch Dashboards, Alarms & X-Ray
-│       └── cicd/                     # CodePipeline, CodeBuild, CodeDeploy
+│       └── cicd/                     # CodePipeline, CodeBuild, CodeDeploy (100% AWS Native)
 ├── scripts/
 │   ├── seed_inquiries.py             # Test harness simulating the 4 inbound omnichannel webhooks
 │   ├── k6-load-test.js               # Load and auto-scaling validation script (15-50 VUs)
 │   ├── deploy-infra.sh               # 1-Click Terraform & infrastructure deployment bootstrap
 │   └── teardown-infra.sh             # 1-Click Clean teardown script verified to 0.00 € residual cost
-├── .github/
-│   └── workflows/
-│       └── pr-verify.yml             # PR gate: terraform validate, Conftest (OPA) & KICS (Checkmarx) IaC security scan
 ├── LICENSE
 ├── README.md
 ├── AGENTS.md                         # Antigravity persistent workspace rules & directives
