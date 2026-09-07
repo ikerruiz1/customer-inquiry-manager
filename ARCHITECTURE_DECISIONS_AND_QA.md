@@ -48,6 +48,56 @@ Whenever working on code, infrastructure, or interview preparation, refer to thi
 34. [Dual-Vector Sentiment & Frustration Analysis: Quantitative Scoring, Churn Detection, and Automatic Priority Escalation](#q34-dual-vector-sentiment--frustration-analysis-quantitative-scoring-churn-detection-and-automatic-priority-escalation)
 35. [Automated Key Entity Extraction (NER): PostgreSQL JSONB Storage with Generalized Inverted (GIN) Indexing](#q35-automated-key-entity-extraction-ner-postgresql-jsonb-storage-with-generalized-inverted-gin-indexing)
 36. [The Clarification Protocol: Handling Vague, Chaotic, or Incomplete Inquiries Without Model Hallucination](#q36-the-clarification-protocol-handling-vague-chaotic-or-incomplete-inquiries-without-model-hallucination)
+# ARCHITECTURE DECISIONS & TECHNICAL Q&A LEDGER
+## Project: Customer Inquiry Manager (Enterprise AI Customer Inquiry & Ticket Triage Platform)
+
+---
+
+### Purpose of this Document
+This document serves as the **authoritative, exhaustive technical memory and Architecture Decision Record (ADR) log** for the Customer Inquiry Manager project. Every technical question, architectural debate, alternative analysis, and engineering rationale discussed throughout the system design lifecycle is recorded here in **Strict English**.
+
+Whenever working on code, infrastructure, or interview preparation, refer to this ledger to understand the exact evolution of technical thought and why each architectural decision was made.
+
+---
+
+### Quick Index of Architectural Debates & Decisions
+
+1. [Compute Selection: ECS Fargate Spot vs. Amazon EKS](#q1-why-ecs-fargate-spot-instead-of-amazon-eks)
+2. [Platform Engineering vs. Workload: Was Kubernetes in Project 1 Overengineering?](#q2-was-kubernetes-in-project-1-overengineering-should-it-have-more-microservices)
+3. [The Sidecar Pattern: Core Definition, Mechanics, and Network Namespaces](#q3-what-is-a-sidecar-container-and-how-does-it-differ-from-a-kubernetes-pod)
+4. [Sidecar Usage Across the Portfolio: Why Project 3 and Not Projects 1 & 2?](#q4-why-use-a-sidecar-in-project-3-and-not-in-project-1-or-project-2)
+5. [Sidecar Alternatives & Enterprise Realities: Why Reject Fluent Bit, Envoy, and Datadog?](#q5-what-other-sidecars-exist-and-why-is-aws-x-ray-mandatory-for-genai)
+6. [Diagram Structure in Project 1 vs. Project 3: Namespaces vs. MicroVM Tasks](#q6-was-the-diagram-structure-in-project-1-wrong-compared-to-project-3)
+7. [ECR Regional Repository vs. ECR VPC Endpoint: Push vs. Pull Dual Routing](#q7-why-route-to-both-regional-ecr-and-ecr-vpc-endpoint-privatelink)
+8. [Ingress Architecture: The Role of Internet Gateway (IGW)](#q8-why-is-the-internet-gateway-igw-not-an-intermediate-hop)
+9. [Identity Clarification: "Support Agent" vs. Generic "User"](#q9-who-is-the-user-node-is-it-an-external-customer-or-an-internal-operator)
+10. [Omnichannel Ingress: The 4 Inbound Sources and Elimination of Direct Email Ingress](#q10-why-was-direct-mail-to-app-ingress-eliminated-in-favor-of-webhooks)
+11. [Outbound Events: Differentiating Inbound Webhooks from Outbound SNS Notifications](#q11-why-was-sns-to-webhooks-eliminated-from-outbound-events)
+12. [Flow Chronology & KMS Reordering: Transversal Security vs. End-of-Life Actions](#q12-why-were-kms-flows-reordered-instead-of-remaining-at-the-end-of-the-sequence)
+13. [Visual Governance in Excalidraw: Unified Single-Color Blocks](#q13-why-enforce-a-single-unified-color-per-architectural-block)
+14. [FinOps Multi-Tier Storage: Granular Glacier Transitions and Data Minimization](#q14-why-separate-s3-glacier-instant-retrieval-from-flexible-retrieval)
+15. [Observability Depth: Visualizing ECS Fargate Auto-Scaling and Metric Dashboards](#q15-is-observability-poorer-in-ecs-fargate-than-in-eks-how-do-we-visualize-scaling)
+16. [Database Isolation: Dedicated Database Subnets with Local-Only Routing](#q16-why-provision-isolated-database-subnets-with-no-internet-or-nat-routes)
+17. [Repository Structure & Idiomatic Layout: AI Inventory Tracker (EKS/Go) vs. Customer Inquiry Manager (ECS/Python)](#q17-why-does-the-directory-structure-differ-from-ai-inventory-tracker-will-an-evaluator-view-this-negatively)
+18. [ECS Module Scope: Why Manage Cluster, Task Definition, and Service Inside `terraform/modules/ecs/`?](#q18-why-manage-ecs-inside-terraformmodulesecs-instead-of-having-a-separate-deployment-directory-like-k8s)
+19. [AI Security & DevSecOps: Integrating Prompt Injection Defense, PII Masking, and Supply Chain Security without Overengineering](#q19-how-do-we-address-devsecops-and-ai-security-requirements-without-introducing-overengineering)
+20. [Architectural & Feature Delta: Does Implementing Bedrock Guardrails and DevSecOps Modify Topology or Business Scope?](#q20-does-incorporating-ai-security-and-devsecops-alter-the-architecture-technologies-or-features)
+21. [Senior Cybersecurity & AI Security Matrix: Comprehensive Competency Mapping Across Portfolio Projects](#q21-senior-cybersecurity--ai-security-matrix-mapping-enterprise-competencies-across-the-portfolio)
+22. [IaC Security in Production: Why Every Terraform Repository Requires Scanning & Where It Belongs (PR Gate vs. Application Build)](#q22-why-is-iac-security-scanning-mandatory-for-every-production-repository-and-where-should-it-run)
+23. [IaC Security Tooling Evaluation: Comparing Checkov, Trivy Config, KICS (Checkmarx), and OPA/Conftest](#q23-iac-security-tooling-evaluation-comparing-checkov-trivy-config-kics-and-opaconftest)
+24. [Reddit Trivy Security Incident Analysis, Container vs. IaC Decoupling, and Definitive Selection of KICS (Checkmarx) & Conftest (OPA) over Checkov & TFLint](#q24-reddit-trivy-security-incident-analysis-container-vs-iac-decoupling-and-definitive-selection-of-kics-checkmarx--conftest-opa-over-checkov--tflint)
+25. [Expanding the Master Architecture Execution Map from 45 to 47 Chronological Flows for Explicit Policy-as-Code (Conftest OPA) and IaC Security (KICS Checkmarx) Modeling](#q25-expanding-the-master-architecture-execution-map-from-45-to-47-chronological-flows-for-explicit-policy-as-code-conftest-opa-and-iac-security-kics-checkmarx-modeling)
+26. [Definitive Cybersecurity & DevSecOps Mapping against Senior Job Requirements (P1 vs. P3 vs. Future Project), Rigorous Technical Rationales, and Honest Tool Evaluation (Architectural Shift vs. Resume Vendor Diversification)](#q26-definitive-cybersecurity--devsecops-mapping-against-senior-job-requirements-p1-vs-p3-vs-future-project-rigorous-technical-rationales-and-honest-tool-evaluation-architectural-shift-vs-resume-vendor-diversification)
+27. [Omnichannel Ingestion Architecture: The 4 Inbound Webhook Sources (SES, Web Form, Trustpilot, Stripe) & Canonical Normalization](#q27-omnichannel-ingestion-architecture-the-4-inbound-webhook-sources-ses-web-form-trustpilot-stripe--canonical-normalization)
+28. [Web Operations Console vs. Desktop Fat Client: Why the Industry Uses Cloud Web Interfaces with Zero-Trust Authentication](#q28-web-operations-console-vs-desktop-fat-client-why-the-industry-uses-cloud-web-interfaces-with-zero-trust-authentication)
+29. [Enterprise Authentication & Multi-Factor Security: Amazon Cognito with Enforced RFC 6238 Software Token TOTP MFA](#q29-enterprise-authentication--multi-factor-security-amazon-cognito-with-enforced-rfc-6238-software-token-totp-mfa)
+30. [In-Context Grounding vs. Fine-Tuning: Why Model Retraining is an Anti-Pattern for AI Triage & The Role of `company_profile.json`](#q30-in-context-grounding-vs-fine-tuning-why-model-retraining-is-an-anti-pattern-for-ai-triage--the-role-of-company_profilejson)
+31. [Atomic Multi-Attribute Triage: Why Single-Pass Inference Trumps Sequential Multi-Call Pipelines](#q31-atomic-multi-attribute-triage-why-single-pass-inference-trumps-sequential-multi-call-pipelines)
+32. [Department Categorization Taxonomies & Precedence Rules: Resolving Conflicting Symptoms vs. Underlying Root Cause](#q32-department-categorization-taxonomies--precedence-rules-resolving-conflicting-symptoms-vs-underlying-root-cause)
+33. [Deterministic SLA Calculation: The ITIL Impact x Urgency Matrix & Why LLMs Must Never Calculate Temporal Deadlines](#q33-deterministic-sla-calculation-the-itil-impact-x-urgency-matrix--why-llms-must-never-calculate-temporal-deadlines)
+34. [Dual-Vector Sentiment & Frustration Analysis: Quantitative Scoring, Churn Detection, and Automatic Priority Escalation](#q34-dual-vector-sentiment--frustration-analysis-quantitative-scoring-churn-detection-and-automatic-priority-escalation)
+35. [Automated Key Entity Extraction (NER): PostgreSQL JSONB Storage with Generalized Inverted (GIN) Indexing](#q35-automated-key-entity-extraction-ner-postgresql-jsonb-storage-with-generalized-inverted-gin-indexing)
+36. [The Clarification Protocol: Handling Vague, Chaotic, or Incomplete Inquiries Without Model Hallucination](#q36-the-clarification-protocol-handling-vague-chaotic-or-incomplete-inquiries-without-model-hallucination)
 37. [Suggested Response Draft Architecture: The 4 Dynamic Response Strategies & Agent Copilot Guidance Notes](#q37-suggested-response-draft-architecture-the-4-dynamic-response-strategies--agent-copilot-guidance-notes)
 38. [High-Performance Prioritized Queue: Multi-Criteria Tie-Breaking & Partial Composite B-Tree Indexing in PostgreSQL](#q38-high-performance-prioritized-queue-multi-criteria-tie-breaking--partial-composite-b-tree-indexing-in-postgresql)
 39. [Human-in-the-Loop Category Overrides: Immutable Audit Trails for SOC 2 Compliance & MLOps Calibration Datasets](#q39-human-in-the-loop-category-overrides-immutable-audit-trails-for-soc-2-compliance--mlops-calibration-datasets)
@@ -55,6 +105,7 @@ Whenever working on code, infrastructure, or interview preparation, refer to thi
 41. [Split-Screen Live Demo Verification: Demonstrating Multi-Agent Claiming & ACID Consistency in 45 Seconds](#q41-split-screen-live-demo-verification-demonstrating-multi-agent-claiming--acid-consistency-in-45-seconds)
 42. [Business-Agnostic CLI Test Harness (`seed_inquiries.py`) with Real Cryptographic Signatures vs. SRE Load Testing (`k6-load-test.js`)](#q42-business-agnostic-cli-test-harness-seed_inquiriespy-with-real-cryptographic-signatures-vs-sre-load-testing-k6-load-testjs)
 43. [Executive Analytics, GenAI Unit Economics, and SRE Observability: Measuring Real Cost per Ticket (~0.00025 €), MTTR Reduction, and Model Acceptance Rate](#q43-executive-analytics-genai-unit-economics-and-sre-observability-measuring-real-cost-per-ticket-000025--mttr-reduction-and-model-acceptance-rate)
+44. [Dual Public Review Ingestion Architecture: Supporting Both Trustpilot and Google Reviews as Optional Pluggable Webhook Providers](#q44-dual-public-review-ingestion-architecture-supporting-both-trustpilot-and-google-reviews-as-optional-pluggable-webhook-providers)
 
 ---
 
@@ -687,7 +738,7 @@ Observability in this project is actually **more production-realistic** than in 
    - **Execution Location:** GitHub Actions PR Gate (`.github/workflows/pr-verify.yml`) and Pre-Flight Script (`scripts/deploy-infra.sh`).
    - **Why Replace Checkov?** Checkov is already implemented in **Project 1 (`ai-inventory-tracker`)** and **Project 2 (`automated-backup-system`)**. Repeating Checkov in Project 3 creates portfolio redundancy and misses the opportunity to showcase enterprise vendor breadth.
    - **Why KICS by Checkmarx?**
-     - **Enterprise Vendor Prestige:** Checkmarx is a premier Gartner Magic Quadrant leader in Application Security Testing (AST), heavily demanded by enterprise consultancies (e.g., Paradigma Digital, Accenture, Deloitte) and global tier-1 banking institutions.
+     - **Enterprise Vendor Prestige:** Checkmarx is a premier Gartner Magic Quadrant leader in Application Security Testing (AST), heavily demanded by enterprise consultancies (e.g., Paradigma Digital, Accenture, Santander).
      - **Comprehensive Policy Engine:** Ships with over 2,000 queries validating against CIS AWS Foundations Benchmark, SOC 2, HIPAA, and PCI-DSS across Terraform, Dockerfile, and CloudFormation.
      - **Superior Performance:** Written in Go as a standalone lightweight binary; eliminates the heavyweight Python/pip runtime overhead that makes Checkov execution noticeably slower in ephemeral CI runners.
      - **Native SARIF Output:** Directly exports SARIF format for integration into GitHub Code Scanning security alerts.
@@ -1214,3 +1265,49 @@ Observability in this project is actually **more production-realistic** than in 
 3. **Dual-Layer Observability Architecture:**
    - *Operational Dashboard (React Console):* Displays aggregate KPI cards powered by lightweight SQL views in PostgreSQL.
    - *Cloud Infrastructure Dashboard (AWS CloudWatch + X-Ray):* Provisioned declaratively in `terraform/modules/monitoring/`, charting distributed trace waterfall latencies, Fargate CPU/Memory utilization, and automated alarm notifications to SNS.
+
+---
+
+### Q44: Dual Public Review Ingestion Architecture: Supporting Both Trustpilot and Google Reviews as Optional Pluggable Webhook Providers
+
+#### Question:
+> *"How should public review ingestion be structured so it is not locked exclusively to Trustpilot, but also supports Google Reviews, while keeping both providers completely optional?"*
+
+#### Answer & Technical Defense:
+1. **The Business Rationale for Multi-Platform Review Monitoring:**
+   - In enterprise reputation management, customer sentiment is split across specialized consumer review aggregators (**Trustpilot**) and local/search enterprise listings (**Google Business Profile / Google Reviews**).
+   - An organization might subscribe to Trustpilot Enterprise, rely exclusively on Google Reviews, utilize both simultaneously, or operate in a stealth/private B2B model where public review webhooks are unconfigured.
+   - Forcing an architecture to depend strictly on a single third-party review provider creates unnecessary vendor lock-in.
+2. **Pluggable & Completely Optional Design:**
+   - In `app/core/config.py`, secrets for both review providers are defined as strictly optional:
+     ```python
+     TRUSTPILOT_WEBHOOK_SECRET: Optional[str] = None
+     GOOGLE_REVIEWS_WEBHOOK_SECRET: Optional[str] = None
+     ```
+   - If `TRUSTPILOT_WEBHOOK_SECRET` is unset, the Trustpilot ingestion endpoint remains disabled or inactive. If `GOOGLE_REVIEWS_WEBHOOK_SECRET` is unset, Google Reviews remains inactive. The platform operates seamlessly whether 0, 1, or 2 review providers are enabled.
+3. **Discrete Endpoints & Cryptographic Verification:**
+   - **Trustpilot Inbound Webhook (`POST /api/v1/webhooks/trustpilot` or `/reviews/trustpilot`):**
+     - Verifies incoming `X-Trustpilot-Signature` using HMAC-SHA256 against `TRUSTPILOT_WEBHOOK_SECRET`.
+     - Extracts: `stars` (1 to 5), `consumer.displayName`, `title`, `text`, `id`.
+   - **Google Reviews Inbound Webhook (`POST /api/v1/webhooks/google-reviews` or `/reviews/google`):**
+     - Google Cloud Pub/Sub push subscription dispatches notifications when a new review is posted to Google Business Profile.
+     - Authenticates via Google OIDC bearer token verification against Google's public JSON Web Key Sets (JWKS) or validates a custom verification token header (`X-Google-Webhook-Secret`).
+     - Extracts: star rating (`starRating`: `ONE`, `TWO`, `THREE`, `FOUR`, `FIVE`), `reviewer.displayName`, `comment`, `reviewId`.
+4. **Canonical Ingestion & Model Mapping:**
+   - Both adapters map cleanly into the canonical `InquiryCreate` model:
+     ```python
+     class ChannelSource(str, Enum):
+         EMAIL = "EMAIL"
+         WEB_FORM = "WEB_FORM"
+         TRUSTPILOT = "TRUSTPILOT"
+         GOOGLE_REVIEWS = "GOOGLE_REVIEWS"
+         STRIPE = "STRIPE"
+     ```
+   - In the database and UI, inquiries are tagged with their specific provenance (`source="TRUSTPILOT"` vs. `source="GOOGLE_REVIEWS"`), allowing support agents to see the exact platform icon (Trustpilot Star badge vs. Google 'G' badge) and allowing Bedrock to tailor suggested responses specifically to each platform's guidelines.
+5. **CLI Test Harness (`seed_inquiries.py`) Support:**
+   - The CLI test harness supports independent simulation for both providers:
+     ```bash
+     python scripts/seed_inquiries.py --channel trustpilot --scenario hostile-churn
+     python scripts/seed_inquiries.py --channel google-reviews --scenario negative-1star
+     ```
+   - Dynamically calculates the corresponding cryptographic signatures (`X-Trustpilot-Signature` or `X-Google-Webhook-Secret`) so both can be demonstrated realistically without live external enterprise subscriptions.
