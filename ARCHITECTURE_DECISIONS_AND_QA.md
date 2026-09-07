@@ -106,6 +106,7 @@ Whenever working on code, infrastructure, or interview preparation, refer to thi
 42. [Business-Agnostic CLI Test Harness (`seed_inquiries.py`) with Real Cryptographic Signatures vs. SRE Load Testing (`k6-load-test.js`)](#q42-business-agnostic-cli-test-harness-seed_inquiriespy-with-real-cryptographic-signatures-vs-sre-load-testing-k6-load-testjs)
 43. [Executive Analytics, GenAI Unit Economics, and SRE Observability: Measuring Real Cost per Ticket (~0.00025 €), MTTR Reduction, and Model Acceptance Rate](#q43-executive-analytics-genai-unit-economics-and-sre-observability-measuring-real-cost-per-ticket-000025--mttr-reduction-and-model-acceptance-rate)
 44. [Dual Public Review Ingestion Architecture: Supporting Both Trustpilot and Google Reviews as Optional Pluggable Webhook Providers](#q44-dual-public-review-ingestion-architecture-supporting-both-trustpilot-and-google-reviews-as-optional-pluggable-webhook-providers)
+45. [Zero-Secrets Policy Across CI/CD, Source Code, and IaC: Eliminating Hardcoded Credentials via Secrets Manager, IAM OIDC, and ECS Native Injection](#q45-zero-secrets-policy-across-cicd-source-code-and-iac-eliminating-hardcoded-credentials-via-secrets-manager-iam-oidc-and-ecs-native-injection)
 
 ---
 
@@ -1311,3 +1312,38 @@ Observability in this project is actually **more production-realistic** than in 
      python scripts/seed_inquiries.py --channel google-reviews --scenario negative-1star
      ```
    - Dynamically calculates the corresponding cryptographic signatures (`X-Trustpilot-Signature` or `X-Google-Webhook-Secret`) so both can be demonstrated realistically without live external enterprise subscriptions.
+
+---
+
+### Q45: Zero-Secrets Policy Across CI/CD, Source Code, and IaC: Eliminating Hardcoded Credentials via Secrets Manager, IAM OIDC, and ECS Native Injection
+
+#### Question:
+> *"Are we strictly maintaining the security policy of zero hardcoded secrets in source code, CI/CD pipelines, and configuration files, delegating all credentials to AWS Secrets Manager?"*
+
+#### Answer & Technical Defense:
+1. **The Absolute Non-Negotiable Standard (Defense in Depth):**
+   - Storing plaintext credentials, database passwords, API tokens, or static AWS access keys anywhere in source repositories, CI/CD YAML files, or Docker images is strictly prohibited.
+   - The platform enforces a zero-secrets architecture across all three operational layers:
+2. **Layer 1: Source Code & Container Runtime (FastAPI on ECS Fargate):**
+   - **Cero Hardcoded Secrets:** Neither `.env` files with production secrets nor hardcoded strings exist in `app/`.
+   - **Dual Retrieval Pattern:**
+     - *Pattern A (Native ECS Task Definition Injection):* In `terraform/modules/ecs/`, the `container_definitions` JSON binds sensitive variables using the native ECS `secrets` block pointing to AWS Secrets Manager ARNs (`arn:aws:secretsmanager:...:secret:customer-inquiry/webhooks:STRIPE_SECRET::`). The ECS container agent fetches the secrets over the private VPC endpoint at container startup using the `TaskExecutionRole`, injecting them as environment variables inside the isolated microVM.
+     - *Pattern B (Direct In-Memory Boto3 Fetch):* For runtime secrets requiring dynamic rotation without container restart, FastAPI queries AWS Secrets Manager over the `com.amazonaws.eu-west-1.secretsmanager` Interface Endpoint via PrivateLink.
+   - **Static Code Analysis Defense:** The CI/CD pipeline runs **Semgrep SAST** (`p/secrets`, `p/security-audit`). Any accidental commit containing API keys, private keys, or high-entropy credentials immediately halts the build with exit-code 1.
+3. **Layer 2: CI/CD Pipeline & GitHub Version Control:**
+   - **Zero Static AWS Credentials (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`):** GitHub Actions uses **IAM OIDC Identity Federation** (identical to Project 2). GitHub's ephemeral runner exchanges an OpenID Connect token for short-lived (15–60 minute) STS temporary session credentials.
+   - **AWS CodePipeline / CodeBuild:** Runs under an assigned IAM Service Role with strict least-privilege policies. If CodeBuild requires a secret during testing, it uses native SSM/Secrets Manager mapping in `buildspec.yml`:
+     ```yaml
+     env:
+       secrets-manager:
+         STRIPE_SECRET: "customer-inquiry/webhooks:STRIPE_SECRET"
+     ```
+4. **Layer 3: Infrastructure as Code & Database Credentials (Terraform & RDS):**
+   - **Zero Passwords in State Files:** In `terraform/modules/rds/`, the database uses native AWS Secrets Manager management:
+     ```hcl
+     resource "aws_db_instance" "postgres" {
+       manage_master_user_password = true
+       # No master_password parameter is ever declared in Terraform HCL
+     }
+     ```
+   - AWS generates, stores in Secrets Manager, encrypts with a Customer Managed KMS Key (CMK), and rotates the master database password automatically without human intervention or plaintext exposure in `terraform.tfstate`.
