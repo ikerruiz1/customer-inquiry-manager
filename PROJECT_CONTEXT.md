@@ -5,6 +5,8 @@
 
 ### 1. Purpose & Portfolio Strategy
 
+> **Architectural Ledger & Q&A Memory:** For the exhaustive chronological ledger of design debates, technical inquiries, and architectural justifications, refer to [ARCHITECTURE_DECISIONS_AND_QA.md](file:///c:/Dev/Cloud/customer-inquiry-manager/customer-inquiry-manager/ARCHITECTURE_DECISIONS_AND_QA.md).
+
 - **Objective:** Architect, deploy, and operate an enterprise-grade customer inquiry ingestion, AI-powered intelligent triage, and automated SLA calculation platform on AWS.
 - **Positioning:** Project 3 of 5 within the Cloud, DevOps, and SRE Professional Portfolio:
   - *Project 1 (AI Inventory Tracker):* EKS, Go, DynamoDB Streams, ArgoCD GitOps, GitLab CI. (Demonstrates CNCF standards, multi-tenant Kubernetes platform engineering, and declarative GitOps reconciliation).
@@ -86,6 +88,9 @@ Amazon SNS handles outbound asynchronous fan-out strictly to two designated targ
    - Enforced MFA (`mfa_configuration = "ON"`) using RFC 6238 Software Tokens (TOTP). Zero SMS telecommunication fees or SIM-swapping vulnerabilities.
    - Role-Based Access Control (RBAC): `Tier1_Agents` and `Operations_Managers`.
    - JWT tokens (RS256) validated in-memory by FastAPI against Cognito JWKS for sub-millisecond authentication latency.
+7. **Continuous Knowledge Ledger Synchronization:**
+   - Whenever an architectural question, technical inquiry, or design trade-off is discussed, the assistant MUST automatically append the question, evaluated alternatives, and final engineering resolution to `ARCHITECTURE_DECISIONS_AND_QA.md` in Strict English.
+   - If the resolution impacts the active topology, endpoints, or data models, `PROJECT_CONTEXT.md` MUST be synchronized simultaneously.
 
 ---
 
@@ -103,38 +108,48 @@ Amazon SNS handles outbound asynchronous fan-out strictly to two designated targ
 
 ---
 
-### 5. Master Architecture Execution Map (45 Chronological Flows)
+### 5. Master Architecture Execution Map (47 Chronological Flows)
 
 Every flow connects exactly one origin node to one destination node. Each block is allocated a **single, unified color** in Excalidraw. Cryptographic, policy, and background storage transitions are distinguished using **dashed lines**.
 
 | Block | Functional Domain | Unified Color | Excalidraw Hex | Flow Range |
 | :--- | :--- | :--- | :---: | :---: |
-| **Block 1** | IaC & Remote State | **Brown / Copper** | `#9A3412` | 1 – 3 |
-| **Block 2** | CI/CD & DevSecOps | **Orange** | `#EA580C` | 4 – 13 |
-| **Block 3** | Fargate Bootstrapping, Private Connectivity & DB | **Purple** | `#7C3AED` | 14 – 18 |
-| **Block 4** | Perimeter Ingress, DNS & Authentication | **Royal Blue** | `#2563EB` | 19 – 27 |
-| **Block 5** | AI Inference, Attachments & KMS Encryption | **Emerald Green** | `#059669` | 28 – 31 |
-| **Block 6** | Asynchronous Dispatch & ChatOps | **Magenta / Pink** | `#DB2777` | 32 – 34 |
-| **Block 7** | Human-in-the-Loop Operations | **Teal / Turquoise** | `#0D9488` | 35 – 36 |
-| **Block 8** | Distributed Telemetry & Observability | **Salmon** | `#FA8072` | 37 – 41 |
-| **Block 9** | Storage FinOps & S3/Glacier Lifecycle | **White** | `#FFFFFF` | 42 – 44 |
-| **Block 10**| Resilience & Load Testing | **Light Brown** | `#D97706` | 45 |
+| **Block 1** | IaC, Policy-as-Code Governance & Remote State | **Brown / Copper** | `#9A3412` | 1 – 5 |
+| **Block 2** | CI/CD & DevSecOps (SAST, SCA, SBOM) | **Orange** | `#EA580C` | 6 – 15 |
+| **Block 3** | Fargate Bootstrapping, Private Connectivity & DB | **Purple** | `#7C3AED` | 16 – 20 |
+| **Block 4** | Perimeter Ingress, DNS, WAF & Authentication | **Royal Blue** | `#2563EB` | 21 – 29 |
+| **Block 5** | AI Inference with Guardrails, Attachments & KMS | **Emerald Green** | `#059669` | 30 – 33 |
+| **Block 6** | Asynchronous Dispatch & ChatOps | **Magenta / Pink** | `#DB2777` | 34 – 36 |
+| **Block 7** | Human-in-the-Loop Operations & Audited Closure | **Teal / Turquoise** | `#0D9488` | 37 – 38 |
+| **Block 8** | Distributed Telemetry & Observability | **Salmon** | `#FA8072` | 39 – 43 |
+| **Block 9** | Storage FinOps & S3/Glacier Lifecycle | **White** | `#FFFFFF` | 44 – 46 |
+| **Block 10**| Resilience & Load Testing | **Light Brown** | `#D97706` | 47 |
 
 ---
 
-#### Block 1: Infrastructure as Code (IaC) & Remote State (Color: Brown / Copper `#9A3412`)
+#### Block 1: IaC, Policy-as-Code Governance & Remote State (Color: Brown / Copper `#9A3412`)
 
-##### Flow 1: `Developer` ➔ `Terraform` *(Brown - Solid)*
+##### Flow 1: `Developer` ➔ `Conftest (OPA Rego)` *(Brown - Solid)*
+* **Action:** Developer (or automated PR gate) executes `conftest test` against Terraform code evaluating organizational policies written in **Rego**.
+* **Rationale:** Enforces Policy-as-Code guardrails: verifies 3-tier subnet isolation, prohibits 0.0.0.0/0 ingress on non-ALB security groups, enforces KMS CMK encryption, and mandates FinOps tags.
+* **Precedence:** Absolute first validation gate (*fail-fast*). Blocks invalid architecture before static analysis or cloud mutation.
+
+##### Flow 2: `Developer` ➔ `KICS (Checkmarx)` *(Brown - Solid)*
+* **Action:** Developer executes `kics scan -p terraform/` to scan HCL code against 2,000+ security queries.
+* **Rationale:** Scans for CIS AWS Foundations Benchmark, SOC 2, and PCI-DSS compliance misconfigurations.
+* **Precedence:** Executes alongside Policy-as-Code validation before any cloud mutation commands are permitted.
+
+##### Flow 3: `Developer` ➔ `Terraform` *(Brown - Solid)*
 * **Action:** Developer executes Terraform CLI commands (`terraform init`, `terraform plan`, `terraform apply`) authenticated via IAM federated credentials.
 * **Rationale:** Guarantees cloud topology immutability and repeatability across VPCs, subnets, ECS clusters, and security policies.
-* **Precedence:** Absolute starting point. Providers and dependency graphs must resolve before issuing AWS API calls.
+* **Precedence:** Permitted only after Conftest (1) and KICS (2) pass with exit-code 0.
 
-##### Flow 2: `Terraform` ➔ `S3 (Remote Backend)` *(Brown - Solid)*
+##### Flow 4: `Terraform` ➔ `S3 (Remote Backend)` *(Brown - Solid)*
 * **Action:** Terraform establishes HTTPS 443 connection to synchronize and lock state via DynamoDB.
 * **Rationale:** Prevents race conditions and state corruption across concurrent runs.
 * **Precedence:** Executes immediately upon CLI invocation before executing cloud mutations.
 
-##### Flow 3: `Terraform` ➔ `KMS` *(Brown - Dashed)*
+##### Flow 5: `Terraform` ➔ `KMS` *(Brown - Dashed)*
 * **Action:** Terraform invokes KMS API (`kms:GenerateDataKey` / `kms:Encrypt`) to encrypt `terraform.tfstate` at rest using a Customer Managed Key (CMK).
 * **Rationale:** Protects sensitive infrastructure secrets and credentials stored within state files.
 * **Precedence:** Applied synchronously whenever state data is serialized and written to the backend bucket.
@@ -143,53 +158,53 @@ Every flow connects exactly one origin node to one destination node. Each block 
 
 #### Block 2: Continuous Integration & Delivery / DevSecOps (Color: Orange `#EA580C`)
 
-##### Flow 4: `Developer` ➔ `Github Repository` *(Orange - Solid)*
+##### Flow 6: `Developer` ➔ `Github Repository` *(Orange - Solid)*
 * **Action:** Developer executes `git push origin main` over SSH (port 22) or HTTPS (port 443).
 * **Rationale:** Commits source code to the authoritative version control repository.
 * **Precedence:** Precedes all automated CI/CD triggers.
 
-##### Flow 5: `Github Repository` ➔ `CodePipeline` *(Orange - Solid)*
+##### Flow 7: `Github Repository` ➔ `CodePipeline` *(Orange - Solid)*
 * **Action:** GitHub emits an HTTPS webhook to AWS CodeStar Connections / EventBridge upon detecting commits on branch `main`.
 * **Rationale:** Initiates the automated software delivery lifecycle.
-* **Precedence:** Direct consequence of Flow 4.
+* **Precedence:** Direct consequence of Flow 6.
 
-##### Flow 6: `CodePipeline` ➔ `CodeBuild` *(Orange - Solid)*
+##### Flow 8: `CodePipeline` ➔ `CodeBuild` *(Orange - Solid)*
 * **Action:** CodePipeline spins up an ephemeral CodeBuild runner and injects environment variables and `buildspec.yml`.
 * **Rationale:** Isolates compute-intensive build and test execution from pipeline orchestration.
 * **Precedence:** Executes after source stage artifact acquisition succeeds.
 
-##### Flow 7: `CodeBuild` ➔ `Pytest` *(Orange - Solid)*
+##### Flow 9: `CodeBuild` ➔ `Pytest` *(Orange - Solid)*
 * **Action:** CodeBuild executes `pytest tests/` in the Python virtual environment.
 * **Rationale:** Validates Pydantic schemas, business logic, and API endpoints (*fail-fast* gate).
 * **Precedence:** First quality gate. Halts the build immediately upon test failure.
 
-##### Flow 8: `CodeBuild` ➔ `Semgrep` *(Orange - Solid)*
+##### Flow 10: `CodeBuild` ➔ `Semgrep` *(Orange - Solid)*
 * **Action:** CodeBuild runs `semgrep --config p/security-audit` across Python and React codebases.
-* **Rationale:** Static Application Security Testing (SAST) for SQL injection, hardcoded credentials, and cryptographic weaknesses.
+* **Rationale:** Static Application Security Testing (SAST) for SQL injection, hardcoded credentials, and cryptographic weaknesses (OWASP Top 10).
 * **Precedence:** Runs against source code prior to container packaging.
 
-##### Flow 9: `CodeBuild` ➔ `Trivy` *(Orange - Solid)*
-* **Action:** CodeBuild executes `trivy image --exit-code 1 <image_id>` on the locally built Docker image.
+##### Flow 11: `CodeBuild` ➔ `Trivy` *(Orange - Solid)*
+* **Action:** CodeBuild executes `trivy image --exit-code 1 <image_id>` on the locally built Docker image (`python:3.12-slim`).
 * **Rationale:** Scans container filesystem and dependencies (`pip`, `npm`) for known CVEs.
 * **Precedence:** Evaluates built container layers before pushing to the container registry.
 
-##### Flow 10: `CodeBuild` ➔ `ECR` *(Orange - Solid)*
-* **Action:** CodeBuild authenticates via `aws ecr get-login-password` and executes `docker push <account>.dkr.ecr.<region>.amazonaws.com/customer-inquiry-manager:latest`.
-* **Rationale:** Stores immutable container image layers in the regional private registry.
-* **Precedence:** Executes only after passing Pytest (7), Semgrep (8), and Trivy (9).
+##### Flow 12: `CodeBuild` ➔ `ECR` *(Orange - Solid)*
+* **Action:** CodeBuild generates CycloneDX SBOM via **Syft**, authenticates via `aws ecr get-login-password` and executes `docker push <account>.dkr.ecr.<region>.amazonaws.com/customer-inquiry-manager:latest`.
+* **Rationale:** Stores immutable container image layers in the regional private registry with complete supply chain transparency.
+* **Precedence:** Executes only after passing Pytest (9), Semgrep (10), and Trivy (11).
 
-##### Flow 11: `CodeBuild` ➔ `S3 (Pipeline Artifacts)` *(Orange - Solid)*
+##### Flow 13: `CodeBuild` ➔ `S3 (Pipeline Artifacts)` *(Orange - Solid)*
 * **Action:** CodeBuild uploads `imagedefinitions.json` linking container name to ECR image digest.
 * **Rationale:** Provides the deployment manifest required by CodePipeline and CodeDeploy.
 * **Precedence:** Generated only after the ECR push completes and the image digest is established.
 
-##### Flow 12: `CodePipeline` ➔ `CodeDeploy` *(Orange - Solid)*
+##### Flow 14: `CodePipeline` ➔ `CodeDeploy` *(Orange - Solid)*
 * **Action:** CodePipeline triggers CodeDeploy using the generated image definitions artifact.
 * **Rationale:** Manages progressive Blue/Green traffic shifting between ALB Target Groups.
 * **Precedence:** Follows successful completion of the build and packaging stage.
 
-##### Flow 13: `CodeDeploy` ➔ `ECS Cluster` *(Orange - Solid)*
-* **Action:** CodeDeploy invokes ECS APIs (`RegisterTaskDefinition`, `UpdateService`) to instantiate new Fargate tasks.
+##### Flow 15: `CodeDeploy` ➔ `ECS Cluster` *(Orange - Solid)*
+* **Action:** CodeDeploy invokes ECS APIs (`RegisterTaskDefinition`, `UpdateService`) to instantiate new Fargate tasks with `capacity_provider_strategy = FARGATE_SPOT` and the `aws-xray-daemon` sidecar.
 * **Rationale:** Triggers container lifecycle in the ECS Fargate compute plane.
 * **Precedence:** Final deployment instruction transferring execution to the container runtime.
 
@@ -197,27 +212,27 @@ Every flow connects exactly one origin node to one destination node. Each block 
 
 #### Block 3: Fargate Bootstrapping, Private Connectivity & DB Encryption (Color: Purple `#7C3AED`)
 
-##### Flow 14: `ECS Cluster` ➔ `VPC Endpoint: ECR` *(Purple - Solid)*
+##### Flow 16: `ECS Cluster` ➔ `VPC Endpoint: ECR` *(Purple - Solid)*
 * **Action:** ECS agent establishes TLS connection to ECR Interface Endpoints (`ecr.api`, `ecr.dkr`) to pull manifests and layers.
 * **Rationale:** Enables private image retrieval in subnets lacking Internet or NAT Gateway routes.
 * **Precedence:** Container cannot start until image layers are retrieved and unpacked.
 
-##### Flow 15: `App (FastAPI)` ➔ `VPC Endpoint: Secrets Manager` *(Purple - Solid)*
+##### Flow 17: `App (FastAPI)` ➔ `VPC Endpoint: Secrets Manager` *(Purple - Solid)*
 * **Action:** During application startup (`lifespan`), FastAPI retrieves database credentials and JWT secrets over HTTPS via PrivateLink.
 * **Rationale:** Eliminates plaintext credentials in environment variables or configuration files.
 * **Precedence:** Mandatory prerequisite to initializing database connection pools.
 
-##### Flow 16: `App (FastAPI)` ➔ `VPC Endpoint: S3 (Gateway)` *(Purple - Solid)*
+##### Flow 18: `App (FastAPI)` ➔ `VPC Endpoint: S3 (Gateway)` *(Purple - Solid)*
 * **Action:** FastAPI executes `s3:GetObject` via the S3 Gateway Endpoint to download `company_profile.json`.
 * **Rationale:** Loads grounding context into RAM to enrich Bedrock system prompts with zero runtime per-request latency.
 * **Precedence:** Must load during startup before declaring readiness probes healthy.
 
-##### Flow 17: `App (FastAPI)` ➔ `RDS` *(Purple - Solid)*
+##### Flow 19: `App (FastAPI)` ➔ `RDS` *(Purple - Solid)*
 * **Action:** SQLAlchemy (`asyncpg`) opens a TCP 5432 connection pool with mandatory TLS (`sslmode=require`) to PostgreSQL in the isolated subnet.
 * **Rationale:** Establishes database session pooling for CRUD and audit transactions.
 * **Precedence:** Enables `/health/ready` probe to return HTTP 200, signalling target group readiness.
 
-##### Flow 18: `RDS` ➔ `KMS` *(Purple - Dashed)*
+##### Flow 20: `RDS` ➔ `KMS` *(Purple - Dashed)*
 * **Action:** RDS storage engine requests KMS CMK (`kms:GenerateDataKey` / `kms:Decrypt`) to encrypt underlying EBS storage volumes.
 * **Rationale:** Enforces encryption at rest for all database tables, indexes, and write-ahead logs.
 * **Precedence:** Operates continuously from database initialization and throughout all read/write I/O operations.
@@ -226,47 +241,47 @@ Every flow connects exactly one origin node to one destination node. Each block 
 
 #### Block 4: Perimeter Ingress, DNS, Inspection & Authentication (Color: Royal Blue `#2563EB`)
 
-##### Flow 19: `Support Agent` ➔ `Route 53` *(Royal Blue - Solid)*
+##### Flow 21: `Support Agent` ➔ `Route 53` *(Royal Blue - Solid)*
 * **Action:** Operator browser issues DNS query (UDP/TCP 53) for the application FQDN.
 * **Rationale:** Resolves domain name to routable endpoint IPs.
 * **Precedence:** Required initial step before assembling any client TCP packet.
 
-##### Flow 20: `Route 53` ➔ `ALB` *(Royal Blue - Solid)*
+##### Flow 22: `Route 53` ➔ `ALB` *(Royal Blue - Solid)*
 * **Action:** Route 53 resolves DNS Alias record to Application Load Balancer public IPs.
 * **Rationale:** Handles dynamic ALB scaling and IP changes transparently.
-* **Precedence:** Directly answers client DNS query from Flow 19.
+* **Precedence:** Directly answers client DNS query from Flow 21.
 
-##### Flow 21: `ALB` ➔ `ACM` *(Royal Blue - Solid)*
+##### Flow 23: `ALB` ➔ `ACM` *(Royal Blue - Solid)*
 * **Action:** ALB validates and terminates TLS certificate X.509 via AWS Certificate Manager.
 * **Rationale:** Offloads asymmetric cryptographic handshake overhead from Fargate compute tasks.
 * **Precedence:** Negotiated during client HTTPS handshake on listener port 443.
 
-##### Flow 22: `WAF` ➔ `ALB` *(Royal Blue - Dashed)*
+##### Flow 24: `WAF` ➔ `ALB` *(Royal Blue - Dashed)*
 * **Action:** AWS WAF inspects inbound Layer 7 HTTP requests against OWASP Core Rule Sets, SQLi, XSS, and rate limits.
 * **Rationale:** Drops malicious payloads before reaching compute infrastructure.
 * **Precedence:** Evaluated synchronously at the ALB boundary prior to target routing.
 
-##### Flow 23: `Support Agent` ➔ `ALB` *(Royal Blue - Solid)*
+##### Flow 25: `Support Agent` ➔ `ALB` *(Royal Blue - Solid)*
 * **Action:** Operator establishes TLS session over port 443 to load the React SPA or execute API calls.
 * **Rationale:** Primary ingress pipe for authenticated administrative operations.
 * **Precedence:** Occurs once DNS resolution, TLS termination, and WAF inspection pass.
 
-##### Flow 24: `ALB` ➔ `Cognito` *(Royal Blue - Solid)*
-* **Action:** ALB listener evaluates authentication rule, redirecting unauthenticated requests to Cognito OAuth2/OIDC endpoint.
+##### Flow 26: `ALB` ➔ `Cognito` *(Royal Blue - Solid)*
+* **Action:** ALB listener evaluates authentication rule, redirecting unauthenticated requests to Cognito OAuth2/OIDC endpoint with enforced **RFC 6238 Software Token TOTP MFA**.
 * **Rationale:** Enforces centralized identity management and TOTP MFA challenge before granting UI access.
 * **Precedence:** Triggered immediately when accessing protected web console routes.
 
-##### Flow 25: `ALB` ➔ `App (FastAPI)` *(Royal Blue - Solid)*
+##### Flow 27: `ALB` ➔ `App (FastAPI)` *(Royal Blue - Solid)*
 * **Action:** ALB forwards inspected, authenticated HTTP traffic to private Fargate tasks on TCP 8000 with `X-Forwarded-For` and `X-Amzn-Oidc-Data` headers.
 * **Rationale:** Distributes traffic evenly across private backend replicas.
 * **Precedence:** Forwards only after WAF approval and valid identity claims.
 
-##### Flow 26: `App (FastAPI)` ➔ `VPC Endpoint: Cognito` *(Royal Blue - Solid)*
-* **Action:** FastAPI security middleware validates JWT token signature against Cognito JWKS over PrivateLink.
-* **Rationale:** Verifies token authenticity and extracts RBAC claims (`Tier1_Agents`, `Operations_Managers`) without internet access.
+##### Flow 28: `App (FastAPI)` ➔ `VPC Endpoint: Cognito` *(Royal Blue - Solid)*
+* **Action:** FastAPI security middleware validates JWT token signature against Cognito JWKS over PrivateLink and extracts RBAC groups (`Tier1_Agents`, `Operations_Managers`).
+* **Rationale:** Verifies token authenticity and extracts RBAC claims without internet access.
 * **Precedence:** First processing stage inside FastAPI upon receiving forwarded requests.
 
-##### Flow 27: `Webhooks` *(4 Sources)* ➔ `ALB` *(Royal Blue - Solid)*
+##### Flow 29: `Webhooks` *(4 Sources)* ➔ `ALB` *(Royal Blue - Solid)*
 * **Action:** Inbound programmatic inquiries (SES email parse, web form, Trustpilot review, Stripe billing) send signed POST requests to `/api/v1/webhooks/*`.
 * **Rationale:** Ingests external customer events into the unified processing pipeline.
 * **Precedence:** Shares the same inspected perimeter entry as web console users.
@@ -275,22 +290,22 @@ Every flow connects exactly one origin node to one destination node. Each block 
 
 #### Block 5: AI Inference, Attachments & KMS Encryption (Color: Emerald Green `#059669`)
 
-##### Flow 28: `App (FastAPI)` ➔ `VPC Endpoint: Bedrock` *(Emerald Green - Solid)*
-* **Action:** FastAPI invokes `bedrock-runtime:InvokeModel` with normalized inquiry text via Interface Endpoint to Claude 3 Haiku / Titan (*Single-Pass Multi-Attribute Extraction*).
-* **Rationale:** Executes intent classification, sentiment analysis, urgency rating (1–5), churn detection, and response drafting in a single sub-second call.
+##### Flow 30: `App (FastAPI)` ➔ `VPC Endpoint: Bedrock` *(Emerald Green - Solid)*
+* **Action:** FastAPI invokes `bedrock-runtime:Converse` passing `guardrailConfig` via Interface Endpoint to Claude 3.5 Sonnet / Haiku. **Amazon Bedrock Guardrails** evaluates Prompt Attack filters (Prompt Injection / Jailbreak) and PII redaction rules (DLP) before foundation model execution.
+* **Rationale:** Executes intent classification, sentiment analysis, urgency rating (1–5), churn detection, and response drafting in a single sub-second call while mitigating OWASP Top 10 for LLMs risks.
 * **Precedence:** Executes once input payload is validated in memory, before database persistence.
 
-##### Flow 29: `App (FastAPI)` ➔ `S3 (Attachments)` *(Emerald Green - Solid)*
+##### Flow 31: `App (FastAPI)` ➔ `S3 (Attachments)` *(Emerald Green - Solid)*
 * **Action:** FastAPI uploads inquiry attachments (PDFs, screenshots) to S3 bucket via S3 Endpoint.
 * **Rationale:** Offloads binary object storage from PostgreSQL to scalable object store.
 * **Precedence:** Executes upon verifying payload validity and extracting file metadata.
 
-##### Flow 30: `S3 (Attachments)` ➔ `KMS` *(Emerald Green - Dashed)*
+##### Flow 32: `S3 (Attachments)` ➔ `KMS` *(Emerald Green - Dashed)*
 * **Action:** S3 invokes KMS API to encrypt uploaded object using Customer Managed Key (SSE-KMS).
 * **Rationale:** Enforces envelope encryption and IAM dual-authorization controls over customer attachments.
 * **Precedence:** Executed synchronously by S3 storage engine upon receiving `s3:PutObject`.
 
-##### Flow 31: `App (FastAPI)` ➔ `VPC Endpoint: SNS` *(Emerald Green - Solid)*
+##### Flow 33: `App (FastAPI)` ➔ `VPC Endpoint: SNS` *(Emerald Green - Solid)*
 * **Action:** FastAPI invokes `sns:Publish` to publish classified ticket event (`ticket.created`, `ticket.triaged`).
 * **Rationale:** Decouples synchronous API response from downstream asynchronous notification consumers.
 * **Precedence:** Fires immediately after Bedrock classification and attachment storage succeed.
@@ -299,17 +314,17 @@ Every flow connects exactly one origin node to one destination node. Each block 
 
 #### Block 6: Asynchronous Dispatch & ChatOps (Color: Magenta / Pink `#DB2777`)
 
-##### Flow 32: `VPC Endpoint: SNS` ➔ `SNS` *(Regional)* *(Magenta - Solid)*
+##### Flow 34: `VPC Endpoint: SNS` ➔ `SNS` *(Regional)* *(Magenta - Solid)*
 * **Action:** VPC Endpoint ENI routes the published message to the regional Amazon SNS service over the private AWS network backbone.
 * **Rationale:** Transports event payloads out of isolated subnets without public IPs.
-* **Precedence:** Intermediate transport hop following Flow 31.
+* **Precedence:** Intermediate transport hop following Flow 33.
 
-##### Flow 33: `SNS` ➔ `Mail` *(Magenta - Solid)*
+##### Flow 35: `SNS` ➔ `Mail` *(Magenta - Solid)*
 * **Action:** SNS triggers email subscription (or forwards to Amazon SES) to send automated receipt and SLA deadline to customer.
 * **Rationale:** Confirms ticket registration and establishes customer SLA expectations.
 * **Precedence:** Asynchronous reaction to the published SNS domain event.
 
-##### Flow 34: `SNS` ➔ `Slack` *(Magenta - Solid)*
+##### Flow 36: `SNS` ➔ `Slack` *(Magenta - Solid)*
 * **Action:** SNS dispatches HTTPS webhook to Slack `#ops-critical` channel for tickets classified as `HIGH` or `CRITICAL` (P1/P2).
 * **Rationale:** Provides real-time ChatOps alerting to on-call support engineers.
 * **Precedence:** Evaluated concurrently with email notification based on SNS subscription filter policies.
@@ -318,41 +333,41 @@ Every flow connects exactly one origin node to one destination node. Each block 
 
 #### Block 7: Human-in-the-Loop Operations (Color: Teal / Turquoise `#0D9488`)
 
-##### Flow 35: `Support Agent` ➔ `App (FastAPI)` *(Teal - Solid)*
+##### Flow 37: `Support Agent` ➔ `App (FastAPI)` *(Teal - Solid)*
 * **Action:** Authenticated operator reviews AI-suggested draft in React console, edits content if necessary, and submits resolution via `PATCH /api/v1/inquiries/{id}/resolve`.
 * **Rationale:** Implements Human-in-the-Loop governance to prevent LLM hallucinations on critical customer interactions.
 * **Precedence:** Occurs after ticket is classified, notified, and listed in the active operational queue.
 
-##### Flow 36: `App (FastAPI)` ➔ `RDS` *(Teal - Solid)*
+##### Flow 38: `App (FastAPI)` ➔ `RDS` *(Teal - Solid)*
 * **Action:** FastAPI executes SQL `UPDATE inquiries SET status='RESOLVED', human_reviewed=true, resolution_text=... WHERE id=...`.
 * **Rationale:** Persists final ticket state and auditor identity (`cognito_sub`) in PostgreSQL.
-* **Precedence:** Direct consequence of operator approval in Flow 35.
+* **Precedence:** Direct consequence of operator approval in Flow 37.
 
 ---
 
 #### Block 8: Distributed Telemetry & Observability (Color: Salmon `#FA8072`)
 
-##### Flow 37: `App (FastAPI)` ➔ `Sidecar (xray-daemon)` *(Salmon - Solid)*
+##### Flow 39: `App (FastAPI)` ➔ `Sidecar (xray-daemon)` *(Salmon - Solid)*
 * **Action:** FastAPI X-Ray SDK middleware emits non-blocking UDP packets to `127.0.0.1:2000` containing subsegment timings (PostgreSQL queries, Bedrock inference, S3 uploads).
 * **Rationale:** Collects distributed traces with zero synchronous latency penalty on HTTP worker threads.
 * **Precedence:** Emitted continuously throughout request execution stages.
 
-##### Flow 38: `Sidecar (xray-daemon)` ➔ `VPC Endpoint: X-Ray` *(Salmon - Solid)*
+##### Flow 40: `Sidecar (xray-daemon)` ➔ `VPC Endpoint: X-Ray` *(Salmon - Solid)*
 * **Action:** Daemon batches buffered trace segments and flushes them via HTTPS `PutTraceSegments` over PrivateLink to AWS X-Ray.
 * **Rationale:** Isolates trace transmission from application lifecycle and maintains private VPC transit.
 * **Precedence:** Flushed asynchronously upon buffer capacity or time window thresholds.
 
-##### Flow 39: `App (FastAPI)` ➔ `VPC Endpoint: CloudWatch` *(Salmon - Solid)*
+##### Flow 41: `App (FastAPI)` ➔ `VPC Endpoint: CloudWatch` *(Salmon - Solid)*
 * **Action:** Docker `awslogs` driver and FastAPI stream structured JSON logs and Embedded Metric Format (EMF) metrics to CloudWatch.
 * **Rationale:** Centralizes operational logs, SLI indicators, and audit trails without public egress.
 * **Precedence:** Continuous streaming throughout application lifecycle.
 
-##### Flow 40: `ALB` ➔ `S3 (ALB Access Logs)` *(Salmon - Dashed)*
+##### Flow 42: `ALB` ➔ `S3 (ALB Access Logs)` *(Salmon - Dashed)*
 * **Action:** ALB writes compressed `.gz` access log files every 5 minutes directly to designated S3 bucket.
 * **Rationale:** Provides raw connection logs for forensic inspection and Athena SQL queries.
 * **Precedence:** Periodic automated control plane operation independent of application code.
 
-##### Flow 41: `RDS` ➔ `VPC Endpoint: CloudWatch` *(Salmon - Solid)*
+##### Flow 43: `RDS` ➔ `VPC Endpoint: CloudWatch` *(Salmon - Solid)*
 * **Action:** RDS database engine streams Enhanced Monitoring, Performance Insights, CPU, and connection metrics to CloudWatch.
 * **Rationale:** Powers database saturation alarms and slow query identification.
 * **Precedence:** Continuous managed engine metric streaming.
@@ -361,26 +376,26 @@ Every flow connects exactly one origin node to one destination node. Each block 
 
 #### Block 9: Storage FinOps & S3/Glacier Lifecycle (Color: White `#FFFFFF`)
 
-##### Flow 42: `S3 (Attachments)` ➔ `Glacier Instant Retrieval` *(White - Dashed)*
+##### Flow 44: `S3 (Attachments)` ➔ `Glacier Instant Retrieval` *(White - Dashed)*
 * **Action:** S3 Lifecycle rule transitions attachment objects older than 60 days to `GLACIER_IR`.
 * **Rationale:** Reduces storage costs by 68% while preserving millisecond retrieval capabilities for historical ticket reopening.
 * **Precedence:** Evaluated daily against object creation metadata.
 
-##### Flow 43: `S3 (ALB Access Logs)` ➔ `Glacier Flexible Retrieval` *(White - Dashed)*
+##### Flow 45: `S3 (ALB Access Logs)` ➔ `Glacier Flexible Retrieval` *(White - Dashed)*
 * **Action:** S3 Lifecycle rule transitions ALB access logs older than 30 days to `GLACIER`.
 * **Rationale:** Optimizes storage expenditure for cold diagnostic data infrequently queried after active incident analysis.
-* **Precedence:** Evaluated daily on logs generated in Flow 40.
+* **Precedence:** Evaluated daily on logs generated in Flow 42.
 
-##### Flow 44: `Glacier Flexible Retrieval` ➔ `Purge / Delete` *(White - Dashed)*
+##### Flow 46: `Glacier Flexible Retrieval` ➔ `Purge / Delete` *(White - Dashed)*
 * **Action:** S3 Lifecycle expiration action permanently deletes access log objects older than 90 days.
 * **Rationale:** Enforces data minimization compliance (GDPR) and prevents indefinite storage cost accumulation.
-* **Precedence:** Terminal lifecycle stage following archival in Flow 43.
+* **Precedence:** Terminal lifecycle stage following archival in Flow 45.
 
 ---
 
 #### Block 10: Resilience & Load Testing (Color: Light Brown `#D97706`)
 
-##### Flow 45: `Load Generator (k6)` ➔ `ALB` *(Light Brown - Solid)*
+##### Flow 47: `Load Generator (k6)` ➔ `ALB` *(Light Brown - Solid)*
 * **Action:** Distributed k6 execution script injects concurrent HTTPS traffic spikes against ALB endpoints.
 * **Rationale:** Experimentally validates ECS Fargate Spot auto-scaling policies and proves p95 latency stability under heavy load.
 * **Precedence:** Final verification milestone. Executed only when entire infrastructure, security boundaries, and telemetry collectors are active.
@@ -425,7 +440,7 @@ customer-inquiry-manager/
 │   │   ├── test_inquiries.py
 │   │   ├── test_bedrock_schema.py
 │   │   └── test_auth.py
-│   ├── buildspec.yml                 # AWS CodeBuild spec (pytest + semgrep + trivy + docker build)
+│   ├── buildspec.yml                 # AWS CodeBuild spec (pytest + semgrep + trivy + sbom + docker build)
 │   └── requirements.txt
 ├── frontend/                         # React 18/19 Operations Console (Vite SPA)
 │   ├── src/
@@ -459,10 +474,15 @@ customer-inquiry-manager/
 ├── scripts/
 │   ├── seed_inquiries.py             # Test harness simulating the 4 inbound omnichannel webhooks
 │   ├── k6-load-test.js               # Load and auto-scaling validation script (15-50 VUs)
-│   ├── deploy.sh                     # Pipeline trigger / Terraform apply execution script
-│   └── destroy.sh                    # Clean teardown script verified to 0.00 € residual cost
+│   ├── deploy-infra.sh               # 1-Click Terraform & infrastructure deployment bootstrap
+│   └── teardown-infra.sh             # 1-Click Clean teardown script verified to 0.00 € residual cost
+├── .github/
+│   └── workflows/
+│       └── pr-verify.yml             # PR gate: terraform validate, Conftest (OPA) & KICS (Checkmarx) IaC security scan
 ├── LICENSE
 ├── README.md
+├── AGENTS.md                         # Antigravity persistent workspace rules & directives
+├── ARCHITECTURE_DECISIONS_AND_QA.md  # Exhaustive design decisions and Q&A history ledger
 └── PROJECT_CONTEXT.md
 ```
 
