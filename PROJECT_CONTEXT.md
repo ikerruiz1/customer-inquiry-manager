@@ -52,11 +52,11 @@
 - Support Agents are authenticated internal operators (`Tier1_Agents` and `Operations_Managers`) who log into the React 18/19 SPA through Amazon Cognito with enforced Software Token MFA (TOTP).
 - Support Agents perform **Human-in-the-Loop (HITL)** governance: auditing, modifying, and approving AI-generated response drafts and closing tickets (`PATCH /api/v1/inquiries/{id}/resolve`).
 
-#### D. Omnichannel Ingestion: The 4 Inbound Webhook Sources
+#### D. Omnichannel Ingestion: Inbound Webhook Sources
 Inbound customer communications are normalized into a canonical Pydantic model (`InquiryCreate`) at the Application Load Balancer boundary (`POST /api/v1/webhooks/*`):
 1. **Corporate Email Parsing Webhook:** Handled via AWS SES Inbound Rules / SendGrid Inbound Parse (`POST /api/v1/webhooks/email`).
 2. **Customer Portal Web Form Webhook:** Direct web inquiry intake from customer applications (`POST /api/v1/webhooks/webform`).
-3. **Public Reviews & Reputation Webhook:** Real-time customer dissatisfaction intake from Trustpilot / Google Reviews API (`POST /api/v1/webhooks/reviews`).
+3. **Public Reviews & Reputation Webhooks (Dual Pluggable Providers):** Real-time customer dissatisfaction intake supporting both **Trustpilot** (`POST /api/v1/webhooks/trustpilot`) and **Google Reviews** (`POST /api/v1/webhooks/google-reviews`), both completely optional and independently verifiable.
 4. **Billing & Dispute Webhook:** High-priority financial failure events from Stripe (`POST /api/v1/webhooks/billing`).
 
 #### E. Decoupled Outbound Event Notification
@@ -415,7 +415,7 @@ customer-inquiry-manager/
 │   │   │   ├── endpoints/
 │   │   │   │   ├── auth.py           # Login, TOTP MFA challenge, verify, and refresh
 │   │   │   │   ├── inquiries.py      # POST /inquiries, GET /inquiries, PATCH claim/resolve
-│   │   │   │   ├── webhooks.py       # Inbound 4-channel webhooks (Email, Web, Reviews, Billing)
+│   │   │   │   ├── webhooks.py       # Inbound webhooks (Email, Webform, Trustpilot, Google Reviews, Billing)
 │   │   │   │   └── attachments.py    # Presigned URLs and S3 upload handling
 │   │   │   └── router.py
 │   │   └── health.py                 # /health/live, /health/ready probes
