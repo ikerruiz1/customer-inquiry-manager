@@ -1,18 +1,5 @@
 # ==============================================================================
-# Stage 1: Frontend Build Stage
-# ==============================================================================
-FROM node:20-alpine AS frontend-builder
-WORKDIR /build
-
-# Copy frontend source files if available
-COPY frontend/package*.json ./
-RUN if [ -f package.json ]; then npm ci --ignore-scripts; fi
-
-COPY frontend/ ./
-RUN if [ -f package.json ]; then npm run build; else mkdir -p dist; fi
-
-# ==============================================================================
-# Stage 2: Production Python Runtime Stage
+# Production Python Runtime Stage
 # ==============================================================================
 FROM python:3.12-slim AS runner
 
@@ -42,9 +29,6 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application source code and runtime configuration
 COPY company_profile.json .
 COPY app/ ./app/
-
-# Copy built frontend assets from Stage 1 into static mount directory
-COPY --from=frontend-builder /build/dist ./static
 
 # Ensure correct file permissions for non-root execution
 RUN chown -R appuser:appgroup /app /home/appuser
