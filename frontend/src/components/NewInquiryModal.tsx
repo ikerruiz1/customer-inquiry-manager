@@ -47,39 +47,171 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
     onClose();
   };
 
+  const loadPreset = (presetType: 'billing' | 'p1' | 'review') => {
+    if (presetType === 'billing') {
+      setChannel(ChannelEnum.BILLING);
+      setName('Sarah Jenkins');
+      setEmail('s.jenkins@enterprisecorp.com');
+      setSubject('Duplicate subscription renewal charge on invoice INV-9041');
+      setBody('We were charged twice ($1,450.00) for our annual team license on Stripe today. Please cancel the redundant transaction and refund our company card immediately.');
+    } else if (presetType === 'p1') {
+      setChannel(ChannelEnum.EMAIL);
+      setName('Alex Rivera');
+      setEmail('arivera@fintech-bank.es');
+      setSubject('EMERGENCY: Production database connection pool exhaustion in eu-west-1');
+      setBody('Critical outage on API gateway. Microservices are throwing 504 Gateway Timeouts. Our SLA clock is ticking and customer checkouts are failing.');
+    } else {
+      setChannel(ChannelEnum.TRUSTPILOT);
+      setName('David Miller');
+      setEmail('dmiller99@gmail.com');
+      setSubject('1-Star Review: Frustrated with unresolved ticket for 3 weeks');
+      setBody('Horrible support experience. Nobody answers my inquiries regarding order #88412. I am canceling my account and requesting a full chargeback.');
+    }
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        {/* Modal Header */}
         <div
           style={{
-            padding: '1rem 1.25rem',
-            borderBottom: '1px solid var(--border-subtle)',
+            padding: '18px 24px',
+            borderBottom: '1px solid rgba(12, 13, 13, 0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: 'rgba(59, 130, 246, 0.08)',
+            backgroundColor: '#FFFFFF',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Sparkles size={18} color="#60a5fa" />
-            <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#93c5fd' }}>
-              Inject Custom Customer Inquiry (Live AI Triage)
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                backgroundColor: 'var(--color-sage)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--color-black)',
+              }}
+            >
+              <Sparkles size={16} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-black)', margin: 0, letterSpacing: '-0.02em' }}>
+                New Customer Inquiry
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                Ingest customer inquiry with live Amazon Bedrock autonomous triage
+              </span>
+            </div>
           </div>
+
           <button
             onClick={onClose}
-            className="btn btn-secondary"
-            style={{ padding: '0.3rem', borderRadius: '50%' }}
+            style={{
+              padding: '6px',
+              borderRadius: '50%',
+              border: '1px solid rgba(12, 13, 13, 0.1)',
+              backgroundColor: '#FAFAFA',
+              color: 'var(--color-black)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             <X size={15} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
+        {/* Quick Scenario Fill Buttons */}
+        <div
+          style={{
+            padding: '12px 24px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+            Quick Presets:
+          </span>
+          <button
+            type="button"
+            onClick={() => loadPreset('billing')}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              border: '1px solid rgba(12, 13, 13, 0.12)',
+              backgroundColor: '#FAFAFA',
+              color: '#0C0D0D',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Billing Dispute ($1,450)
+          </button>
+          <button
+            type="button"
+            onClick={() => loadPreset('p1')}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              border: '1px solid rgba(12, 13, 13, 0.12)',
+              backgroundColor: '#FAFAFA',
+              color: '#0C0D0D',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            P1 Outage (Tech Support)
+          </button>
+          <button
+            type="button"
+            onClick={() => loadPreset('review')}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              border: '1px solid rgba(12, 13, 13, 0.12)',
+              backgroundColor: '#FAFAFA',
+              color: '#0C0D0D',
+              fontSize: '0.72rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Trustpilot 1-Star (Churn)
+          </button>
+        </div>
+
+        {/* Modal Form */}
+        <form onSubmit={handleSubmit} style={{ padding: '16px 24px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {error && (
+            <div
+              style={{
+                padding: '8px 12px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#dc2626',
+                fontSize: '0.76rem',
+                fontWeight: 600,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Name & Email Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
-                CUSTOMER NAME:
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Customer Name
               </label>
               <input
                 type="text"
@@ -88,20 +220,21 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
                 required
                 style={{
                   width: '100%',
-                  padding: '0.45rem 0.65rem',
-                  borderRadius: '6px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-prominent)',
-                  color: 'var(--text-main)',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  backgroundColor: '#FAFAFA',
+                  border: '1px solid rgba(12, 13, 13, 0.12)',
+                  color: '#0C0D0D',
                   fontSize: '0.82rem',
+                  fontFamily: 'var(--font-sans)',
                   outline: 'none',
                 }}
               />
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
-                CUSTOMER EMAIL:
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Customer Email
               </label>
               <input
                 type="email"
@@ -110,83 +243,90 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
                 required
                 style={{
                   width: '100%',
-                  padding: '0.45rem 0.65rem',
-                  borderRadius: '6px',
-                  background: 'var(--bg-input)',
-                  border: '1px solid var(--border-prominent)',
-                  color: 'var(--text-main)',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  backgroundColor: '#FAFAFA',
+                  border: '1px solid rgba(12, 13, 13, 0.12)',
+                  color: '#0C0D0D',
                   fontSize: '0.82rem',
+                  fontFamily: 'var(--font-sans)',
                   outline: 'none',
                 }}
               />
             </div>
           </div>
 
+          {/* Channel Select */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
-              INBOUND CHANNEL:
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Inbound Channel
             </label>
             <select
               value={channel}
               onChange={(e) => setChannel(e.target.value as ChannelEnum)}
               style={{
                 width: '100%',
-                padding: '0.45rem 0.65rem',
-                borderRadius: '6px',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-prominent)',
-                color: 'var(--text-main)',
+                padding: '9px 12px',
+                borderRadius: '10px',
+                backgroundColor: '#FAFAFA',
+                border: '1px solid rgba(12, 13, 13, 0.12)',
+                color: '#0C0D0D',
                 fontSize: '0.82rem',
+                fontFamily: 'var(--font-sans)',
                 outline: 'none',
               }}
             >
               <option value={ChannelEnum.WEB_FORM}>Web Form</option>
-              <option value={ChannelEnum.EMAIL}>Email (SES)</option>
+              <option value={ChannelEnum.EMAIL}>Email (AWS SES)</option>
               <option value={ChannelEnum.BILLING}>Stripe Billing</option>
               <option value={ChannelEnum.TRUSTPILOT}>Trustpilot Review</option>
+              <option value={ChannelEnum.GOOGLE_REVIEWS}>Google Reviews</option>
             </select>
           </div>
 
+          {/* Subject */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
-              SUBJECT:
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Subject Line
             </label>
             <input
               type="text"
-              placeholder="e.g. Caída de base de datos en clúster k8s producción..."
+              placeholder="e.g. Production database connection timeout in eu-west-1..."
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               required
               style={{
                 width: '100%',
-                padding: '0.45rem 0.65rem',
-                borderRadius: '6px',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-prominent)',
-                color: 'var(--text-main)',
+                padding: '9px 12px',
+                borderRadius: '10px',
+                backgroundColor: '#FAFAFA',
+                border: '1px solid rgba(12, 13, 13, 0.12)',
+                color: '#0C0D0D',
                 fontSize: '0.82rem',
+                fontFamily: 'var(--font-sans)',
                 outline: 'none',
               }}
             />
           </div>
 
+          {/* Inquiry Content */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.25rem' }}>
-              INQUIRY CONTENT (Write any text in any language):
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Inquiry Body Text (Any language / format)
             </label>
             <textarea
-              placeholder="Escribe aquí cualquier mensaje arbitrario (en español, inglés, con errores de ortografía o quejas extremas) para probar la inferencia de Amazon Bedrock..."
+              rows={4}
+              placeholder="Write customer message here to test Bedrock autonomous classification..."
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              rows={4}
               required
               style={{
                 width: '100%',
-                padding: '0.55rem 0.65rem',
-                borderRadius: '6px',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-prominent)',
-                color: 'var(--text-main)',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                backgroundColor: '#FAFAFA',
+                border: '1px solid rgba(12, 13, 13, 0.12)',
+                color: '#0C0D0D',
                 fontSize: '0.82rem',
                 fontFamily: 'var(--font-sans)',
                 outline: 'none',
@@ -195,22 +335,53 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
             />
           </div>
 
-          {error && (
-            <span style={{ fontSize: '0.75rem', color: '#f87171' }}>{error}</span>
-          )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.5rem' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary" style={{ fontSize: '0.8rem' }}>
+          {/* Footer Actions */}
+          <div
+            style={{
+              marginTop: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '10px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(12, 13, 13, 0.15)',
+                backgroundColor: '#FFFFFF',
+                color: '#0C0D0D',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
               Cancel
             </button>
+
             <button
               type="submit"
-              disabled={isSubmitting || !subject.trim() || !body.trim()}
-              className="btn btn-primary"
-              style={{ fontSize: '0.8rem' }}
+              disabled={isSubmitting}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 20px',
+                borderRadius: '9999px',
+                backgroundColor: '#0C0D0D',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(12, 13, 13, 0.15)',
+              }}
             >
               <Send size={13} />
-              <span>Ingest & Trigger AI Triage</span>
+              <span>{isSubmitting ? 'Ingesting...' : 'Ingest & Trigger AI Triage'}</span>
             </button>
           </div>
         </form>

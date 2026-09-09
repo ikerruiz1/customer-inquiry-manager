@@ -1,0 +1,1128 @@
+import React, { useState, useEffect } from 'react';
+import {
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  Mail,
+  Globe,
+  CreditCard,
+  Star,
+  ChevronRight,
+  Zap,
+  Flame,
+  User,
+} from 'lucide-react';
+import {
+  PriorityEnum,
+  ChannelEnum,
+  InquiryStatusEnum,
+  DepartmentEnum,
+} from '../types/inquiry';
+import type {
+  Inquiry,
+  AgentProfile,
+} from '../types/inquiry';
+import { INITIAL_AGENTS } from '../api/mockData';
+
+export type QueueTab = 'DEFAULT' | 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'ASSIGNED' | 'COMPLETED' | 'FILTERS';
+
+export type FacetFilter =
+  | 'ALL'
+  | 'P1'
+  | 'P2'
+  | 'P3'
+  | 'P4'
+  | 'CHURN_RISK'
+  | 'STRIPE'
+  | 'EMAIL'
+  | 'TRUSTPILOT'
+  | 'WEB_FORM';
+
+interface LoadLogicQueueTableProps {
+  inquiries: Inquiry[];
+  selectedTicket: Inquiry | null;
+  onSelectTicket: (ticket: Inquiry) => void;
+  currentAgent: AgentProfile;
+  onClaimTicket: (ticketId: string) => void;
+  isClaiming: boolean;
+  activeTab: QueueTab;
+  onTabChange: (tab: QueueTab) => void;
+}
+
+export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
+  inquiries,
+  selectedTicket,
+  onSelectTicket,
+  currentAgent,
+  onClaimTicket,
+  isClaiming,
+  activeTab,
+  onTabChange,
+}) => {
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [activeFacetFilter, setActiveFacetFilter] = useState<FacetFilter>('ALL');
+  const [isFiltersBarOpen, setIsFiltersBarOpen] = useState<boolean>(false);
+
+  // Live ticker updating every 1000ms for exact countdown recalculation
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Compute tab counts
+  const tabCounts = {
+    all: inquiries.length,
+    pending: inquiries.filter((t) => t.status === InquiryStatusEnum.UNASSIGNED).length,
+    inProgress: inquiries.filter((t) => t.status === InquiryStatusEnum.CLAIMED).length,
+    assigned: inquiries.filter((t) => t.assigned_agent_id === currentAgent.id && t.status !== InquiryStatusEnum.RESOLVED).length,
+    completed: inquiries.filter((t) => t.status === InquiryStatusEnum.RESOLVED).length,
+  };
+
+  // Compute facet counts for quick filter chips
+  const facetCounts = {
+    p1: inquiries.filter((t) => t.priority === PriorityEnum.P1).length,
+    p2: inquiries.filter((t) => t.priority === PriorityEnum.P2).length,
+    p3: inquiries.filter((t) => t.priority === PriorityEnum.P3).length,
+    p4: inquiries.filter((t) => t.priority === PriorityEnum.P4).length,
+    churn: inquiries.filter((t) => t.churn_risk).length,
+    stripe: inquiries.filter((t) => t.channel === ChannelEnum.BILLING).length,
+    email: inquiries.filter((t) => t.channel === ChannelEnum.EMAIL).length,
+    trustpilot: inquiries.filter((t) => t.channel === ChannelEnum.TRUSTPILOT).length,
+    webForm: inquiries.filter((t) => t.channel === ChannelEnum.WEB_FORM).length,
+  };
+
+  // 1. Filter based on active tab
+  const tabFilteredInquiries = inquiries.filter((ticket) => {
+    if (activeTab === 'PENDING') return ticket.status === InquiryStatusEnum.UNASSIGNED;
+    if (activeTab === 'IN_PROGRESS') return ticket.status === InquiryStatusEnum.CLAIMED;
+    if (activeTab === 'ASSIGNED') return ticket.assigned_agent_id === currentAgent.id && ticket.status !== InquiryStatusEnum.RESOLVED;
+    if (activeTab === 'COMPLETED') return ticket.status === InquiryStatusEnum.RESOLVED;
+    return true; // 'DEFAULT', 'ALL', 'FILTERS'
+  });
+
+  // 2. Filter based on active quick facet
+  const facetFilteredInquiries = tabFilteredInquiries.filter((ticket) => {
+    if (activeFacetFilter === 'ALL') return true;
+    if (activeFacetFilter === 'P1') return ticket.priority === PriorityEnum.P1;
+    if (activeFacetFilter === 'P2') return ticket.priority === PriorityEnum.P2;
+    if (activeFacetFilter === 'P3') return ticket.priority === PriorityEnum.P3;
+    if (activeFacetFilter === 'P4') return ticket.priority === PriorityEnum.P4;
+    if (activeFacetFilter === 'CHURN_RISK') return ticket.churn_risk === true;
+    if (activeFacetFilter === 'STRIPE') return ticket.channel === ChannelEnum.BILLING;
+    if (activeFacetFilter === 'EMAIL') return ticket.channel === ChannelEnum.EMAIL;
+    if (activeFacetFilter === 'TRUSTPILOT') return ticket.channel === ChannelEnum.TRUSTPILOT;
+    if (activeFacetFilter === 'WEB_FORM') return ticket.channel === ChannelEnum.WEB_FORM;
+    return true;
+  });
+
+  // 3. Automated ITIL Q38 Urgency Hierarchy Sorting (Strict Default Mode)
+  // Precedence: 1. is_sla_breached DESC -> 2. priority (P1>P2>P3>P4) -> 3. churn_risk DESC -> 4. sla_deadline_at ASC -> 5. created_at ASC
+  const sortedInquiries = [...facetFilteredInquiries].sort((a, b) => {
+    const now = currentTime;
+    const aDeadline = new Date(a.sla_deadline_at).getTime();
+    const bDeadline = new Date(b.sla_deadline_at).getTime();
+    const aBreached = a.status !== InquiryStatusEnum.RESOLVED && aDeadline < now;
+    const bBreached = b.status !== InquiryStatusEnum.RESOLVED && bDeadline < now;
+
+    // 1. is_sla_breached DESC
+    if (aBreached !== bBreached) return aBreached ? -1 : 1;
+
+    // 2. priority: P1 > P2 > P3 > P4
+    const priorityWeight: Record<PriorityEnum, number> = {
+      [PriorityEnum.P1]: 1,
+      [PriorityEnum.P2]: 2,
+      [PriorityEnum.P3]: 3,
+      [PriorityEnum.P4]: 4,
+    };
+    const pDiff = (priorityWeight[a.priority] || 4) - (priorityWeight[b.priority] || 4);
+    if (pDiff !== 0) return pDiff;
+
+    // 3. churn_risk DESC
+    if (a.churn_risk !== b.churn_risk) return a.churn_risk ? -1 : 1;
+
+    // 4. sla_deadline_at ASC
+    if (aDeadline !== bDeadline) return aDeadline - bDeadline;
+
+    // 5. created_at ASC
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
+  const getChannelBadge = (channel: ChannelEnum) => {
+    switch (channel) {
+      case ChannelEnum.BILLING:
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', borderRadius: '4px', backgroundColor: 'rgba(147, 51, 234, 0.08)', color: '#7E22CE', border: '1px solid rgba(147, 51, 234, 0.15)', fontSize: '0.67rem', fontWeight: 800, letterSpacing: '0.03em' }}>
+            <CreditCard size={10} color="#7E22CE" /> STRIPE
+          </span>
+        );
+      case ChannelEnum.TRUSTPILOT:
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', borderRadius: '4px', backgroundColor: 'rgba(0, 182, 122, 0.1)', color: '#00875A', border: '1px solid rgba(0, 182, 122, 0.2)', fontSize: '0.67rem', fontWeight: 800, letterSpacing: '0.03em' }}>
+            <Star size={10} color="#00875A" fill="#00875A" /> TRUSTPILOT
+          </span>
+        );
+      case ChannelEnum.EMAIL:
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', borderRadius: '4px', backgroundColor: 'rgba(37, 99, 235, 0.08)', color: '#1D4ED8', border: '1px solid rgba(37, 99, 235, 0.15)', fontSize: '0.67rem', fontWeight: 800, letterSpacing: '0.03em' }}>
+            <Mail size={10} color="#1D4ED8" /> EMAIL
+          </span>
+        );
+      case ChannelEnum.WEB_FORM:
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', borderRadius: '4px', backgroundColor: 'rgba(245, 158, 11, 0.08)', color: '#B45309', border: '1px solid rgba(245, 158, 11, 0.15)', fontSize: '0.67rem', fontWeight: 800, letterSpacing: '0.03em' }}>
+            <Globe size={10} color="#B45309" /> WEB FORM
+          </span>
+        );
+      default:
+        return (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '1px 6px', borderRadius: '4px', backgroundColor: 'rgba(12, 13, 13, 0.05)', color: '#4B5563', fontSize: '0.67rem', fontWeight: 700 }}>
+            {channel}
+          </span>
+        );
+    }
+  };
+
+  // Synchronized 3-grey and 3-green distinct department palette
+  const getDepartmentBadge = (dept: DepartmentEnum) => {
+    const meta: Record<DepartmentEnum, { label: string; color: string; bg: string; dot: string; dotBorder?: string }> = {
+      // 3 Greys:
+      [DepartmentEnum.TECH_SUPPORT]: { label: 'Tech Support', color: '#111827', bg: 'rgba(17, 24, 39, 0.08)', dot: '#111827' },
+      [DepartmentEnum.SECURITY]: { label: 'Security', color: '#374151', bg: 'rgba(107, 114, 128, 0.12)', dot: '#6B7280' },
+      [DepartmentEnum.GENERAL]: { label: 'General', color: '#4B5563', bg: 'rgba(203, 213, 225, 0.25)', dot: '#CBD5E1', dotBorder: '1px solid #94A3B8' },
+      // 3 Greens:
+      [DepartmentEnum.BILLING]: { label: 'Billing', color: '#064E3B', bg: 'rgba(6, 78, 59, 0.08)', dot: '#064E3B' },
+      [DepartmentEnum.ACCOUNTS]: { label: 'Accounts', color: '#047857', bg: 'rgba(16, 185, 129, 0.12)', dot: '#10B981' },
+      [DepartmentEnum.SALES]: { label: 'Sales', color: '#4D7C0F', bg: 'rgba(132, 204, 22, 0.15)', dot: '#84CC16' },
+    };
+    const m = meta[dept] || meta[DepartmentEnum.GENERAL];
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '1px 6px',
+          borderRadius: '4px',
+          backgroundColor: m.bg,
+          color: m.color,
+          fontSize: '0.68rem',
+          fontWeight: 700,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <span
+          style={{
+            width: '6px',
+            height: '6px',
+            borderRadius: '50%',
+            backgroundColor: m.dot,
+            border: m.dotBorder || 'none',
+            flexShrink: 0,
+          }}
+        />
+        {m.label}
+      </span>
+    );
+  };
+
+  // Severity / Priority Pill: Explicit P1, P2, P3, P4 prominently visible from the outside
+  const getSeverityBadge = (priority: PriorityEnum) => {
+    switch (priority) {
+      case PriorityEnum.P1:
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(254, 242, 242, 0.95)',
+              color: '#DC2626',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Flame size={11} color="#DC2626" /> P1 Emergency
+          </span>
+        );
+      case PriorityEnum.P2:
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(254, 243, 199, 0.85)',
+              color: '#B45309',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            P2 High
+          </span>
+        );
+      case PriorityEnum.P3:
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(239, 246, 255, 0.9)',
+              color: '#2563EB',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            P3 Medium
+          </span>
+        );
+      case PriorityEnum.P4:
+      default:
+        return (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 8px',
+              borderRadius: '9999px',
+              backgroundColor: 'rgba(243, 244, 246, 0.9)',
+              color: '#4B5563',
+              border: '1px solid rgba(107, 114, 128, 0.2)',
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            P4 Low
+          </span>
+        );
+    }
+  };
+
+  // SLA Due Countdown Pill matching Image 2
+  const getSlaDuePill = (ticket: Inquiry) => {
+    if (ticket.status === InquiryStatusEnum.RESOLVED) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            backgroundColor: 'rgba(236, 253, 245, 0.9)',
+            color: '#059669',
+            border: '1px solid rgba(16, 185, 129, 0.2)',
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <CheckCircle2 size={11} /> SLA Met
+        </span>
+      );
+    }
+
+    const deadline = new Date(ticket.sla_deadline_at).getTime();
+    const diffSeconds = Math.floor((deadline - currentTime) / 1000);
+
+    if (diffSeconds <= 0) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            backgroundColor: 'rgba(254, 242, 242, 0.9)',
+            color: '#DC2626',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            fontSize: '0.7rem',
+            fontWeight: 800,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <AlertTriangle size={11} /> Overdue
+        </span>
+      );
+    }
+
+    const hours = Math.floor(diffSeconds / 3600);
+    const minutes = Math.floor((diffSeconds % 3600) / 60);
+
+    if (diffSeconds < 3600) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            backgroundColor: 'rgba(254, 243, 199, 0.9)',
+            color: '#B45309',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            fontSize: '0.7rem',
+            fontWeight: 800,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Clock size={11} /> {minutes}m
+        </span>
+      );
+    }
+
+    if (diffSeconds < 7200) {
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            backgroundColor: 'rgba(254, 243, 199, 0.75)',
+            color: '#B45309',
+            border: '1px solid rgba(245, 158, 11, 0.2)',
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Clock size={11} /> {hours}h {minutes}m
+        </span>
+      );
+    }
+
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '3px',
+          padding: '2px 8px',
+          borderRadius: '9999px',
+          backgroundColor: '#FAFAFA',
+          color: '#4B5563',
+          border: '1px solid rgba(12, 13, 13, 0.08)',
+          fontSize: '0.7rem',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        <Clock size={11} color="#6B7280" /> {hours}h {minutes}m
+      </span>
+    );
+  };
+
+  const getAssignedAgent = (agentId?: string | null) => {
+    if (!agentId) return null;
+    return INITIAL_AGENTS.find((a) => a.id === agentId);
+  };
+
+  // Fixed CSS Grid Layout across Table Headers and Data Rows (6 Columns matching Image 2)
+  const gridColumns = '100px 165px 1fr 190px 115px 110px';
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
+      {/* Top Bar: Title + Status Tabs + Dedicated Filters Tab */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+            {/* Title with live count badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0C0D0D', letterSpacing: '-0.02em', margin: 0 }}>
+                Inquiries
+              </h2>
+              <span
+                style={{
+                  backgroundColor: 'rgba(12, 13, 13, 0.08)',
+                  color: '#0C0D0D',
+                  fontSize: '0.78rem',
+                  fontWeight: 800,
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                }}
+              >
+                {sortedInquiries.length}
+              </span>
+            </div>
+
+            {/* Status Pills */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+              {/* Default Tab: Auto Urgent First via Q38 ITIL Algorithm */}
+              <button
+                onClick={() => {
+                  onTabChange('DEFAULT');
+                  setActiveFacetFilter('ALL');
+                  setIsFiltersBarOpen(false);
+                }}
+                className={`pill-btn ${activeTab === 'DEFAULT' || (activeTab === 'ALL' && activeFacetFilter === 'ALL' && !isFiltersBarOpen) ? 'active' : ''}`}
+                title="Default Mode: Automatic ITIL Urgent First Prioritization (Q38 Algorithm)"
+              >
+                Default (Urgent First) {tabCounts.all}
+              </button>
+
+              <button
+                onClick={() => {
+                  onTabChange('PENDING');
+                  setActiveFacetFilter('ALL');
+                }}
+                className={`pill-btn ${activeTab === 'PENDING' ? 'active' : ''}`}
+              >
+                Pending {tabCounts.pending}
+              </button>
+
+              <button
+                onClick={() => {
+                  onTabChange('IN_PROGRESS');
+                  setActiveFacetFilter('ALL');
+                }}
+                className={`pill-btn ${activeTab === 'IN_PROGRESS' ? 'active' : ''}`}
+              >
+                In Progress {tabCounts.inProgress}
+              </button>
+
+              <button
+                onClick={() => {
+                  onTabChange('ASSIGNED');
+                  setActiveFacetFilter('ALL');
+                }}
+                className={`pill-btn ${activeTab === 'ASSIGNED' ? 'active' : ''}`}
+              >
+                Assigned {tabCounts.assigned}
+              </button>
+
+              <button
+                onClick={() => {
+                  onTabChange('COMPLETED');
+                  setActiveFacetFilter('ALL');
+                }}
+                className={`pill-btn ${activeTab === 'COMPLETED' ? 'active' : ''}`}
+              >
+                Completed {tabCounts.completed}
+              </button>
+
+              {/* Dedicated Filters Tab Toggle */}
+              <button
+                onClick={() => {
+                  setIsFiltersBarOpen(!isFiltersBarOpen);
+                  if (activeTab !== 'FILTERS') {
+                    onTabChange('FILTERS');
+                  }
+                }}
+                className={`pill-btn ${activeTab === 'FILTERS' || isFiltersBarOpen || activeFacetFilter !== 'ALL' ? 'active' : ''}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  border: activeFacetFilter !== 'ALL' ? '1.5px solid #0C0D0D' : undefined,
+                }}
+              >
+                <span>⚡ Filters</span>
+                {activeFacetFilter !== 'ALL' && (
+                  <span
+                    style={{
+                      backgroundColor: '#047857',
+                      color: '#FFFFFF',
+                      fontSize: '0.65rem',
+                      fontWeight: 800,
+                      padding: '1px 5px',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    {activeFacetFilter}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Right indicator: Active Sort Policy */}
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '5px 12px',
+              borderRadius: '9999px',
+              backgroundColor: '#FAFAFA',
+              border: '1px solid rgba(12, 13, 13, 0.08)',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              color: '#4B5563',
+            }}
+            title="Automated ITIL Tie-Breaking: Breached -> P1..P4 -> Churn Risk -> Nearest SLA -> FIFO"
+          >
+            <Zap size={11} color="#047857" />
+            <span>ITIL Auto-Urgent Priority Active</span>
+          </div>
+        </div>
+
+        {/* Dedicated Filters Tab Content: 1-Click Quick Facet Chips */}
+        {(isFiltersBarOpen || activeTab === 'FILTERS' || activeFacetFilter !== 'ALL') && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              flexWrap: 'wrap',
+              padding: '8px 14px',
+              backgroundColor: '#FAFAFA',
+              borderRadius: '12px',
+              border: '1px solid rgba(12, 13, 13, 0.08)',
+            }}
+          >
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#4B5563', textTransform: 'uppercase', letterSpacing: '0.04em', marginRight: '4px' }}>
+              Filter By:
+            </span>
+
+            {/* P1 Only */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'P1' ? 'ALL' : 'P1')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'P1' ? '#DC2626' : '#FFFFFF',
+                color: activeFacetFilter === 'P1' ? '#FFFFFF' : '#DC2626',
+                border: '1px solid rgba(220, 38, 38, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Flame size={11} />
+              <span>P1 Only ({facetCounts.p1})</span>
+            </button>
+
+            {/* P2 Only */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'P2' ? 'ALL' : 'P2')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'P2' ? '#B45309' : '#FFFFFF',
+                color: activeFacetFilter === 'P2' ? '#FFFFFF' : '#B45309',
+                border: '1px solid rgba(180, 83, 9, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>P2 Only ({facetCounts.p2})</span>
+            </button>
+
+            {/* P3 Only */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'P3' ? 'ALL' : 'P3')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'P3' ? '#2563EB' : '#FFFFFF',
+                color: activeFacetFilter === 'P3' ? '#FFFFFF' : '#2563EB',
+                border: '1px solid rgba(37, 99, 235, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>P3 Only ({facetCounts.p3})</span>
+            </button>
+
+            {/* P4 Only */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'P4' ? 'ALL' : 'P4')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'P4' ? '#4B5563' : '#FFFFFF',
+                color: activeFacetFilter === 'P4' ? '#FFFFFF' : '#4B5563',
+                border: '1px solid rgba(75, 85, 99, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <span>P4 Only ({facetCounts.p4})</span>
+            </button>
+
+            {/* Churn Risk Only */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'CHURN_RISK' ? 'ALL' : 'CHURN_RISK')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'CHURN_RISK' ? '#0C0D0D' : '#FFFFFF',
+                color: activeFacetFilter === 'CHURN_RISK' ? '#FFFFFF' : '#DC2626',
+                border: activeFacetFilter === 'CHURN_RISK' ? '1px solid #0C0D0D' : '1px solid rgba(220, 38, 38, 0.35)',
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <AlertTriangle size={11} />
+              <span>Churn Risk ({facetCounts.churn})</span>
+            </button>
+
+            {/* Stripe */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'STRIPE' ? 'ALL' : 'STRIPE')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'STRIPE' ? '#7E22CE' : '#FFFFFF',
+                color: activeFacetFilter === 'STRIPE' ? '#FFFFFF' : '#7E22CE',
+                border: '1px solid rgba(126, 34, 206, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <CreditCard size={10} />
+              <span>Stripe ({facetCounts.stripe})</span>
+            </button>
+
+            {/* Email */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'EMAIL' ? 'ALL' : 'EMAIL')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'EMAIL' ? '#1D4ED8' : '#FFFFFF',
+                color: activeFacetFilter === 'EMAIL' ? '#FFFFFF' : '#1D4ED8',
+                border: '1px solid rgba(29, 78, 216, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Mail size={10} />
+              <span>Email ({facetCounts.email})</span>
+            </button>
+
+            {/* Trustpilot */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'TRUSTPILOT' ? 'ALL' : 'TRUSTPILOT')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'TRUSTPILOT' ? '#00875A' : '#FFFFFF',
+                color: activeFacetFilter === 'TRUSTPILOT' ? '#FFFFFF' : '#00875A',
+                border: '1px solid rgba(0, 135, 90, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Star size={10} />
+              <span>Trustpilot ({facetCounts.trustpilot})</span>
+            </button>
+
+            {/* Web Form */}
+            <button
+              onClick={() => setActiveFacetFilter(activeFacetFilter === 'WEB_FORM' ? 'ALL' : 'WEB_FORM')}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 10px',
+                borderRadius: '9999px',
+                backgroundColor: activeFacetFilter === 'WEB_FORM' ? '#B45309' : '#FFFFFF',
+                color: activeFacetFilter === 'WEB_FORM' ? '#FFFFFF' : '#B45309',
+                border: '1px solid rgba(180, 83, 9, 0.3)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              <Globe size={10} />
+              <span>Web Form ({facetCounts.webForm})</span>
+            </button>
+
+            {/* Reset / Clear Button */}
+            {activeFacetFilter !== 'ALL' && (
+              <button
+                onClick={() => setActiveFacetFilter('ALL')}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  padding: '3px 10px',
+                  borderRadius: '9999px',
+                  backgroundColor: 'rgba(12, 13, 13, 0.08)',
+                  color: '#0C0D0D',
+                  border: 'none',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  marginLeft: 'auto',
+                }}
+              >
+                ↺ Reset Filter
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Table Column Header: Strictly Aligned Grid (6 Columns Matching Image 2) */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: gridColumns,
+          alignItems: 'center',
+          gap: '14px',
+          padding: '8px 18px',
+          backgroundColor: '#FAFAFA',
+          borderRadius: '12px',
+          border: '1px solid rgba(12, 13, 13, 0.05)',
+          fontSize: '0.72rem',
+          fontWeight: 700,
+          color: '#64748B',
+          textTransform: 'uppercase',
+          letterSpacing: '0.04em',
+        }}
+      >
+        <span>Ticket ID</span>
+        <span>Customer & Channel</span>
+        <span>Issue & Key Entities</span>
+        <span>Severity & SLA Due</span>
+        <span>Flags</span>
+        <span style={{ textAlign: 'right' }}>Actions</span>
+      </div>
+
+      {/* Empty State */}
+      {sortedInquiries.length === 0 ? (
+        <div
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: '20px',
+            border: '1px solid rgba(12, 13, 13, 0.08)',
+            padding: '48px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <div
+            style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              backgroundColor: '#ECF4EE',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#16a34a',
+            }}
+          >
+            <CheckCircle2 size={24} />
+          </div>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0C0D0D', margin: 0 }}>
+            No Inquiries In This View
+          </h3>
+          <p style={{ fontSize: '0.82rem', color: '#666666', maxWidth: '380px', margin: 0 }}>
+            There are currently no tickets matching the "{activeTab}" filter. Select "All" or create a new test inquiry using the top action buttons.
+          </p>
+        </div>
+      ) : (
+        /* High-Density Row List: Strict Grid Alignment (Matching Image 2) */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {sortedInquiries.map((ticket) => {
+            const isSelected = selectedTicket?.id === ticket.id;
+            const assignedAgent = getAssignedAgent(ticket.assigned_agent_id);
+
+            return (
+              <div
+                key={ticket.id}
+                onClick={() => onSelectTicket(ticket)}
+                className={`table-row-card ${isSelected ? 'selected' : ''}`}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: gridColumns,
+                  alignItems: 'center',
+                  gap: '14px',
+                  padding: '12px 18px',
+                  backgroundColor: isSelected ? 'rgba(236, 244, 238, 0.7)' : '#FFFFFF',
+                  borderRadius: '14px',
+                  border: isSelected
+                    ? '1.5px solid #0C0D0D'
+                    : '1px solid rgba(12, 13, 13, 0.08)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: isSelected
+                    ? '0 4px 16px rgba(12, 13, 13, 0.08)'
+                    : '0 1px 3px rgba(12, 13, 13, 0.02)',
+                }}
+              >
+                {/* Col 1: Ticket ID (Fixed width 100px) */}
+                <div>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '0.82rem',
+                      fontWeight: 800,
+                      color: '#1F2937',
+                    }}
+                  >
+                    #{ticket.id.slice(0, 8).toUpperCase()}
+                  </span>
+                </div>
+
+                {/* Col 2: Customer & Channel (Fixed width 165px) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden' }}>
+                  <span
+                    style={{
+                      fontSize: '0.84rem',
+                      fontWeight: 700,
+                      color: '#0C0D0D',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={ticket.customer_name}
+                  >
+                    {ticket.customer_name}
+                  </span>
+                  <div>{getChannelBadge(ticket.channel)}</div>
+                </div>
+
+                {/* Col 3: Issue & Key Entities (Flexible 1fr) */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    {ticket.is_simulation && (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          padding: '1px 5px',
+                          borderRadius: '4px',
+                          backgroundColor: '#FEF3C7',
+                          color: '#92400E',
+                          border: '1px solid #FDE68A',
+                          fontSize: '0.65rem',
+                          fontWeight: 800,
+                          letterSpacing: '0.03em',
+                        }}
+                      >
+                        <Zap size={9} /> SIM
+                      </span>
+                    )}
+
+                    <span
+                      style={{
+                        fontSize: '0.84rem',
+                        fontWeight: 600,
+                        color: '#0C0D0D',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={ticket.subject}
+                    >
+                      {ticket.subject}
+                    </span>
+                  </div>
+
+                  {/* Horizontal row of Entities + Department Badge */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                    {getDepartmentBadge(ticket.department)}
+                    {ticket.entities?.monetary_amount && (
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          backgroundColor: '#ECF4EE',
+                          color: '#0C0D0D',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {ticket.entities.monetary_amount}
+                      </span>
+                    )}
+                    {ticket.entities?.order_id && (
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          backgroundColor: 'rgba(12, 13, 13, 0.05)',
+                          color: '#4B5563',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          fontFamily: 'var(--font-mono)',
+                        }}
+                      >
+                        Ref: {ticket.entities.order_id}
+                      </span>
+                    )}
+                    {ticket.entities?.error_code && (
+                      <span
+                        style={{
+                          fontSize: '0.68rem',
+                          backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                          color: '#dc2626',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {ticket.entities.error_code}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Col 4: Severity & SLA Due (Side-by-side, Fixed width 190px) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  {getSeverityBadge(ticket.priority)}
+                  {getSlaDuePill(ticket)}
+                </div>
+
+                {/* Col 5: Flags (Fixed width 115px) */}
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  {ticket.churn_risk ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        fontSize: '0.74rem',
+                        color: '#DC2626',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <AlertTriangle size={12} color="#DC2626" /> Churn Risk
+                    </span>
+                  ) : (
+                    <span style={{ color: '#9CA3AF', fontSize: '0.74rem', fontWeight: 500 }}>
+                      All Clear
+                    </span>
+                  )}
+                </div>
+
+                {/* Col 6: Actions (Fixed width 110px, right-aligned) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                  {ticket.status === InquiryStatusEnum.UNASSIGNED ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onClaimTicket(ticket.id);
+                      }}
+                      disabled={isClaiming}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        padding: '4px 12px',
+                        borderRadius: '9999px',
+                        backgroundColor: '#FFFFFF',
+                        color: '#1F2937',
+                        border: '1px solid rgba(12, 13, 13, 0.16)',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        boxShadow: '0 1px 2px rgba(12, 13, 13, 0.04)',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F3F4F6')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
+                      title="Claim ticket for current operator"
+                    >
+                      <span>Claim</span>
+                      <ChevronRight size={11} />
+                    </button>
+                  ) : ticket.status === InquiryStatusEnum.RESOLVED ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '3px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        color: '#059669',
+                      }}
+                    >
+                      <CheckCircle2 size={12} /> Resolved
+                    </span>
+                  ) : (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 9px',
+                        borderRadius: '9999px',
+                        backgroundColor: 'rgba(37, 99, 235, 0.08)',
+                        color: '#1D4ED8',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={`Claimed by ${assignedAgent ? assignedAgent.name : 'Operator'}`}
+                    >
+                      <User size={11} />
+                      <span>{assignedAgent ? assignedAgent.name : 'Assigned'}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};

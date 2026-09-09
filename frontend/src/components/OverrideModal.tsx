@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldAlert, Check } from 'lucide-react';
+import { X, RotateCcw, AlertCircle } from 'lucide-react';
 import {
   DepartmentEnum,
   PriorityEnum,
@@ -47,138 +47,225 @@ export const OverrideModal: React.FC<OverrideModalProps> = ({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
+        {/* Modal Header */}
         <div
           style={{
-            padding: '1rem 1.25rem',
-            borderBottom: '1px solid var(--border-subtle)',
+            padding: '18px 24px',
+            borderBottom: '1px solid rgba(12, 13, 13, 0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            backgroundColor: 'rgba(239, 68, 68, 0.05)',
+            backgroundColor: '#FFFFFF',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <ShieldAlert size={18} color="#f87171" />
-            <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fca5a5' }}>
-              Override AI Classification (MLOps Calibration)
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#dc2626',
+              }}
+            >
+              <RotateCcw size={16} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-black)', margin: 0, letterSpacing: '-0.02em' }}>
+                Override AI Classification
+              </h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                MLOps calibration with immutable audit ledger justification
+              </span>
+            </div>
           </div>
+
           <button
             onClick={onClose}
-            className="btn btn-secondary"
-            style={{ padding: '0.3rem', borderRadius: '50%' }}
+            style={{
+              padding: '6px',
+              borderRadius: '50%',
+              border: '1px solid rgba(12, 13, 13, 0.1)',
+              backgroundColor: '#FAFAFA',
+              color: 'var(--color-black)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
           >
             <X size={15} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Ticket #{ticket.id.substring(0, 8)}: <strong>{ticket.subject}</strong>
-          </div>
-
-          {/* Department Select */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.3rem' }}>
-              NEW DEPARTMENT TAXONOMY:
-            </label>
-            <select
-              value={selectedDept}
-              onChange={(e) => setSelectedDept(e.target.value as DepartmentEnum)}
+        {/* Modal Form */}
+        <form onSubmit={handleSubmit} style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {error && (
+            <div
               style={{
-                width: '100%',
-                padding: '0.5rem',
-                borderRadius: '6px',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-prominent)',
-                color: 'var(--text-main)',
-                fontSize: '0.82rem',
-                outline: 'none',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                border: '1px solid rgba(239, 68, 68, 0.25)',
+                color: '#dc2626',
+                fontSize: '0.76rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
-              {Object.values(DepartmentEnum).map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
+              <AlertCircle size={14} />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Ticket Target Banner */}
+          <div
+            style={{
+              padding: '10px 14px',
+              borderRadius: '10px',
+              backgroundColor: '#FAFAFA',
+              border: '1px solid rgba(12, 13, 13, 0.08)',
+              fontSize: '0.78rem',
+              color: '#0C0D0D',
+            }}
+          >
+            Overriding Ticket: <strong style={{ fontFamily: 'var(--font-mono)' }}>#{ticket.id.slice(0, 8).toUpperCase()}</strong> - {ticket.subject}
           </div>
 
-          {/* Priority Select */}
-          <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.3rem' }}>
-              NEW ITIL PRIORITY / SLA:
-            </label>
-            <select
-              value={selectedPriority}
-              onChange={(e) => setSelectedPriority(e.target.value as PriorityEnum)}
-              style={{
-                width: '100%',
-                padding: '0.5rem',
-                borderRadius: '6px',
-                background: 'var(--bg-input)',
-                border: '1px solid var(--border-prominent)',
-                color: 'var(--text-main)',
-                fontSize: '0.82rem',
-                outline: 'none',
-              }}
-            >
-              {Object.values(PriorityEnum).map((p) => (
-                <option key={p} value={p}>
-                  {p} {p === 'P1' ? '(30m Critical)' : p === 'P2' ? '(2h High)' : p === 'P3' ? '(8h Normal)' : '(24h Low)'}
-                </option>
-              ))}
-            </select>
+          {/* Department & Priority Select Row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                New Department
+              </label>
+              <select
+                value={selectedDept}
+                onChange={(e) => setSelectedDept(e.target.value as DepartmentEnum)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  backgroundColor: '#FAFAFA',
+                  border: '1px solid rgba(12, 13, 13, 0.12)',
+                  color: '#0C0D0D',
+                  fontSize: '0.82rem',
+                  fontFamily: 'var(--font-sans)',
+                  outline: 'none',
+                }}
+              >
+                <option value={DepartmentEnum.TECH_SUPPORT}>Tech Support</option>
+                <option value={DepartmentEnum.BILLING}>Billing</option>
+                <option value={DepartmentEnum.SECURITY}>Security</option>
+                <option value={DepartmentEnum.ACCOUNTS}>Accounts</option>
+                <option value={DepartmentEnum.SALES}>Sales</option>
+                <option value={DepartmentEnum.GENERAL}>General</option>
+              </select>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                New Priority
+              </label>
+              <select
+                value={selectedPriority}
+                onChange={(e) => setSelectedPriority(e.target.value as PriorityEnum)}
+                style={{
+                  width: '100%',
+                  padding: '9px 12px',
+                  borderRadius: '10px',
+                  backgroundColor: '#FAFAFA',
+                  border: '1px solid rgba(12, 13, 13, 0.12)',
+                  color: '#0C0D0D',
+                  fontSize: '0.82rem',
+                  fontFamily: 'var(--font-sans)',
+                  outline: 'none',
+                }}
+              >
+                <option value={PriorityEnum.P1}>P1 - Emergency (1h SLA)</option>
+                <option value={PriorityEnum.P2}>P2 - High (4h SLA)</option>
+                <option value={PriorityEnum.P3}>P3 - Medium (8h SLA)</option>
+                <option value={PriorityEnum.P4}>P4 - Low (24h SLA)</option>
+              </select>
+            </div>
           </div>
 
-          {/* Mandatory Justification */}
+          {/* Justification Reason Textarea */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-dim)', marginBottom: '0.3rem' }}>
-              MANDATORY ENGINEERING JUSTIFICATION (Min 10 characters):
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Mandatory Engineering Justification (min 10 chars)
             </label>
             <textarea
-              value={reason}
-              onChange={(e) => {
-                setReason(e.target.value);
-                if (error) setError(null);
-              }}
-              placeholder="Explain why the AI classification was adjusted (e.g., Hidden IDOR vulnerability misclassified as standard API bug)..."
               rows={3}
+              placeholder="e.g. Model mistook payment dispute for general technical support; routing to Senior Billing team."
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              required
               style={{
                 width: '100%',
-                padding: '0.6rem',
-                borderRadius: '6px',
-                background: 'var(--bg-input)',
-                border: error ? '1px solid #ef4444' : '1px solid var(--border-prominent)',
-                color: 'var(--text-main)',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                backgroundColor: '#FAFAFA',
+                border: '1px solid rgba(12, 13, 13, 0.12)',
+                color: '#0C0D0D',
                 fontSize: '0.82rem',
                 fontFamily: 'var(--font-sans)',
                 outline: 'none',
-                resize: 'none',
+                resize: 'vertical',
               }}
             />
-            {error && (
-              <span style={{ fontSize: '0.72rem', color: '#f87171', marginTop: '0.2rem', display: 'block' }}>
-                {error}
-              </span>
-            )}
           </div>
 
           {/* Footer Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.5rem' }}>
-            <button type="button" onClick={onClose} className="btn btn-secondary" style={{ fontSize: '0.8rem' }}>
+          <div
+            style={{
+              marginTop: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '10px',
+            }}
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                padding: '8px 16px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(12, 13, 13, 0.15)',
+                backgroundColor: '#FFFFFF',
+                color: '#0C0D0D',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
               Cancel
             </button>
+
             <button
               type="submit"
-              disabled={isSubmitting || reason.trim().length < 10}
-              className="btn btn-primary"
-              style={{ fontSize: '0.8rem' }}
+              disabled={isSubmitting}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 20px',
+                borderRadius: '9999px',
+                backgroundColor: '#0C0D0D',
+                color: '#FFFFFF',
+                border: 'none',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(12, 13, 13, 0.15)',
+              }}
             >
-              <Check size={14} />
-              <span>Confirm Calibration & Recalculate SLA</span>
+              <span>{isSubmitting ? 'Recording...' : 'Commit MLOps Override'}</span>
             </button>
           </div>
         </form>
