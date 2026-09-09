@@ -1,11 +1,9 @@
 """FastAPI application entrypoint, lifespan event orchestration, and middleware assembly."""
 import logging
-import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 
 from app.api.v1.router import api_router
 from app.core.config import settings
@@ -72,11 +70,6 @@ app.include_router(health_router)
 # Attach Master API v1 Router
 app.include_router(api_router, prefix="/api/v1")
 
-# Mount static frontend assets if directory exists
-static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
-if os.path.exists(static_dir):
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-
 
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
@@ -90,10 +83,7 @@ async def generic_exception_handler(request: Request, exc: Exception):
 
 @app.get("/")
 async def root():
-    """Root entrypoint returning frontend console if available, or service metadata."""
-    index_file = os.path.join(static_dir, "index.html")
-    if os.path.exists(index_file):
-        return FileResponse(index_file)
+    """Root entrypoint returning service status metadata."""
     return {
         "service": settings.PROJECT_NAME,
         "version": settings.VERSION,

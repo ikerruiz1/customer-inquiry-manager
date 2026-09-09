@@ -9,7 +9,6 @@ phases:
   install:
     runtime-versions:
       python: 3.12
-      nodejs: 20
     commands:
       - echo "Installing system utilities and Python dependencies..."
       - pip install --upgrade pip

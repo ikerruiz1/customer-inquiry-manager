@@ -58,23 +58,11 @@ customer-inquiry-manager/
 │       ├── test_health.py            # Container health check probe tests
 │       ├── test_inquiries.py         # ITIL SLA calculation, claiming & HITL resolve tests
 │       └── test_webhooks.py          # HMAC-SHA256 & omnichannel ingestion tests
-├── frontend/                         # React 18/19 Operations Console (Vite SPA)
-│   ├── src/
-│   │   ├── components/               # TicketQueue, TicketDetail, TOTPModal, SLATimer
-│   │   ├── services/                 # API client, Cognito authentication
-│   │   ├── App.tsx
-│   │   ├── main.tsx
-│   │   └── index.css
-│   ├── index.html
-│   ├── vite.config.ts
-│   └── package.json
-├── static/                           # Embedded standalone operations dashboard
-│   └── index.html
 ├── docs/                             # Authoritative Documentation & Decision Memory
 │   ├── PROJECT_CONTEXT.md            # 3-Tier topology blueprint & 47 chronological flows
 │   └── ARCHITECTURE_DECISIONS_AND_QA.md # Historical ledger of engineering debates & resolutions
 ├── company_profile.json              # Domain grounding document (ITIL matrix & refund policies)
-├── Dockerfile                        # Multi-stage build: Node builder -> Python 3.12 runner
+├── Dockerfile                        # Production Python 3.12-slim runtime container (Non-root security)
 ├── buildspec.yml                     # AWS CodeBuild spec (Pytest, Semgrep SAST, KICS, Trivy, Syft)
 ├── appspec.yaml                      # AWS CodeDeploy spec (ECS Fargate Blue/Green Canary)
 ├── terraform/                        # Modular Infrastructure as Code
@@ -106,11 +94,13 @@ pytest app/tests/ -v
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Accessing the Web Operations Console
+### Accessing the API & Documentation
 Once running, open your browser:
-- **Operations Console:** [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
+- **Service Metadata (Root):** [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
 - **Interactive OpenAPI Documentation:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- **Container Health Check Probe:** [http://127.0.0.1:8000/health/live](http://127.0.0.1:8000/health/live)
+- **ReDoc Technical Specification:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
+- **Container Liveness Probe:** [http://127.0.0.1:8000/health/live](http://127.0.0.1:8000/health/live)
+- **Container Readiness Probe:** [http://127.0.0.1:8000/health/ready](http://127.0.0.1:8000/health/ready)
 
 ---
 
