@@ -94,6 +94,7 @@ export interface Inquiry {
   human_reviewed: boolean;
   was_edited?: boolean;
   edit_character_distance?: number;
+  is_simulation?: boolean;
 
   created_at: string;
   updated_at: string;
@@ -129,7 +130,7 @@ export interface KPIStats {
 }
 
 export interface InquiryFilters {
-  statusTab: 'ACTIVE' | 'IN_PROGRESS' | 'RESOLVED';
+  statusTab: 'ACTIVE' | 'IN_PROGRESS' | 'RESOLVED' | 'ALL';
   department?: DepartmentEnum | 'ALL';
   priority?: PriorityEnum | 'ALL';
   churnOnly: boolean;

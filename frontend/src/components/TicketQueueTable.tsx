@@ -10,6 +10,7 @@ import {
   CreditCard,
   Star,
   ChevronRight,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   PriorityEnum,
@@ -90,55 +91,51 @@ export const TicketQueueTable: React.FC<TicketQueueTableProps> = ({
     switch (channel) {
       case ChannelEnum.BILLING:
         return (
-          <span className="badge badge-stripe">
+          <span className="badge-channel channel-stripe">
             <CreditCard size={11} /> Stripe
           </span>
         );
       case ChannelEnum.TRUSTPILOT:
         return (
-          <span className="badge badge-trustpilot">
+          <span className="badge-channel channel-trustpilot">
             <Star size={11} /> Trustpilot
           </span>
         );
       case ChannelEnum.EMAIL:
         return (
-          <span className="badge badge-email">
+          <span className="badge-channel channel-email">
             <Mail size={11} /> Email
           </span>
         );
       case ChannelEnum.WEB_FORM:
         return (
-          <span className="badge badge-webform">
+          <span className="badge-channel channel-webform">
             <Globe size={11} /> Web Form
           </span>
         );
       default:
-        return <span className="badge">{channel}</span>;
+        return <span className="badge-channel channel-google">{channel}</span>;
     }
   };
 
-  const getPriorityBadge = (priority: PriorityEnum) => {
+  const getSeverityBadge = (priority: PriorityEnum) => {
     switch (priority) {
       case PriorityEnum.P1:
-        return (
-          <span className="badge badge-p1">
-            <Flame size={11} /> P1
-          </span>
-        );
+        return <span className="badge badge-emergency"><Flame size={11} /> Emergency</span>;
       case PriorityEnum.P2:
-        return <span className="badge badge-p2">P2</span>;
+        return <span className="badge badge-high">High</span>;
       case PriorityEnum.P3:
-        return <span className="badge badge-p3">P3</span>;
+        return <span className="badge badge-medium">Medium</span>;
       case PriorityEnum.P4:
-        return <span className="badge badge-p4">P4</span>;
+        return <span className="badge badge-low">Low</span>;
     }
   };
 
   const formatCountdown = (ticket: Inquiry) => {
     if (ticket.status === InquiryStatusEnum.RESOLVED) {
       return (
-        <span style={{ color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', fontWeight: 600 }}>
-          <CheckCircle2 size={13} /> SLA Met
+        <span style={{ color: '#16a34a', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.72rem', fontWeight: 600 }}>
+          <CheckCircle2 size={12} /> SLA Met
         </span>
       );
     }
@@ -147,18 +144,9 @@ export const TicketQueueTable: React.FC<TicketQueueTableProps> = ({
     const diffSeconds = Math.floor((deadline - currentTime) / 1000);
 
     if (diffSeconds <= 0) {
-      const minsOver = Math.abs(Math.floor(diffSeconds / 60));
       return (
-        <span
-          className="badge"
-          style={{
-            background: 'rgba(239, 68, 68, 0.3)',
-            color: '#fca5a5',
-            border: '1px solid #ef4444',
-            fontSize: '0.72rem',
-          }}
-        >
-          🚨 BREACHED (-{minsOver}m)
+        <span className="sla-pill sla-breached">
+          <Clock size={11} /> Overdue
         </span>
       );
     }
@@ -168,43 +156,24 @@ export const TicketQueueTable: React.FC<TicketQueueTableProps> = ({
     const seconds = diffSeconds % 60;
 
     if (diffSeconds < 900) {
-      // Under 15 mins -> Pulsing crimson
       return (
-        <span
-          className="pulse-critical"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '0.3rem',
-            color: '#f87171',
-            fontWeight: 700,
-            fontSize: '0.75rem',
-            padding: '0.15rem 0.4rem',
-            borderRadius: '4px',
-            background: 'rgba(239, 68, 68, 0.2)',
-          }}
-        >
-          <Clock size={12} />
-          {minutes}m {seconds}s
+        <span className="sla-pill sla-breached pulse-emergency">
+          <Clock size={11} /> {minutes}m {seconds}s
         </span>
       );
     }
 
     if (diffSeconds < 7200) {
-      // Under 2 hours -> Amber
       return (
-        <span style={{ color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem', fontWeight: 600 }}>
-          <Clock size={12} />
-          {hours}h {minutes}m
+        <span className="sla-pill sla-warning">
+          <Clock size={11} /> {hours > 0 ? `${hours}h ` : ''}{minutes}m
         </span>
       );
     }
 
-    // Normal green
     return (
-      <span style={{ color: '#34d399', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
-        <Clock size={12} />
-        {hours}h {minutes}m
+      <span className="sla-pill sla-on-track">
+        <Clock size={11} /> {hours}h {minutes}m
       </span>
     );
   };
@@ -225,227 +194,241 @@ export const TicketQueueTable: React.FC<TicketQueueTableProps> = ({
           flexDirection: 'column',
           alignItems: 'center',
           gap: '0.75rem',
+          backgroundColor: 'var(--card-bg)',
+          borderRadius: '0.85rem',
+          border: '1px solid var(--card-border)',
         }}
       >
         <CheckCircle2 size={42} color="#10b981" />
-        <div style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-main)' }}>
+        <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
           Queue is Completely Clear
         </div>
-        <div style={{ fontSize: '0.85rem', maxWidth: '420px' }}>
-          No customer inquiries match the current filter selection. Inject a scenario via the simulator above to see real-time AI triage.
+        <div style={{ fontSize: '0.82rem', maxWidth: '400px' }}>
+          No customer inquiries match the current filter selection. Inject a scenario via the simulator on the right to see real-time AI triage.
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ overflowX: 'auto', width: '100%' }}>
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          textAlign: 'left',
-          fontSize: '0.82rem',
-        }}
-      >
-        <thead>
-          <tr
-            style={{
-              backgroundColor: '#0a0e17',
-              borderBottom: '1px solid var(--border-prominent)',
-              color: 'var(--text-dim)',
-              fontSize: '0.72rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.04em',
-            }}
-          >
-            <th style={{ padding: '0.65rem 1rem', width: '130px' }}>Priority & SLA</th>
-            <th style={{ padding: '0.65rem 0.8rem', width: '110px' }}>Channel</th>
-            <th style={{ padding: '0.65rem 1rem', minWidth: '220px' }}>Customer & Subject</th>
-            <th style={{ padding: '0.65rem 0.8rem', width: '130px' }}>Department</th>
-            <th style={{ padding: '0.65rem 0.8rem', width: '130px' }}>AI Alerts</th>
-            <th style={{ padding: '0.65rem 1rem', width: '140px', textAlign: 'right' }}>Assignment</th>
-          </tr>
-        </thead>
-        <tbody>
-          {sortedInquiries.map((ticket) => {
-            const isSelected = selectedTicket?.id === ticket.id;
-            const assignedAgent = getAssignedAgent(ticket.assigned_agent_id);
-            const isClaimedByOther =
-              ticket.status === InquiryStatusEnum.CLAIMED &&
-              ticket.assigned_agent_id !== currentAgent.id;
+    <div
+      style={{
+        backgroundColor: 'var(--bento-card-bg)',
+        borderRadius: 'var(--bento-card-radius)',
+        border: '1px solid var(--bento-card-border)',
+        overflow: 'hidden',
+        width: '100%',
+      }}
+    >
+      <div style={{ overflowX: 'auto', width: '100%' }}>
+        <table
+          style={{
+            width: '100%',
+            borderCollapse: 'collapse',
+            textAlign: 'left',
+            fontSize: '0.82rem',
+          }}
+        >
+          <thead>
+            <tr
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                color: 'var(--text-muted)',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                letterSpacing: '0.02em',
+              }}
+            >
+              <th style={{ padding: '0.85rem 1rem', width: '120px' }}>Ticket ID</th>
+              <th style={{ padding: '0.85rem 1rem', width: '190px' }}>Customer & Channel</th>
+              <th style={{ padding: '0.85rem 1rem', minWidth: '220px' }}>Issue & Key Entities</th>
+              <th style={{ padding: '0.85rem 1rem', width: '190px' }}>Severity & SLA Due</th>
+              <th style={{ padding: '0.85rem 1rem', width: '120px' }}>Flags</th>
+              <th style={{ padding: '0.85rem 1rem', width: '120px', textAlign: 'right' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sortedInquiries.map((ticket) => {
+              const isSelected = selectedTicket?.id === ticket.id;
+              const assignedAgent = getAssignedAgent(ticket.assigned_agent_id);
+              const isClaimedByOther =
+                ticket.status === InquiryStatusEnum.CLAIMED &&
+                ticket.assigned_agent_id !== currentAgent.id;
 
-            return (
-              <tr
-                key={ticket.id}
-                onClick={() => onSelectTicket(ticket)}
-                style={{
-                  borderBottom: '1px solid var(--border-subtle)',
-                  backgroundColor: isSelected
-                    ? 'rgba(59, 130, 246, 0.12)'
-                    : ticket.priority === PriorityEnum.P1 && ticket.status !== InquiryStatusEnum.RESOLVED
-                    ? 'rgba(239, 68, 68, 0.05)'
-                    : 'transparent',
-                  cursor: 'pointer',
-                  transition: 'background-color 0.1s ease',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
-                }}
-                onMouseLeave={(e) => {
-                  if (!isSelected) {
-                    e.currentTarget.style.backgroundColor =
-                      ticket.priority === PriorityEnum.P1 && ticket.status !== InquiryStatusEnum.RESOLVED
-                        ? 'rgba(239, 68, 68, 0.05)'
-                        : 'transparent';
-                  }
-                }}
-              >
-                {/* Priority & Countdown */}
-                <td style={{ padding: '0.75rem 1rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      {getPriorityBadge(ticket.priority)}
-                    </div>
-                    <div>{formatCountdown(ticket)}</div>
-                  </div>
-                </td>
-
-                {/* Channel */}
-                <td style={{ padding: '0.75rem 0.8rem' }}>
-                  {getChannelBadge(ticket.channel)}
-                </td>
-
-                {/* Customer & Subject */}
-                <td style={{ padding: '0.75rem 1rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>
-                        {ticket.customer_name}
-                      </span>
-                      <span style={{ fontSize: '0.74rem', color: 'var(--text-dim)' }}>
-                        ({ticket.customer_email})
-                      </span>
-                    </div>
-                    <div
+              return (
+                <tr
+                  key={ticket.id}
+                  onClick={() => onSelectTicket(ticket)}
+                  style={{
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                    backgroundColor: isSelected
+                      ? 'rgba(184, 165, 254, 0.09)'
+                      : ticket.priority === PriorityEnum.P1 && ticket.status !== InquiryStatusEnum.RESOLVED
+                      ? 'rgba(248, 113, 113, 0.04)'
+                      : 'transparent',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.12s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.backgroundColor =
+                        ticket.priority === PriorityEnum.P1 && ticket.status !== InquiryStatusEnum.RESOLVED
+                          ? 'rgba(248, 113, 113, 0.04)'
+                          : 'transparent';
+                    }
+                  }}
+                >
+                  {/* Ticket ID */}
+                  <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                    <span
                       style={{
-                        color: 'var(--text-muted)',
-                        fontSize: '0.8rem',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        maxWidth: '480px',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        color: isSelected ? 'var(--pastel-lilac)' : '#ffffff',
                       }}
                     >
-                      {ticket.subject}
+                      {ticket.id.slice(0, 8).toUpperCase()}
+                    </span>
+                  </td>
+
+                  {/* Customer & Channel */}
+                  <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <span style={{ fontWeight: 600, color: '#ffffff', fontSize: '0.82rem' }}>
+                        {ticket.customer_name}
+                      </span>
+                      <div>{getChannelBadge(ticket.channel)}</div>
                     </div>
-                  </div>
-                </td>
+                  </td>
 
-                {/* Department */}
-                <td style={{ padding: '0.75rem 0.8rem' }}>
-                  <span
-                    style={{
-                      display: 'inline-block',
-                      padding: '0.2rem 0.5rem',
-                      borderRadius: '4px',
-                      fontSize: '0.74rem',
-                      fontWeight: 500,
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      color: '#cbd5e1',
-                      border: '1px solid var(--border-subtle)',
-                    }}
-                  >
-                    {ticket.department}
-                  </span>
-                </td>
-
-                {/* AI Alerts / Churn Risk */}
-                <td style={{ padding: '0.75rem 0.8rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    {ticket.churn_risk && (
+                  {/* Issue & Key Entities */}
+                  <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                       <span
-                        className="badge"
                         style={{
-                          background: 'rgba(239, 68, 68, 0.2)',
-                          color: '#fca5a5',
-                          border: '1px solid rgba(239, 68, 68, 0.4)',
-                          fontSize: '0.68rem',
+                          fontWeight: 600,
+                          color: '#ffffff',
+                          fontSize: '0.82rem',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          maxWidth: '360px',
                         }}
+                        title={ticket.subject}
                       >
-                        <AlertTriangle size={10} /> Churn Risk
+                        {ticket.subject}
+                      </span>
+                      {ticket.entities && (ticket.entities.order_id || ticket.entities.monetary_amount || ticket.entities.error_code) && (
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          {ticket.entities.monetary_amount && (
+                            <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(255, 255, 255, 0.06)', color: 'var(--pastel-yellow-dark)', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 600 }}>
+                              {ticket.entities.monetary_amount}
+                            </span>
+                          )}
+                          {ticket.entities.order_id && (
+                            <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(255, 255, 255, 0.06)', color: '#94a3b8', padding: '0.1rem 0.35rem', borderRadius: '4px', fontFamily: 'var(--font-mono)' }}>
+                              Ref: {ticket.entities.order_id}
+                            </span>
+                          )}
+                          {ticket.entities.error_code && (
+                            <span style={{ fontSize: '0.68rem', backgroundColor: 'var(--pastel-coral-bg)', color: 'var(--pastel-coral)', padding: '0.1rem 0.35rem', borderRadius: '4px', fontWeight: 600 }}>
+                              {ticket.entities.error_code}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  {/* Severity & SLA Due (matching reference layout: Severity Badge + Countdown) */}
+                  <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      {getSeverityBadge(ticket.priority)}
+                      {formatCountdown(ticket)}
+                    </div>
+                  </td>
+
+                  {/* Flags (Safety Risk, Churn Risk, All Clear) */}
+                  <td style={{ padding: '0.85rem 1rem', verticalAlign: 'middle' }}>
+                    {ticket.churn_risk ? (
+                      <span className="flag-risk">
+                        <AlertTriangle size={12} /> Churn Risk
+                      </span>
+                    ) : ticket.priority === PriorityEnum.P1 ? (
+                      <span className="flag-warning">
+                        <ShieldAlert size={12} /> Safety Risk
+                      </span>
+                    ) : (
+                      <span className="flag-clear">
+                        All Clear
                       </span>
                     )}
-                    {ticket.sentiment_score < -0.6 && (
+                  </td>
+
+                  {/* Actions */}
+                  <td style={{ padding: '0.85rem 1rem', textAlign: 'right', verticalAlign: 'middle' }}>
+                    {ticket.status === InquiryStatusEnum.RESOLVED ? (
                       <span
                         style={{
-                          fontSize: '0.7rem',
-                          color: '#f87171',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          fontSize: '0.72rem',
+                          color: '#16a34a',
+                          fontWeight: 600,
+                        }}
+                      >
+                        <CheckCircle2 size={12} /> Closed
+                      </span>
+                    ) : ticket.status === InquiryStatusEnum.CLAIMED ? (
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.3rem',
+                          fontSize: '0.72rem',
+                          padding: '0.2rem 0.5rem',
+                          borderRadius: '0.375rem',
+                          background: isClaimedByOther ? '#fffbeb' : '#eff6ff',
+                          color: isClaimedByOther ? '#b45309' : '#2563eb',
+                          border: `1px solid ${isClaimedByOther ? '#fde68a' : '#bfdbfe'}`,
                           fontWeight: 500,
                         }}
                       >
-                        Frustration: {ticket.urgency}/5
+                        <User size={11} />
+                        {assignedAgent ? assignedAgent.name : 'Claimed'}
                       </span>
+                    ) : (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClaimTicket(ticket.id);
+                        }}
+                        disabled={isClaiming}
+                        className="btn-secondary"
+                        style={{
+                          padding: '0.25rem 0.6rem',
+                          fontSize: '0.75rem',
+                          borderRadius: '0.375rem',
+                        }}
+                        title="Claim ticket for active agent"
+                      >
+                        <span>Claim</span>
+                        <ChevronRight size={12} />
+                      </button>
                     )}
-                  </div>
-                </td>
-
-                {/* Assignment & Action */}
-                <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
-                  {ticket.status === InquiryStatusEnum.RESOLVED ? (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.25rem',
-                        fontSize: '0.75rem',
-                        color: '#34d399',
-                        fontWeight: 500,
-                      }}
-                    >
-                      <CheckCircle2 size={13} /> Closed
-                    </span>
-                  ) : ticket.status === InquiryStatusEnum.CLAIMED ? (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.3rem',
-                        fontSize: '0.75rem',
-                        padding: '0.2rem 0.5rem',
-                        borderRadius: '4px',
-                        background: isClaimedByOther ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                        color: isClaimedByOther ? '#fcd34d' : '#93c5fd',
-                        border: `1px solid ${isClaimedByOther ? 'rgba(245, 158, 11, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`,
-                      }}
-                    >
-                      <User size={12} />
-                      {assignedAgent ? assignedAgent.name : 'Claimed'}
-                    </span>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onClaimTicket(ticket.id);
-                      }}
-                      disabled={isClaiming}
-                      className="btn btn-secondary"
-                      style={{
-                        padding: '0.25rem 0.6rem',
-                        fontSize: '0.75rem',
-                      }}
-                      title="Claim ticket for active agent"
-                    >
-                      <span>Claim</span>
-                      <ChevronRight size={12} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };

@@ -28,7 +28,7 @@ import type {
 import { INITIAL_AGENTS } from '../api/mockData';
 import { getAuditLogs } from '../api/client';
 
-interface TicketDetailDrawerProps {
+interface LoadLogicDetailDrawerProps {
   ticket: Inquiry | null;
   onClose: () => void;
   currentAgent: AgentProfile;
@@ -38,7 +38,7 @@ interface TicketDetailDrawerProps {
   isResolving: boolean;
 }
 
-export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
+export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
   ticket,
   onClose,
   currentAgent,
@@ -63,7 +63,7 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
 
     // Fetch audit history
     getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
-  }, [ticket.id]);
+  }, [ticket.id, ticket.suggested_response]);
 
   const assignedAgent = INITIAL_AGENTS.find((a) => a.id === ticket.assigned_agent_id);
   const isClaimedByOther =
@@ -91,15 +91,15 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
   return (
     <div
       style={{
-        backgroundColor: '#14151e',
-        borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+        backgroundColor: '#FFFFFF',
+        borderLeft: '1px solid rgba(12, 13, 13, 0.1)',
         width: '560px',
         maxWidth: '100%',
         height: '100%',
         overflowY: 'auto',
         display: 'flex',
         flexDirection: 'column',
-        boxShadow: '-10px 0 35px rgba(0, 0, 0, 0.6)',
+        boxShadow: '-8px 0 28px rgba(12, 13, 13, 0.08)',
         position: 'relative',
         zIndex: 50,
       }}
@@ -107,36 +107,48 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
       {/* Drawer Header */}
       <div
         style={{
-          padding: '1.1rem 1.25rem',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          padding: '16px 20px',
+          borderBottom: '1px solid rgba(12, 13, 13, 0.08)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          backgroundColor: '#14151e',
+          backgroundColor: '#FFFFFF',
           position: 'sticky',
           top: 0,
           zIndex: 10,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-          <span style={{ fontSize: '0.92rem', fontWeight: 800, color: '#ffffff', fontFamily: 'var(--font-mono)' }}>
-            TICKET #{ticket.id.substring(0, 8).toUpperCase()}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0C0D0D', fontFamily: 'var(--font-mono)' }}>
+            #{ticket.id.substring(0, 8).toUpperCase()}
           </span>
           <span
             style={{
-              background: 'rgba(255, 255, 255, 0.06)',
-              color: 'var(--text-muted)',
-              fontSize: '0.7rem',
-              fontWeight: 600,
-              padding: '0.15rem 0.5rem',
+              backgroundColor: 'rgba(12, 13, 13, 0.06)',
+              color: '#0C0D0D',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              padding: '2px 8px',
               borderRadius: '9999px',
             }}
           >
             {ticket.channel}
           </span>
           {ticket.priority === PriorityEnum.P1 && (
-            <span className="badge badge-emergency" style={{ fontSize: '0.7rem' }}>
-              <Flame size={10} /> Emergency P1
+            <span
+              style={{
+                backgroundColor: '#0C0D0D',
+                color: '#FFFFFF',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              <Flame size={11} color="#f87171" /> Emergency P1
             </span>
           )}
         </div>
@@ -144,15 +156,16 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
         <button
           onClick={onClose}
           style={{
-            padding: '0.35rem',
+            padding: '6px',
             borderRadius: '50%',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            backgroundColor: 'rgba(255, 255, 255, 0.05)',
-            color: '#ffffff',
+            border: '1px solid rgba(12, 13, 13, 0.1)',
+            backgroundColor: '#FAFAFA',
+            color: '#0C0D0D',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            transition: 'background-color 0.15s ease',
           }}
           title="Close Drawer"
         >
@@ -160,20 +173,20 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
         </button>
       </div>
 
-      {/* Concurrency Warning Banner (Collision Detection) */}
+      {/* Concurrency Warning Banner (Cognito Multi-Agent Collision Lock) */}
       {isClaimedByOther && (
         <div
           style={{
-            margin: '0.85rem 1.25rem 0',
-            padding: '0.65rem 0.85rem',
+            margin: '14px 20px 0',
+            padding: '10px 14px',
             borderRadius: '12px',
-            background: 'rgba(254, 240, 138, 0.1)',
-            border: '1px solid rgba(254, 240, 138, 0.25)',
-            color: 'var(--pastel-yellow-dark)',
+            backgroundColor: '#FEF3C7',
+            border: '1px solid #FDE68A',
+            color: '#92400E',
             fontSize: '0.78rem',
             display: 'flex',
             alignItems: 'flex-start',
-            gap: '0.5rem',
+            gap: '8px',
           }}
         >
           <Lock size={15} style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -185,39 +198,39 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
       )}
 
       {/* Main Drawer Body */}
-      <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {/* Section 1: Customer Message */}
+      <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {/* Section 1: Customer Message Card */}
         <div
           style={{
-            background: '#191a25',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            borderRadius: '16px',
-            padding: '1.1rem',
+            backgroundColor: '#FAFAFA',
+            border: '1px solid rgba(12, 13, 13, 0.08)',
+            borderRadius: '18px',
+            padding: '16px',
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.45rem' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#666666', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Customer Inquiry
             </span>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: '0.72rem', color: '#888888' }}>
               {new Date(ticket.created_at).toLocaleString()}
             </span>
           </div>
 
-          <div style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.5rem' }}>
+          <div style={{ fontSize: '0.96rem', fontWeight: 700, color: '#0C0D0D', marginBottom: '8px' }}>
             {ticket.subject}
           </div>
 
           <div
             style={{
-              fontSize: '0.82rem',
-              color: '#cbd5e1',
+              fontSize: '0.84rem',
+              color: '#333333',
               lineHeight: 1.6,
               whiteSpace: 'pre-wrap',
-              background: '#12131b',
-              padding: '0.85rem',
-              borderRadius: '10px',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
+              backgroundColor: '#FFFFFF',
+              padding: '12px 14px',
+              borderRadius: '12px',
+              border: '1px solid rgba(12, 13, 13, 0.06)',
             }}
           >
             {ticket.body}
@@ -225,26 +238,26 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
 
           <div
             style={{
-              marginTop: '0.65rem',
+              marginTop: '10px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              fontSize: '0.74rem',
-              color: 'var(--text-muted)',
+              fontSize: '0.75rem',
+              color: '#666666',
             }}
           >
-            <span>Sender: <strong style={{ color: '#ffffff' }}>{ticket.customer_name}</strong> ({ticket.customer_email})</span>
-            <span>Channel: <strong style={{ color: 'var(--pastel-lilac)' }}>{ticket.channel}</strong></span>
+            <span>Sender: <strong style={{ color: '#0C0D0D' }}>{ticket.customer_name}</strong> ({ticket.customer_email})</span>
+            <span>Channel: <strong style={{ color: '#0C0D0D' }}>{ticket.channel}</strong></span>
           </div>
         </div>
 
-        {/* Section 2: Explainable AI (XAI) & Latency Card */}
+        {/* Section 2: Explainable AI (XAI) & Latency Card (Sage Styling) */}
         <div
           style={{
-            background: '#181928',
-            border: '1px solid rgba(184, 165, 254, 0.2)',
-            borderRadius: '16px',
-            padding: '1.1rem',
+            backgroundColor: '#ECF4EE',
+            border: '1px solid rgba(12, 13, 13, 0.08)',
+            borderRadius: '18px',
+            padding: '16px',
           }}
         >
           <div
@@ -252,36 +265,37 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: '0.6rem',
+              marginBottom: '10px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Brain size={16} color="var(--pastel-lilac)" />
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--pastel-lilac)' }}>
-                EXPLAINABLE AI TRIAGE (Amazon Bedrock)
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Brain size={16} color="#0C0D0D" />
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0C0D0D', textTransform: 'uppercase' }}>
+                Bedrock Explainable AI (XAI)
               </span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span
                 style={{
-                  fontSize: '0.68rem',
-                  padding: '0.15rem 0.45rem',
-                  borderRadius: '4px',
-                  background: 'rgba(184, 165, 254, 0.15)',
-                  color: 'var(--pastel-lilac)',
-                  fontWeight: 600,
+                  fontSize: '0.7rem',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  backgroundColor: '#FFFFFF',
+                  color: '#0C0D0D',
+                  fontWeight: 700,
+                  border: '1px solid rgba(12, 13, 13, 0.08)',
                 }}
               >
-                Claude Haiku 4.5
+                Claude 3.5 Haiku
               </span>
               <span
                 style={{
-                  fontSize: '0.68rem',
-                  padding: '0.15rem 0.45rem',
-                  borderRadius: '4px',
-                  background: 'rgba(74, 222, 128, 0.15)',
-                  color: 'var(--pastel-mint)',
-                  fontWeight: 600,
+                  fontSize: '0.7rem',
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  backgroundColor: '#0C0D0D',
+                  color: '#FFFFFF',
+                  fontWeight: 700,
                 }}
               >
                 {ticket.bedrock_latency_ms || 612} ms
@@ -290,18 +304,19 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
           </div>
 
           {/* Confidence Score Bar */}
-          <div style={{ marginBottom: '0.65rem' }}>
+          <div style={{ marginBottom: '10px' }}>
             <div
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.72rem',
-                color: 'var(--text-muted)',
-                marginBottom: '0.25rem',
+                fontSize: '0.74rem',
+                color: '#444444',
+                marginBottom: '4px',
+                fontWeight: 600,
               }}
             >
-              <span>Model Confidence Score:</span>
-              <strong style={{ color: 'var(--pastel-lilac)' }}>
+              <span>Model Confidence:</span>
+              <strong style={{ color: '#0C0D0D' }}>
                 {Math.round((ticket.confidence_score || 0.98) * 100)}%
               </strong>
             </div>
@@ -309,8 +324,8 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
               style={{
                 width: '100%',
                 height: '6px',
-                borderRadius: '3px',
-                background: 'rgba(255, 255, 255, 0.08)',
+                borderRadius: '9999px',
+                backgroundColor: 'rgba(12, 13, 13, 0.08)',
                 overflow: 'hidden',
               }}
             >
@@ -318,22 +333,22 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
                 style={{
                   width: `${Math.round((ticket.confidence_score || 0.98) * 100)}%`,
                   height: '100%',
-                  background: 'linear-gradient(90deg, #b8a5fe, #67e8f9)',
-                  borderRadius: '3px',
+                  backgroundColor: '#0C0D0D',
+                  borderRadius: '9999px',
                 }}
               />
             </div>
           </div>
 
-          {/* Triage Rationale */}
+          {/* Triage Rationale Quote */}
           <div
             style={{
-              fontSize: '0.78rem',
-              color: '#e2e8f0',
-              background: '#12131b',
-              padding: '0.7rem 0.85rem',
-              borderRadius: '10px',
-              border: '1px solid rgba(184, 165, 254, 0.15)',
+              fontSize: '0.8rem',
+              color: '#1a1a1a',
+              backgroundColor: '#FFFFFF',
+              padding: '10px 12px',
+              borderRadius: '12px',
+              border: '1px solid rgba(12, 13, 13, 0.08)',
               fontStyle: 'italic',
               lineHeight: 1.5,
             }}
@@ -342,20 +357,20 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
           </div>
         </div>
 
-        {/* Section 3: Extracted Named Entities (NER Chips) */}
+        {/* Section 3: Extracted Named Entities (NER Chips with 1-click Copy) */}
         <div
           style={{
-            background: '#191a25',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            borderRadius: '16px',
-            padding: '1rem',
+            backgroundColor: '#FAFAFA',
+            border: '1px solid rgba(12, 13, 13, 0.08)',
+            borderRadius: '18px',
+            padding: '16px',
           }}
         >
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-faint)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#666666', marginBottom: '8px', textTransform: 'uppercase' }}>
             EXTRACTED KEY DATA ENTITIES (NER)
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
             {ticket.entities && Object.keys(ticket.entities).length > 0 ? (
               Object.entries(ticket.entities).map(([key, val]) => {
                 if (!val) return null;
@@ -368,31 +383,31 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '0.35rem',
-                      padding: '0.3rem 0.6rem',
+                      gap: '6px',
+                      padding: '5px 10px',
                       borderRadius: '8px',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      fontSize: '0.74rem',
+                      backgroundColor: '#FFFFFF',
+                      border: '1px solid rgba(12, 13, 13, 0.1)',
+                      fontSize: '0.76rem',
                       cursor: 'pointer',
                       transition: 'border-color 0.15s ease',
                     }}
                     title="Click to copy value"
                   >
-                    <span style={{ color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.65rem', fontWeight: 600 }}>
+                    <span style={{ color: '#666666', textTransform: 'uppercase', fontSize: '0.66rem', fontWeight: 700 }}>
                       {key.replace('_', ' ')}:
                     </span>
-                    <strong style={{ color: '#ffffff' }}>{displayVal}</strong>
+                    <strong style={{ color: '#0C0D0D' }}>{displayVal}</strong>
                     {isCopied ? (
-                      <Check size={12} color="var(--pastel-mint)" />
+                      <Check size={12} color="#16a34a" />
                     ) : (
-                      <Copy size={12} color="var(--text-muted)" />
+                      <Copy size={12} color="#888888" />
                     )}
                   </div>
                 );
               })
             ) : (
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '0.78rem', color: '#777777' }}>
                 No structured entities detected in input text.
               </span>
             )}
@@ -402,25 +417,25 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
         {/* Section 4: Sentiment & Frustration Meter */}
         <div
           style={{
-            background: '#191a25',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            borderRadius: '16px',
-            padding: '1rem',
+            backgroundColor: '#FAFAFA',
+            border: '1px solid rgba(12, 13, 13, 0.08)',
+            borderRadius: '18px',
+            padding: '14px 16px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
           <div>
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-faint)', marginBottom: '0.2rem', textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#666666', marginBottom: '3px', textTransform: 'uppercase' }}>
               SENTIMENT & FRUSTRATION
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span
                 style={{
-                  fontSize: '0.85rem',
+                  fontSize: '0.88rem',
                   fontWeight: 700,
-                  color: ticket.sentiment_score < -0.5 ? 'var(--pastel-coral)' : ticket.sentiment_score > 0.3 ? 'var(--pastel-mint)' : '#e2e8f0',
+                  color: ticket.sentiment_score < -0.5 ? '#dc2626' : ticket.sentiment_score > 0.3 ? '#16a34a' : '#0C0D0D',
                 }}
               >
                 {ticket.sentiment_score < -0.5
@@ -429,14 +444,26 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
                   ? 'Positive / Satisfied'
                   : 'Neutral / Transactional'}
               </span>
-              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '0.74rem', color: '#777777' }}>
                 (Score: {ticket.sentiment_score})
               </span>
             </div>
           </div>
 
           {ticket.churn_risk && (
-            <span className="badge badge-emergency" style={{ fontSize: '0.72rem' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                borderRadius: '9999px',
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#dc2626',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+              }}
+            >
               <AlertTriangle size={12} /> Churn Risk Alert
             </span>
           )}
@@ -445,10 +472,10 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
         {/* Section 5: Suggested Response Draft (Human-in-the-Loop) */}
         <div
           style={{
-            background: '#191a25',
-            border: '1px solid rgba(254, 240, 138, 0.25)',
-            borderRadius: '16px',
-            padding: '1.1rem',
+            backgroundColor: '#FFFFFF',
+            border: '1.5px solid #0C0D0D',
+            borderRadius: '18px',
+            padding: '16px',
           }}
         >
           <div
@@ -456,24 +483,24 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              marginBottom: '0.6rem',
+              marginBottom: '10px',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Bot size={16} color="var(--pastel-yellow-dark)" />
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--pastel-yellow-dark)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Bot size={16} color="#0C0D0D" />
+              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0C0D0D' }}>
                 SUGGESTED RESPONSE DRAFT
               </span>
             </div>
             {ticket.suggested_strategy && (
               <span
                 style={{
-                  background: 'rgba(254, 240, 138, 0.12)',
-                  color: 'var(--pastel-yellow-dark)',
-                  border: '1px solid rgba(254, 240, 138, 0.25)',
-                  fontSize: '0.68rem',
-                  fontWeight: 600,
-                  padding: '0.15rem 0.5rem',
+                  backgroundColor: '#ECF4EE',
+                  color: '#0C0D0D',
+                  border: '1px solid rgba(12, 13, 13, 0.08)',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
                   borderRadius: '9999px',
                 }}
               >
@@ -486,16 +513,16 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
           {ticket.agent_copilot_notes && (
             <div
               style={{
-                fontSize: '0.75rem',
-                color: '#e2e8f0',
-                background: 'rgba(184, 165, 254, 0.1)',
-                padding: '0.65rem 0.8rem',
-                borderRadius: '8px',
-                border: '1px solid rgba(184, 165, 254, 0.2)',
-                marginBottom: '0.75rem',
+                fontSize: '0.78rem',
+                color: '#1a1a1a',
+                backgroundColor: '#ECF4EE',
+                padding: '10px 12px',
+                borderRadius: '10px',
+                border: '1px solid rgba(12, 13, 13, 0.08)',
+                marginBottom: '12px',
               }}
             >
-              <strong style={{ color: 'var(--pastel-lilac)' }}>Agent Copilot Guidance:</strong> {ticket.agent_copilot_notes}
+              <strong style={{ color: '#0C0D0D' }}>Agent Copilot Guidance:</strong> {ticket.agent_copilot_notes}
             </div>
           )}
 
@@ -507,27 +534,28 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
               rows={6}
               style={{
                 width: '100%',
-                padding: '0.85rem',
-                borderRadius: '10px',
-                background: '#12131b',
-                border: '1.5px solid var(--pastel-lilac)',
-                color: '#ffffff',
-                fontSize: '0.82rem',
+                padding: '12px',
+                borderRadius: '12px',
+                backgroundColor: '#FAFAFA',
+                border: '1.5px solid #0C0D0D',
+                color: '#0C0D0D',
+                fontSize: '0.84rem',
                 fontFamily: 'var(--font-sans)',
                 lineHeight: 1.5,
                 outline: 'none',
                 resize: 'vertical',
+                boxSizing: 'border-box',
               }}
             />
           ) : (
             <div
               style={{
-                background: '#12131b',
-                padding: '0.85rem',
-                borderRadius: '10px',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                fontSize: '0.82rem',
-                color: '#ffffff',
+                backgroundColor: '#FAFAFA',
+                padding: '12px',
+                borderRadius: '12px',
+                border: '1px solid rgba(12, 13, 13, 0.08)',
+                fontSize: '0.84rem',
+                color: '#0C0D0D',
                 lineHeight: 1.6,
                 whiteSpace: 'pre-wrap',
               }}
@@ -539,20 +567,31 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
           {/* Action Buttons */}
           <div
             style={{
-              marginTop: '0.85rem',
+              marginTop: '12px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               flexWrap: 'wrap',
-              gap: '0.5rem',
+              gap: '8px',
             }}
           >
             <div>
               {!isResolved && !isClaimedByOther && (
                 <button
                   onClick={() => setIsEditingDraft(!isEditingDraft)}
-                  className="btn-secondary"
-                  style={{ fontSize: '0.75rem', padding: '0.35rem 0.7rem' }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    borderRadius: '9999px',
+                    border: '1px solid rgba(12, 13, 13, 0.15)',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0C0D0D',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
                 >
                   <Edit3 size={12} />
                   <span>{isEditingDraft ? 'Cancel Edit' : 'Quick Edit'}</span>
@@ -560,13 +599,24 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
               )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               {/* Claim button if unassigned */}
               {ticket.status === InquiryStatusEnum.UNASSIGNED && (
                 <button
                   onClick={() => onClaimTicket(ticket.id)}
-                  className="btn-secondary"
-                  style={{ fontSize: '0.75rem' }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '6px 12px',
+                    borderRadius: '9999px',
+                    border: '1px solid rgba(12, 13, 13, 0.15)',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0C0D0D',
+                    fontSize: '0.76rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
                 >
                   <User size={13} />
                   <span>Claim Ticket</span>
@@ -578,10 +628,19 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
                 <button
                   onClick={handleDispatch}
                   disabled={isResolving || !responseText.trim()}
-                  className="btn-primary"
                   style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '9999px',
+                    backgroundColor: '#0C0D0D',
+                    color: '#FFFFFF',
+                    border: 'none',
                     fontSize: '0.8rem',
-                    padding: '0.45rem 1rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'opacity 0.15s ease',
                   }}
                   title="Freeze SLA and dispatch response to customer"
                 >
@@ -593,7 +652,7 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
               )}
 
               {isResolved && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--pastel-mint)', fontWeight: 600 }}>
+                <span style={{ fontSize: '0.78rem', color: '#16a34a', fontWeight: 700 }}>
                   ✓ Resolved & SLA Clock Frozen
                 </span>
               )}
@@ -604,19 +663,30 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
         {/* Section 6: MLOps Override & Audit History */}
         <div
           style={{
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-            paddingTop: '0.85rem',
+            borderTop: '1px solid rgba(12, 13, 13, 0.08)',
+            paddingTop: '12px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '0.5rem',
+            gap: '8px',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <button
               onClick={onOpenOverrideModal}
               disabled={isResolved || isClaimedByOther}
-              className="btn-secondary"
-              style={{ fontSize: '0.74rem', padding: '0.35rem 0.7rem' }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(12, 13, 13, 0.15)',
+                backgroundColor: '#FFFFFF',
+                color: '#0C0D0D',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
               title="Calibrate model classification with mandatory engineering justification"
             >
               <RotateCcw size={12} />
@@ -625,8 +695,19 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
 
             <button
               onClick={() => setShowAuditLogs(!showAuditLogs)}
-              className="btn-secondary"
-              style={{ fontSize: '0.74rem', padding: '0.35rem 0.7rem' }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '6px 12px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(12, 13, 13, 0.15)',
+                backgroundColor: '#FFFFFF',
+                color: '#0C0D0D',
+                fontSize: '0.74rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
             >
               <History size={12} />
               <span>Audit Trail ({auditLogs.length})</span>
@@ -638,34 +719,34 @@ export const TicketDetailDrawer: React.FC<TicketDetailDrawerProps> = ({
           {showAuditLogs && (
             <div
               style={{
-                background: '#12131b',
+                backgroundColor: '#FAFAFA',
                 borderRadius: '12px',
-                padding: '0.75rem',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                padding: '12px',
+                border: '1px solid rgba(12, 13, 13, 0.08)',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '0.45rem',
-                fontSize: '0.72rem',
+                gap: '8px',
+                fontSize: '0.74rem',
               }}
             >
               {auditLogs.length === 0 ? (
-                <span style={{ color: 'var(--text-muted)' }}>No audit events recorded yet.</span>
+                <span style={{ color: '#888888' }}>No audit events recorded yet.</span>
               ) : (
                 auditLogs.map((log) => (
                   <div
                     key={log.id}
                     style={{
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                      paddingBottom: '0.35rem',
+                      borderBottom: '1px solid rgba(12, 13, 13, 0.06)',
+                      paddingBottom: '6px',
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <strong style={{ color: 'var(--pastel-lilac)' }}>{log.action}</strong>
-                      <span style={{ color: 'var(--text-faint)' }}>
+                      <strong style={{ color: '#0C0D0D' }}>{log.action}</strong>
+                      <span style={{ color: '#888888' }}>
                         {new Date(log.created_at).toLocaleTimeString()}
                       </span>
                     </div>
-                    <div style={{ color: 'var(--text-muted)' }}>
+                    <div style={{ color: '#555555' }}>
                       Agent ID: {log.agent_id} | Reason: {log.reason || 'N/A'}
                     </div>
                   </div>
