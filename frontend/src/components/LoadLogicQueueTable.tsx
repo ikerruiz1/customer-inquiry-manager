@@ -11,6 +11,7 @@ import {
   Zap,
   Flame,
   User,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   PriorityEnum,
@@ -47,6 +48,7 @@ interface LoadLogicQueueTableProps {
   isClaiming: boolean;
   activeTab: QueueTab;
   onTabChange: (tab: QueueTab) => void;
+  dragHandle?: React.ReactNode;
 }
 
 export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
@@ -58,6 +60,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
   isClaiming,
   activeTab,
   onTabChange,
+  dragHandle,
 }) => {
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [activeFacetFilter, setActiveFacetFilter] = useState<FacetFilter>('ALL');
@@ -540,7 +543,8 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                   border: activeFacetFilter !== 'ALL' ? '1.5px solid #0C0D0D' : undefined,
                 }}
               >
-                <span>⚡ Filters</span>
+                <SlidersHorizontal size={13} />
+                <span>Filters</span>
                 {activeFacetFilter !== 'ALL' && (
                   <span
                     style={{
@@ -559,24 +563,28 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
             </div>
           </div>
 
-          {/* Right indicator: Active Sort Policy */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '5px 12px',
-              borderRadius: '9999px',
-              backgroundColor: '#FAFAFA',
-              border: '1px solid rgba(12, 13, 13, 0.08)',
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              color: '#4B5563',
-            }}
-            title="Automated ITIL Tie-Breaking: Breached -> P1..P4 -> Churn Risk -> Nearest SLA -> FIFO"
-          >
-            <Zap size={11} color="#047857" />
-            <span>ITIL Auto-Urgent Priority Active</span>
+          {/* Right indicator: Active Sort Policy & Drag Handle */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 12px',
+                borderRadius: '9999px',
+                backgroundColor: '#FAFAFA',
+                border: '1px solid rgba(12, 13, 13, 0.08)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                color: '#4B5563',
+              }}
+              title="Automated ITIL Tie-Breaking: Breached -> P1..P4 -> Churn Risk -> Nearest SLA -> FIFO"
+            >
+              <Zap size={11} color="#047857" />
+              <span>ITIL Auto-Urgent Priority Active</span>
+            </div>
+
+            {dragHandle}
           </div>
         </div>
 

@@ -1,33 +1,16 @@
 import React from 'react';
-import { Mail, Clock, AlertTriangle, Flame, Brain, ShieldCheck, Zap, Activity } from 'lucide-react';
+import { Clock, Brain, ShieldCheck, Zap } from 'lucide-react';
 import { DepartmentEnum } from '../types/inquiry';
 import type { KPIStats, Inquiry } from '../types/inquiry';
 
-interface LoadLogicHeroCardsProps {
+export interface SlaMatrixHeroCardProps {
   kpis: KPIStats;
   inquiries: Inquiry[];
+  dragHandle?: React.ReactNode;
 }
 
-export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, inquiries }) => {
-  // 1. Calculate Department Distribution from live inquiries
-  const departmentCounts: Record<DepartmentEnum, number> = {
-    [DepartmentEnum.TECH_SUPPORT]: 0,
-    [DepartmentEnum.BILLING]: 0,
-    [DepartmentEnum.SECURITY]: 0,
-    [DepartmentEnum.ACCOUNTS]: 0,
-    [DepartmentEnum.SALES]: 0,
-    [DepartmentEnum.GENERAL]: 0,
-  };
-
-  inquiries.forEach((ticket) => {
-    if (departmentCounts[ticket.department] !== undefined) {
-      departmentCounts[ticket.department]++;
-    }
-  });
-
+export const SlaMatrixHeroCard: React.FC<SlaMatrixHeroCardProps> = ({ kpis, inquiries, dragHandle }) => {
   const totalInquiries = inquiries.length || 1;
-
-  // Calculate live SLA metrics
   const now = Date.now();
   const overdueCount = inquiries.filter(
     (t) => t.status !== 'RESOLVED' && new Date(t.sla_deadline_at).getTime() < now
@@ -36,46 +19,14 @@ export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, in
     (t) => t.status !== 'RESOLVED' && new Date(t.sla_deadline_at).getTime() >= now
   ).length;
 
-  // 3 distinct greys and 3 distinct greens (guaranteed high visual contrast)
-  const orderedDepartments: DepartmentEnum[] = [
-    // 3 Greys: Dark Onyx (#111827), Medium Slate (#6B7280), Light Platinum Silver (#CBD5E1)
-    DepartmentEnum.TECH_SUPPORT,
-    DepartmentEnum.SECURITY,
-    DepartmentEnum.GENERAL,
-    // 3 Greens: Deep Forest Emerald (#064E3B), Bright Mint Jade (#10B981), Warm Lime Chartreuse (#84CC16)
-    DepartmentEnum.BILLING,
-    DepartmentEnum.ACCOUNTS,
-    DepartmentEnum.SALES,
-  ];
-
-  const departmentMeta: Record<DepartmentEnum, { label: string; color: string; bg: string; dotBorder?: string }> = {
-    // 3 Greys:
-    [DepartmentEnum.TECH_SUPPORT]: { label: 'Tech Support', color: '#111827', bg: 'rgba(17, 24, 39, 0.08)' },
-    [DepartmentEnum.SECURITY]: { label: 'Security', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.12)' },
-    [DepartmentEnum.GENERAL]: { label: 'General', color: '#CBD5E1', bg: 'rgba(203, 213, 225, 0.25)', dotBorder: '1px solid #94A3B8' },
-    // 3 Greens:
-    [DepartmentEnum.BILLING]: { label: 'Billing', color: '#064E3B', bg: 'rgba(6, 78, 59, 0.08)' },
-    [DepartmentEnum.ACCOUNTS]: { label: 'Accounts', color: '#10B981', bg: 'rgba(16, 185, 129, 0.12)' },
-    [DepartmentEnum.SALES]: { label: 'Sales', color: '#84CC16', bg: 'rgba(132, 204, 22, 0.15)' },
-  };
-
-  // SLA breakdown calculation for Left Card progress bar
   const resolvedCount = inquiries.filter((t) => t.status === 'RESOLVED').length;
   const inBoundsPct = Math.round((activeInBoundsCount / totalInquiries) * 100);
   const overduePct = Math.round((overdueCount / totalInquiries) * 100);
   const resolvedPct = Math.max(0, 100 - inBoundsPct - overduePct);
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: '20px',
-        width: '100%',
-      }}
-    >
-      {/* 1. Left Card: Live Operational & SLA Matrix (Symmetrical Twin to Right Hero Card) */}
-      <div className="loadlogic-sage-card">
+    <div className="loadlogic-sage-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      <div>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <div>
@@ -90,59 +41,68 @@ export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, in
             </span>
           </div>
 
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '3px 9px',
-              borderRadius: '9999px',
-              backgroundColor: '#FFFFFF',
-              border: '1px solid var(--color-border)',
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              color: '#047857',
-            }}
-          >
-            <Activity size={11} />
-            <span>Live Stream</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 9px',
+                borderRadius: '9999px',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid var(--color-border)',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: kpis.slaComplianceRate >= 95 ? '#047857' : '#B45309',
+              }}
+            >
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  backgroundColor: kpis.slaComplianceRate >= 95 ? '#10B981' : '#F59E0B',
+                }}
+              />
+              <span>{kpis.slaComplianceRate}% In-Bounds</span>
+            </div>
+
+            {dragHandle}
           </div>
         </div>
 
-        {/* Big SLA Compliance Stat + Status Badge (Matching Right Card) */}
+        {/* Big SLA Compliance Percentage Metric + Status Tag */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
           <span style={{ fontSize: '1.85rem', fontWeight: 800, color: '#1F2937', letterSpacing: '-0.03em' }}>
-            {kpis.slaComplianceRate}% In-Bounds
+            {kpis.slaComplianceRate}%
           </span>
           <span
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              backgroundColor: overdueCount > 0 ? 'rgba(254, 242, 242, 0.95)' : 'rgba(255, 255, 255, 0.85)',
+              backgroundColor: 'rgba(255, 255, 255, 0.85)',
               padding: '3px 8px',
               borderRadius: '9999px',
               fontSize: '0.72rem',
               fontWeight: 700,
-              color: overdueCount > 0 ? '#DC2626' : '#047857',
-              border: overdueCount > 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid var(--color-border)',
+              color: '#1F2937',
+              border: '1px solid var(--color-border)',
             }}
           >
-            {overdueCount > 0 ? (
-              <>
-                <AlertTriangle size={12} color="#DC2626" />
-                <span>{overdueCount} Overdue SLA</span>
-              </>
-            ) : (
-              <>
-                <ShieldCheck size={12} color="#047857" />
-                <span>100% SLA Compliant</span>
-              </>
-            )}
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: overdueCount === 0 ? '#10B981' : '#EF4444',
+              }}
+            />
+            <span>{overdueCount === 0 ? 'Optimal Queue Health' : `${overdueCount} Critical Breaches`}</span>
           </span>
         </div>
 
-        {/* Segmented SLA Status Bar (10px height, matching right card) */}
+        {/* Proportional Segmented SLA Breakdown Bar */}
         <div
           style={{
             width: '100%',
@@ -156,25 +116,40 @@ export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, in
         >
           {inBoundsPct > 0 && (
             <div
-              style={{ width: `${inBoundsPct}%`, height: '100%', backgroundColor: '#047857', transition: 'width 0.3s ease' }}
-              title={`Active In-Bounds: ${activeInBoundsCount} (${inBoundsPct}%)`}
+              style={{
+                width: `${inBoundsPct}%`,
+                height: '100%',
+                backgroundColor: '#047857',
+                transition: 'width 0.3s ease',
+              }}
+              title={`Active In-Bounds SLA: ${activeInBoundsCount} tickets (${inBoundsPct}%)`}
             />
           )}
           {resolvedPct > 0 && (
             <div
-              style={{ width: `${resolvedPct}%`, height: '100%', backgroundColor: '#10B981', transition: 'width 0.3s ease' }}
-              title={`Resolved / Met: ${resolvedCount} (${resolvedPct}%)`}
+              style={{
+                width: `${resolvedPct}%`,
+                height: '100%',
+                backgroundColor: '#10B981',
+                transition: 'width 0.3s ease',
+              }}
+              title={`Resolved SLA: ${resolvedCount} tickets (${resolvedPct}%)`}
             />
           )}
           {overduePct > 0 && (
             <div
-              style={{ width: `${overduePct}%`, height: '100%', backgroundColor: '#DC2626', transition: 'width 0.3s ease' }}
-              title={`Overdue / Breached: ${overdueCount} (${overduePct}%)`}
+              style={{
+                width: `${overduePct}%`,
+                height: '100%',
+                backgroundColor: '#DC2626',
+                transition: 'width 0.3s ease',
+              }}
+              title={`Overdue Breach: ${overdueCount} tickets (${overduePct}%)`}
             />
           )}
         </div>
 
-        {/* Explicit SLA Subheader */}
+        {/* Explicit SLA Metrics Section Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
           <span style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#4B5563' }}>
             SLA & Incident Metric Breakdown
@@ -312,37 +287,83 @@ export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, in
             </span>
           </div>
         </div>
-
-        {/* Footnote matching right card */}
-        <div
-          style={{
-            marginTop: '10px',
-            paddingTop: '8px',
-            borderTop: '1px solid rgba(12, 13, 13, 0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            fontSize: '0.74rem',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: 'var(--color-text-muted)' }}>Target SLA Bound:</span>
-            <strong style={{ color: '#1F2937', fontWeight: 800 }}>
-              ≥ 95.0%
-            </strong>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ color: 'var(--color-text-muted)' }}>Avg AI MTTR:</span>
-            <strong style={{ color: '#047857', fontWeight: 800 }}>
-              {kpis.avgMttrSeconds}s
-            </strong>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.68rem' }}>(vs 15m manual)</span>
-          </div>
-        </div>
       </div>
 
-      {/* 2. Bedrock Autonomous Routing Overview: 3 Greys & 3 Greens (High Contrast) */}
-      <div className="loadlogic-sage-card">
+      {/* Footnote */}
+      <div
+        style={{
+          marginTop: '10px',
+          paddingTop: '8px',
+          borderTop: '1px solid rgba(12, 13, 13, 0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.74rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: 'var(--color-text-muted)' }}>Target SLA Bound:</span>
+          <strong style={{ color: '#1F2937', fontWeight: 800 }}>
+            ≥ 95.0%
+          </strong>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: 'var(--color-text-muted)' }}>Avg AI MTTR:</span>
+          <strong style={{ color: '#047857', fontWeight: 800 }}>
+            {kpis.avgMttrSeconds}s
+          </strong>
+          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.68rem' }}>(vs 15m manual)</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export interface BedrockRoutingHeroCardProps {
+  kpis: KPIStats;
+  inquiries: Inquiry[];
+  dragHandle?: React.ReactNode;
+}
+
+export const BedrockRoutingHeroCard: React.FC<BedrockRoutingHeroCardProps> = ({ kpis, inquiries, dragHandle }) => {
+  const departmentCounts: Record<DepartmentEnum, number> = {
+    [DepartmentEnum.TECH_SUPPORT]: 0,
+    [DepartmentEnum.BILLING]: 0,
+    [DepartmentEnum.SECURITY]: 0,
+    [DepartmentEnum.ACCOUNTS]: 0,
+    [DepartmentEnum.SALES]: 0,
+    [DepartmentEnum.GENERAL]: 0,
+  };
+
+  inquiries.forEach((ticket) => {
+    if (departmentCounts[ticket.department] !== undefined) {
+      departmentCounts[ticket.department]++;
+    }
+  });
+
+  const totalInquiries = inquiries.length || 1;
+
+  const orderedDepartments: DepartmentEnum[] = [
+    DepartmentEnum.TECH_SUPPORT,
+    DepartmentEnum.SECURITY,
+    DepartmentEnum.GENERAL,
+    DepartmentEnum.BILLING,
+    DepartmentEnum.ACCOUNTS,
+    DepartmentEnum.SALES,
+  ];
+
+  const departmentMeta: Record<DepartmentEnum, { label: string; color: string; bg: string; dotBorder?: string }> = {
+    [DepartmentEnum.TECH_SUPPORT]: { label: 'Tech Support', color: '#111827', bg: 'rgba(17, 24, 39, 0.08)' },
+    [DepartmentEnum.SECURITY]: { label: 'Security', color: '#6B7280', bg: 'rgba(107, 114, 128, 0.12)' },
+    [DepartmentEnum.GENERAL]: { label: 'General', color: '#CBD5E1', bg: 'rgba(203, 213, 225, 0.25)', dotBorder: '1px solid #94A3B8' },
+    [DepartmentEnum.BILLING]: { label: 'Billing', color: '#064E3B', bg: 'rgba(6, 78, 59, 0.08)' },
+    [DepartmentEnum.ACCOUNTS]: { label: 'Accounts', color: '#10B981', bg: 'rgba(16, 185, 129, 0.12)' },
+    [DepartmentEnum.SALES]: { label: 'Sales', color: '#84CC16', bg: 'rgba(132, 204, 22, 0.15)' },
+  };
+
+  return (
+    <div className="loadlogic-sage-card" style={{ height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+      <div>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
           <div>
@@ -353,26 +374,30 @@ export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, in
               </span>
             </div>
             <span style={{ fontSize: '0.74rem', color: 'var(--color-text-muted)' }}>
-              Claude 3.5 Haiku semantic classification across 6 enterprise domains
+              Claude Haiku 4.5 semantic classification across 6 enterprise domains
             </span>
           </div>
 
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '4px',
-              padding: '3px 8px',
-              borderRadius: '9999px',
-              backgroundColor: '#FFFFFF',
-              border: '1px solid var(--color-border)',
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              color: '#047857',
-            }}
-          >
-            <Zap size={11} />
-            <span>~0.00025 €/ticket</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '3px 8px',
+                borderRadius: '9999px',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid var(--color-border)',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: '#047857',
+              }}
+            >
+              <Zap size={11} />
+              <span>~0.00025 €/ticket</span>
+            </div>
+
+            {dragHandle}
           </div>
         </div>
 
@@ -400,7 +425,7 @@ export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, in
           </span>
         </div>
 
-        {/* Proportional Segmented Department Distribution Bar (3 Greys + 3 Greens Ordered) */}
+        {/* Proportional Segmented Department Distribution Bar */}
         <div
           style={{
             width: '100%',
@@ -490,6 +515,53 @@ export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, in
           })}
         </div>
       </div>
+
+      {/* Footnote */}
+      <div
+        style={{
+          marginTop: '10px',
+          paddingTop: '8px',
+          borderTop: '1px solid rgba(12, 13, 13, 0.06)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.74rem',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: 'var(--color-text-muted)' }}>Bedrock Base Engine:</span>
+          <strong style={{ color: '#1F2937', fontWeight: 800 }}>
+            Claude Haiku 4.5
+          </strong>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: 'var(--color-text-muted)' }}>VPC Egress:</span>
+          <strong style={{ color: '#047857', fontWeight: 800 }}>
+            PrivateLink (Zero NAT)
+          </strong>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export interface LoadLogicHeroCardsProps {
+  kpis: KPIStats;
+  inquiries: Inquiry[];
+}
+
+export const LoadLogicHeroCards: React.FC<LoadLogicHeroCardsProps> = ({ kpis, inquiries }) => {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr',
+        gap: '20px',
+        width: '100%',
+      }}
+    >
+      <SlaMatrixHeroCard kpis={kpis} inquiries={inquiries} />
+      <BedrockRoutingHeroCard kpis={kpis} inquiries={inquiries} />
     </div>
   );
 };
