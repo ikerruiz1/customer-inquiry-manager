@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from 'react';
 import {
-  X,
+  AlertTriangle,
   Bot,
   Brain,
-  Copy,
   Check,
-  Flame,
-  AlertTriangle,
-  User,
-  Send,
-  Edit3,
-  RotateCcw,
   ChevronDown,
   ChevronUp,
+  Copy,
+  Edit3,
+  Flame,
   History,
   Lock,
+  RotateCcw,
+  Send,
+  User,
+  X,
 } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { getAuditLogs } from '../api/client';
+import { INITIAL_AGENTS } from '../api/mockData';
+import type {
+  AgentProfile,
+  AuditLog,
+  Inquiry,
+} from '../types/inquiry';
 import {
   InquiryStatusEnum,
   PriorityEnum,
 } from '../types/inquiry';
-import type {
-  Inquiry,
-  AgentProfile,
-  AuditLog,
-} from '../types/inquiry';
-import { INITIAL_AGENTS } from '../api/mockData';
-import { getAuditLogs } from '../api/client';
 
 interface LoadLogicDetailDrawerProps {
   ticket: Inquiry | null;
@@ -672,8 +672,8 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                   {ticket.sentiment_score < -0.5
                     ? 'Hostile / Frustrated'
                     : ticket.sentiment_score > 0.3
-                    ? 'Positive / Satisfied'
-                    : 'Neutral / Transactional'}
+                      ? 'Positive / Satisfied'
+                      : 'Neutral / Transactional'}
                 </span>
                 <span style={{ fontSize: '0.74rem', color: '#777777' }}>
                   (Score: {ticket.sentiment_score})
