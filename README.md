@@ -91,7 +91,54 @@ customer-inquiry-manager/
 
 ---
 
-## 3. Quickstart: Clone & Run (Zero-Touch Local Setup)
+## 3. Frontend Operations Console Architecture (LoadLogic & Taskly Design System)
+
+The presentation tier is engineered as an enterprise-grade, high-density operations command center built with **React 19, TypeScript (strict mode), and Vite 8**. It utilizes Vanilla CSS with custom property tokens (`:root`), adhering strictly to zero-bloat architectural principles without runtime UI framework dependencies.
+
+### Key Visual & Ergonomic Subsystems:
+
+1. **Taskly Hero Analytics & Semicircular Arc Gauges (`TasklyHeroVisualizations.tsx`):**
+   - **180° Semicircular Arc Gauges (`SemiCircleGauge`):** Mathematical SVG arc rendering (`r=44`, trajectory `M 21 58 A 44 44 0 0 1 109 58`). The active segment sweeps clockwise from the left origin with stroke-dash calculation, while the remaining path is textured with a blueprint-grade diagonal hatch pattern (`<pattern id="hatch_...">`). Displays real-time delta badges (`+10% ↑`, `+15% ↑`).
+   - **Metric Parameter Provenance:** Surfaces raw variables feeding the SLA Compliance and MTTR Velocity metrics (`In-Bounds / Total`, `Breached Count`, `Target Threshold ≥ 95.0%`, Bedrock P95 inference latency `~1.24s`, and FinOps unit economics `~0.00025 €/ticket`).
+   - **Categorical Hatched Pill Bar Charts:** Multi-color diagonal striped bars (`rx="9999"`) visualizing inquiry distributions across 6 Departments, 4 ITIL Priority tiers, 4 Ingestion channels, and 5 Sentiment brackets. Features dynamic Y-axis scaling (`Math.max(...counts)`), floating tooltip capsules, and interactive temporal query selectors (`Current Shift`, `Last 24 Hours`, `Last 7 Days`, `Last 8 Weeks`).
+
+2. **Modular Draggable Widget Engine (`DashboardWidgetGrid.tsx`):**
+   - **7 Atomic Draggable Subcharts:** Operators can independently reorder `kpi_sla`, `kpi_mttr`, `domain_distribution`, `priority_distribution`, `sources_distribution`, `sentiment_distribution`, and `queue_table`.
+   - **HTML5 Drag-and-Drop Stabilization:** Eliminates layout thrashing and 60 FPS stuttering by delegating drag initiation strictly to `.widget-drag-handle` (`⠿ Move`) and rendering drop target previews via an absolute overlay (`position: absolute; inset: 0; pointer-events: none; border: 3px dashed #047857;`) with directional motion vectors (`dropSlotArrow`).
+   - **Persistent Layout State:** Layout configurations serialize to `localStorage` (`cloudscale_widget_order_v7`), accompanied by a 1-click `Reset Layout` trigger.
+
+3. **High-Density Prioritized ITIL Queue Table (`LoadLogicQueueTable.tsx`):**
+   - **Immutable CSS Grid Layout:** Uniform column geometry (`100px 165px 1fr 190px 115px 110px`) guaranteeing that real-time SLA tickers and status indicators remain horizontally anchored across every row.
+   - **Deterministic ITIL Q38 Urgency Hierarchy Algorithm:** Default queue state is sorted automatically across a 5-tier mathematical tie-breaking hierarchy:
+     1. `is_sla_breached DESC` (Immediate contractual breach mitigation)
+     2. `priority (P1 > P2 > P3 > P4) ASC` (Critical incident precedence)
+     3. `churn_risk DESC` (Hostile customer retention de-escalation)
+     4. `sla_deadline_at ASC` (Proximity to SLA window expiration)
+     5. `created_at ASC` (FIFO tie-breaker)
+   - **Quick Facet Filtering Ribbon:** 1-click filter chips for `🔥 P1`, `P2`, `P3`, `P4`, `⚠ Churn Risk`, and Ingestion Channels (`Stripe`, `Email`, `Trustpilot`, `Web Form`).
+   - **Real-Time Heartbeat:** Active 1000ms ticker recalculating seconds to deadline.
+
+4. **Expansive Centered 2-Column Inspection Modal (`LoadLogicDetailDrawer.tsx`):**
+   - Centered dialog operating at `min(1160px, 94vw)` with high-blur backdrop (`backdropFilter: blur(8px)`), eliminating peripheral distraction.
+   - **Resolution Plane (Left):** Raw customer payload with arrival timestamps, structured NER data chips (Order ID, Amount, Error Code) with 1-click clipboard copying, confidential copilot notes, and response draft editor with 1-click approve & dispatch.
+   - **Intelligence & Governance Plane (Right):** Amazon Bedrock Claude Haiku 4.5 XAI rationale, inference latency, confidence scores, sentiment/churn hostility meters, supervisor MLOps classification overrides with mandatory justification ($\ge 10$ chars), and immutable audit trail history (`AuditLog`).
+
+5. **Hardware-Accelerated Ambient Theme Engine (`AmbientBackground.tsx` & `ThemeSelector.tsx`):**
+   - Isolated in a fixed compositing layer (`transform: translateZ(0)`), guaranteeing zero-lag rendering without compositor repaints during queue interaction.
+   - 7 production themes: `Cobalt` (Fluid wave layers), `Cloudscape` (Daylight cumulus), `Syntra` (Cyber 3D grid), `Nebula` (Velvet purple beam), `Horizon` (Fluid contours), `Classic` (Neutral studio), and `Mono Matrix` (ASCII code stream).
+   - In-memory wallpaper preloading and transparent legacy `localStorage` migration (`aura` ➔ `cobalt`).
+
+6. **Top Global Navigation Header (`LoadLogicTopHeader.tsx`):**
+   - Reclaims 100% of the canvas width by eliminating the persistent 260px vertical sidebar.
+   - Cognito TOTP MFA operator switcher (`Carlos M.` vs `Ethan Miller`) with RBAC enforcement.
+   - Compliance indicators verifying AWS PrivateLink Zero-Internet Egress and Bedrock Claude Haiku 4.5.
+   - Omnibar search filter with real-time multi-attribute querying.
+   - Operational audit ledger JSON exporter (`customer_inquiry_audit_*.json`).
+   - Scenario injection modal with 1-click enterprise test cases (`Billing Dispute $1,450`, `P1 Outage Tech Support`, `Trustpilot 1-Star Review`).
+
+---
+
+## 4. Quickstart: Clone & Run (Zero-Touch Local Setup)
 
 Follow these step-by-step instructions to clone, verify, and run both the Backend API and the Frontend Operations Console locally on any machine (Windows, macOS, or Linux).
 
@@ -205,7 +252,7 @@ In the top navigation header of the frontend console, use the **Operator Switche
 
 ---
 
-## 4. Omnichannel Ingestion Simulator
+## 5. Omnichannel Ingestion Simulator
 
 You can inject realistic customer communications across all 5 inbound channels using the included test harness:
 
@@ -221,7 +268,7 @@ python scripts/seed_inquiries.py --scenario billing_dispute # Triggers Stripe Ch
 
 ---
 
-## 5. AWS Cloud Deployment & Teardown
+## 6. AWS Cloud Deployment & Teardown
 
 ### 1-Click Infrastructure Deployment
 ```bash
@@ -236,7 +283,7 @@ chmod +x scripts/*.sh
 
 ---
 
-## 6. Security & Policy-as-Code Compliance
+## 7. Security & Policy-as-Code Compliance
 
 The CI/CD pipeline enforces automated security gates in AWS CodeBuild before any container image is pushed to ECR:
 - **Pytest:** 100% unit and integration test pass rate across database claiming and auth flows.
