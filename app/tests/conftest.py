@@ -1,6 +1,6 @@
 """Pytest configuration and shared fixtures for async testing."""
 import asyncio
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Dict, Any
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
@@ -73,13 +73,13 @@ class MockSNSService(SNSService):
         self.published_ticket_events = []
         self.published_ops_alerts = []
 
-    async def publish_ticket_created(self, inquiry_data: dict) -> str:
-        self.published_ticket_events.append(inquiry_data)
-        return "mock-message-id-ticket-created"
+    async def publish_ticket_created(self, inquiry_dict: Dict[str, Any]) -> bool:
+        self.published_ticket_events.append(inquiry_dict)
+        return True
 
-    async def publish_ops_alert(self, inquiry_data: dict) -> str:
-        self.published_ops_alerts.append(inquiry_data)
-        return "mock-message-id-ops-alert"
+    async def publish_ops_alert(self, inquiry_dict: Dict[str, Any]) -> bool:
+        self.published_ops_alerts.append(inquiry_dict)
+        return True
 
 
 class MockCognitoService(CognitoService):
