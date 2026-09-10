@@ -58,6 +58,15 @@ customer-inquiry-manager/
 │       ├── test_health.py            # Container health check probe tests
 │       ├── test_inquiries.py         # ITIL SLA calculation, claiming & HITL resolve tests
 │       └── test_webhooks.py          # HMAC-SHA256 & omnichannel ingestion tests
+├── frontend/                         # Operations Console (React 19, TypeScript, Vite)
+│   ├── src/                          # Application source code
+│   │   ├── api/                      # Resilient Dual-Mode API client & canonical B2B datasets
+│   │   ├── components/               # Taskly Hero Visualizations, Bento cards, LoadLogic Queue
+│   │   ├── types/                    # Domain schemas (Inquiry, ITIL tiers, Themes)
+│   │   ├── App.tsx                   # Main console root shell
+│   │   └── main.tsx                  # Client entrypoint
+│   ├── public/themes/                # GPU-accelerated wallpapers (Cobalt, Cloudscape, etc.)
+│   └── package.json                  # Frontend dependencies
 ├── docs/                             # Authoritative Documentation & Decision Memory
 │   ├── PROJECT_CONTEXT.md            # 3-Tier topology blueprint & 47 chronological flows
 │   └── ARCHITECTURE_DECISIONS_AND_QA.md # Historical ledger of engineering debates & resolutions
@@ -69,10 +78,12 @@ customer-inquiry-manager/
 │   ├── environments/dev/             # Root dev composition
 │   └── modules/                      # vpc, security_groups, cognito, rds, s3, iam, alb, ecs, monitoring, cicd
 ├── scripts/                          # Automation & Test Harness Scripts
+│   ├── setup-dev.ps1                 # 1-Click Windows PowerShell local developer bootstrap
+│   ├── setup-dev.sh                  # 1-Click Linux / macOS local developer bootstrap
 │   ├── seed_inquiries.py             # Omnichannel inbound traffic generator
 │   ├── k6-load-test.js               # Load and auto-scaling validation script
-│   ├── deploy-infra.sh               # 1-Click deployment bootstrap
-│   └── teardown-infra.sh             # 1-Click clean teardown (0.00 € residual cost)
+│   ├── deploy-infra.sh               # 1-Click AWS infrastructure deployment bootstrap
+│   └── teardown-infra.sh             # 1-Click clean cloud teardown (0.00 € residual cost)
 ├── requirements.txt                  # Locked Python dependencies
 ├── LICENSE
 └── AGENTS.md                         # Persistent workspace rules & directives
@@ -80,27 +91,117 @@ customer-inquiry-manager/
 
 ---
 
-## 3. Quickstart & Local Execution
+## 3. Quickstart: Clone & Run (Zero-Touch Local Setup)
 
-### Local Python Environment Setup
+Follow these step-by-step instructions to clone, verify, and run both the Backend API and the Frontend Operations Console locally on any machine (Windows, macOS, or Linux).
+
+### Prerequisites
+- **Git:** 2.30+
+- **Python:** 3.12+
+- **Node.js:** 18.0+ (LTS recommended) and **npm**
+
+---
+
+### Step 1: Clone the Repository
 ```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Run the automated Pytest test suite (26 passing tests)
-pytest app/tests/ -v
-
-# 3. Start the FastAPI application locally
-uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+git clone https://github.com/ikerruiz1/customer-inquiry-manager.git
+cd customer-inquiry-manager
 ```
 
-### Accessing the API & Documentation
-Once running, open your browser:
-- **Service Metadata (Root):** [http://127.0.0.1:8000/](http://127.0.0.1:8000/)
-- **Interactive OpenAPI Documentation:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-- **ReDoc Technical Specification:** [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
-- **Container Liveness Probe:** [http://127.0.0.1:8000/health/live](http://127.0.0.1:8000/health/live)
-- **Container Readiness Probe:** [http://127.0.0.1:8000/health/ready](http://127.0.0.1:8000/health/ready)
+---
+
+### ⚡ Fast Track: 1-Click Automated Setup
+If you prefer to bootstrap everything with a single command (which provisions `.venv`, installs backend dependencies, passes all 26 tests, and installs frontend dependencies):
+
+- **Windows (PowerShell):**
+  ```powershell
+  .\scripts\setup-dev.ps1
+  ```
+- **macOS / Linux (Bash):**
+  ```bash
+  chmod +x scripts/*.sh
+  ./scripts/setup-dev.sh
+  ```
+
+---
+
+### Step 2: Backend Microservice Setup (Manual Alternative - Terminal 1)
+
+1. **Create an isolated Python virtual environment (`.venv`):**
+   ```bash
+   python -m venv .venv
+   ```
+
+2. **Activate the virtual environment:**
+   - **Windows (PowerShell):**
+     ```powershell
+     .\.venv\Scripts\Activate.ps1
+     ```
+   - **Windows (Command Prompt):**
+     ```cmd
+     .\.venv\Scripts\activate.bat
+     ```
+   - **macOS / Linux:**
+     ```bash
+     source .venv/bin/activate
+     ```
+
+3. **Install locked dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Execute the automated test suite (Verification Gate):**
+   ```bash
+   pytest app/tests/ -v
+   ```
+   *Expected Output:* `26 passed in ~0.75s (100% Pass Rate)`.
+
+5. **Start the FastAPI service locally on Port 8000:**
+   ```bash
+   uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+   ```
+
+---
+
+### Step 3: Frontend Operations Console Setup (Terminal 2)
+
+Open a second terminal window, navigate to the `frontend/` directory, install dependencies, and launch the Vite development server:
+
+```bash
+# 1. Navigate to the frontend directory
+cd frontend
+
+# 2. Install dependencies
+npm install
+
+# 3. Start the Vite development server on Port 5173
+npm run dev
+```
+
+---
+
+### Step 4: Accessing the Application & Verified Endpoints
+
+Once both services are running, access the following endpoints:
+
+| Service / Interface | Local URL | Description |
+| :--- | :--- | :--- |
+| **Operations Console (Frontend)** | [http://localhost:5173/](http://localhost:5173/) | Real-time triage console with Taskly hero visualizations, ITIL queue table, theme selector, and centered ticket inspection modal. |
+| **Interactive API Documentation (Swagger)** | [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) | OpenAPI interactive explorer for triage, claiming, overrides, and webhooks. |
+| **ReDoc Technical Specification** | [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc) | Clean formal API documentation schema. |
+| **Container Liveness Probe** | [http://127.0.0.1:8000/health/live](http://127.0.0.1:8000/health/live) | Kubernetes/ECS container orchestrator liveness probe. |
+| **Container Readiness Probe** | [http://127.0.0.1:8000/health/ready](http://127.0.0.1:8000/health/ready) | Verifies database connectivity and readiness for traffic ingress. |
+
+> **Resilient Dual-Mode Architecture:** If local AWS credentials or cloud RDS instances are not provisioned, the frontend client automatically detects backend connectivity and activates **resilient offline fallback**, populating the complete canonical enterprise dataset so all 20 business features (SLA tickers, sentiment analysis, NER entity copying, MLOps overrides) can be evaluated instantly with zero cloud dependencies.
+
+---
+
+### Step 5: Testing Personas & Role-Based Access Control (RBAC)
+
+In the top navigation header of the frontend console, use the **Operator Switcher** to toggle between personas enforcing Cognito RFC 6238 TOTP MFA policies:
+- **`Carlos M.` (`Tier1_Agents`):** Standard customer support engineer authorized to claim inquiries, compose response drafts, and resolve tickets.
+- **`Ethan Miller` (`Operations_Managers`):** Support supervisor authorized to execute MLOps category overrides with mandatory engineering justification and inspect full audit ledgers.
 
 ---
 
