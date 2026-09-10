@@ -37,8 +37,8 @@ class Settings(BaseSettings):
         description="Primary fast Bedrock model ID for triage and classification",
     )
     BEDROCK_HIGH_REASONING_MODEL_ID: str = Field(
-        default="eu.anthropic.claude-sonnet-4-5-20250929-v1:0",
-        description="High-reasoning Bedrock model for complex escalation drafting",
+        default="eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+        description="Bedrock model ID for triage and escalation drafting (Claude Haiku 4.5)",
     )
     BEDROCK_GUARDRAIL_ID: Optional[str] = Field(
         default=None,
