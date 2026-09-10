@@ -1,19 +1,19 @@
-import React from 'react';
 import {
-  Search,
+  AlertTriangle,
   Filter,
   Flame,
-  AlertTriangle,
   RotateCcw,
+  Search,
 } from 'lucide-react';
+import React from 'react';
+import type {
+  Inquiry,
+  InquiryFilters,
+} from '../types/inquiry';
 import {
   DepartmentEnum,
-  PriorityEnum,
   InquiryStatusEnum,
-} from '../types/inquiry';
-import type {
-  InquiryFilters,
-  Inquiry,
+  PriorityEnum,
 } from '../types/inquiry';
 
 interface FilterBarProps {

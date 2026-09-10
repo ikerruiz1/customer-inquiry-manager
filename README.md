@@ -85,6 +85,7 @@ customer-inquiry-manager/
 │   ├── deploy-infra.sh               # 1-Click AWS infrastructure deployment bootstrap
 │   └── teardown-infra.sh             # 1-Click clean cloud teardown (0.00 € residual cost)
 ├── requirements.txt                  # Locked Python dependencies
+├── pyproject.toml                    # Standard Python project metadata & tool configurations (PEP 518/621)
 ├── LICENSE
 └── AGENTS.md                         # Persistent workspace rules & directives
 ```
@@ -157,8 +158,9 @@ cd customer-inquiry-manager
 
 ---
 
-### ⚡ Fast Track: 1-Click Automated Setup
-If you prefer to bootstrap everything with a single command (which provisions `.venv`, installs backend dependencies, passes all 26 tests, and installs frontend dependencies):
+### Step 2: 1-Click Automated Developer Environment Bootstrap (Recommended)
+
+To guarantee zero workstation drift across any environment, the repository includes an automated onboarding bootstrap script. It validates your local toolchain, initializes the isolated `.venv`, installs 32 locked backend dependencies, verifies all 26 Pytest tests (Quality Gate in ~0.5s), and installs the frontend dependencies:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -170,59 +172,27 @@ If you prefer to bootstrap everything with a single command (which provisions `.
   ./scripts/setup-dev.sh
   ```
 
----
-
-### Step 2: Backend Microservice Setup (Manual Alternative - Terminal 1)
-
-1. **Create an isolated Python virtual environment (`.venv`):**
-   ```bash
-   python -m venv .venv
-   ```
-
-2. **Activate the virtual environment:**
-   - **Windows (PowerShell):**
-     ```powershell
-     .\.venv\Scripts\Activate.ps1
-     ```
-   - **Windows (Command Prompt):**
-     ```cmd
-     .\.venv\Scripts\activate.bat
-     ```
-   - **macOS / Linux:**
-     ```bash
-     source .venv/bin/activate
-     ```
-
-3. **Install locked dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Execute the automated test suite (Verification Gate):**
-   ```bash
-   pytest app/tests/ -v
-   ```
-   *Expected Output:* `26 passed in ~0.75s (100% Pass Rate)`.
-
-5. **Start the FastAPI service locally on Port 8000:**
-   ```bash
-   uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-   ```
+> **Zero-Touch Tooling Integration:** The repository includes a standardized [`pyproject.toml`](pyproject.toml) (PEP 518 / PEP 621) declaring `[tool.pyright] venvPath = "."` and `venv = ".venv"`. Language servers (Pyright, Pyrefly, Pylance) and IDEs automatically bind to the project's virtual environment upon bootstrap with zero manual configuration or editor overrides.
 
 ---
 
-### Step 3: Frontend Operations Console Setup (Terminal 2)
+### Step 3: Launch Local Services (Dual-Terminal Workflow)
 
-Open a second terminal window, navigate to the `frontend/` directory, install dependencies, and launch the Vite development server:
+Once the bootstrap script outputs `ENVIRONMENT SETUP COMPLETE! (0 Errors)`, launch the backend and frontend in two dedicated terminal tabs:
 
+#### Terminal 1 — FastAPI Backend Service (Port 8000)
+- **Windows (PowerShell):**
+  ```powershell
+  .\.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+  ```
+- **macOS / Linux (Bash):**
+  ```bash
+  ./.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+  ```
+
+#### Terminal 2 — React Operations Console (Port 5173)
 ```bash
-# 1. Navigate to the frontend directory
 cd frontend
-
-# 2. Install dependencies
-npm install
-
-# 3. Start the Vite development server on Port 5173
 npm run dev
 ```
 
