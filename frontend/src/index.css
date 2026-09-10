@@ -7,7 +7,7 @@
   --color-sage-dark: #DDE8DF;
   --color-sage-border: rgba(12, 13, 13, 0.06);
   --color-canvas: #FAFAFA;
-  --color-outer: #E9ECEF;
+  --color-outer: #F4F6F8;
   --color-white: #FFFFFF;
   --color-border: rgba(12, 13, 13, 0.08);
   --color-border-subtle: rgba(12, 13, 13, 0.04);
@@ -35,7 +35,7 @@
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--color-outer);
+  background-color: transparent;
   min-height: 100vh;
   color: var(--color-text-main);
   padding: 2rem 1.5rem;
@@ -115,6 +115,19 @@ body {
   background-color: var(--color-black);
   color: var(--color-white);
   border-color: var(--color-black);
+}
+
+/* Taskly-Style Pure White Card Container */
+.loadlogic-card {
+  background-color: #FFFFFF;
+  border-radius: 24px;
+  border: 1px solid rgba(12, 13, 13, 0.05);
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.03), 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.loadlogic-card:hover {
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.05), 0 2px 6px rgba(0, 0, 0, 0.02);
 }
 
 /* Hero Cards in Sage Cream */
@@ -301,5 +314,77 @@ body {
   }
 }
 
+/* Mobile-Widget Drag & Drop System */
+.widget-draggable-card {
+  position: relative;
+  transition: transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.2s cubic-bezier(0.2, 0.9, 0.3, 1), opacity 0.18s ease;
+}
 
+.widget-draggable-card.is-dragging {
+  opacity: 0.38;
+  transform: scale(0.988);
+  box-shadow: 0 10px 24px -4px rgba(12, 13, 13, 0.12);
+  outline: 2px dashed rgba(12, 13, 13, 0.3) !important;
+  outline-offset: -2px;
+  cursor: grabbing !important;
+}
 
+.widget-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.widget-drag-handle:hover {
+  background-color: #FFFFFF !important;
+  color: #0C0D0D !important;
+  border-color: rgba(12, 13, 13, 0.25) !important;
+  box-shadow: 0 2px 8px rgba(12, 13, 13, 0.08) !important;
+}
+
+.widget-drag-handle:active {
+  cursor: grabbing !important;
+  transform: scale(0.96);
+}
+
+.widget-drop-placeholder {
+  border: 2px dashed #059669;
+  background-color: rgba(5, 150, 105, 0.04);
+  border-radius: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #059669;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  min-height: 100px;
+  box-sizing: border-box;
+  animation: pulseDropSlot 1.4s ease-in-out infinite alternate;
+  width: 100%;
+}
+
+@keyframes pulseDropSlot {
+  0% {
+    border-color: rgba(5, 150, 105, 0.35);
+    background-color: rgba(5, 150, 105, 0.02);
+    box-shadow: 0 0 0 0 rgba(5, 150, 105, 0);
+  }
+  100% {
+    border-color: rgba(5, 150, 105, 0.85);
+    background-color: rgba(5, 150, 105, 0.08);
+    box-shadow: 0 0 16px rgba(5, 150, 105, 0.12);
+  }
+}
+
+@keyframes dropSlotArrow {
+  0% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(3px);
+  }
+}

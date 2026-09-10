@@ -1,9 +1,3 @@
-import {
-  Download,
-  Plus,
-  RefreshCw,
-  Search,
-} from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   calculateKPIs,
@@ -14,11 +8,13 @@ import {
   overrideInquiry,
   resolveInquiry,
 } from './api/client';
-import { INITIAL_AGENTS } from './api/mockData';
+import { INITIAL_AGENTS, INITIAL_INQUIRIES } from './api/mockData';
+import { LoadLogicTopHeader } from './components/LoadLogicTopHeader';
+import { DashboardWidgetGrid } from './components/DashboardWidgetGrid';
 import { LoadLogicDetailDrawer } from './components/LoadLogicDetailDrawer';
-import { LoadLogicHeroCards } from './components/LoadLogicHeroCards';
-import { LoadLogicQueueTable, type QueueTab } from './components/LoadLogicQueueTable';
-import { LoadLogicSidebar } from './components/LoadLogicSidebar';
+import { AmbientBackground } from './components/AmbientBackground';
+import { THEMES, type ThemeId } from './types/theme';
+import { type QueueTab } from './components/LoadLogicQueueTable';
 import { NewInquiryModal } from './components/NewInquiryModal';
 import { OverrideModal } from './components/OverrideModal';
 import type {
@@ -26,12 +22,13 @@ import type {
   Inquiry,
 } from './types/inquiry';
 import {
+  ChannelEnum,
   DepartmentEnum,
   PriorityEnum,
 } from './types/inquiry';
 
 export const App: React.FC = () => {
-  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
+  const [inquiries, setInquiries] = useState<Inquiry[]>(INITIAL_INQUIRIES);
   const [selectedTicket, setSelectedTicket] = useState<Inquiry | null>(null);
   const [currentAgent, setCurrentAgent] = useState<AgentProfile>(INITIAL_AGENTS[0]); // Carlos M. / Ethan Miller
   const [queueTab, setQueueTab] = useState<QueueTab>('DEFAULT');
@@ -44,6 +41,32 @@ export const App: React.FC = () => {
   const [isResolving, setIsResolving] = useState<boolean>(false);
   const [isOverrideModalOpen, setIsOverrideModalOpen] = useState<boolean>(false);
   const [isNewInquiryModalOpen, setIsNewInquiryModalOpen] = useState<boolean>(false);
+  const [isLayoutCustomized, setIsLayoutCustomized] = useState<boolean>(false);
+  const [resetSignal, setResetSignal] = useState<number>(0);
+  const [themeId, setThemeId] = useState<ThemeId>(() => {
+    try {
+      const saved = localStorage.getItem('cloudscale_ambient_theme');
+      if (saved === 'aura') {
+        localStorage.setItem('cloudscale_ambient_theme', 'cobalt');
+        return 'cobalt';
+      }
+      if (saved && THEMES.some((t) => t.id === saved)) {
+        return saved as ThemeId;
+      }
+    } catch {
+      // fallback
+    }
+    return 'cloudscape';
+  });
+
+  const handleSelectTheme = (newTheme: ThemeId) => {
+    setThemeId(newTheme);
+    try {
+      localStorage.setItem('cloudscale_ambient_theme', newTheme);
+    } catch {
+      // ignore
+    }
+  };
 
   // Load inquiries from client
   const loadData = useCallback(async () => {
@@ -212,170 +235,56 @@ export const App: React.FC = () => {
 
   // Derived KPIs
   const kpis = useMemo(() => calculateKPIs(inquiries), [inquiries]);
+  const currentTheme = THEMES.find((t) => t.id === themeId) || THEMES[0];
 
   return (
-    <div
-      style={{
-        width: '100%',
-        maxWidth: '1440px',
-        margin: '0 auto',
-        backgroundColor: '#FFFFFF',
-        borderRadius: '32px',
-        border: '1px solid rgba(12, 13, 13, 0.05)',
-        boxShadow: '0 24px 64px -12px rgba(12, 13, 13, 0.08)',
-        padding: '24px',
-        display: 'flex',
-        gap: '24px',
-        position: 'relative',
-        minHeight: '880px',
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* 1. Left Column: Clean Focused LoadLogic Sidebar */}
-      <LoadLogicSidebar
-        currentAgent={currentAgent}
-        onSelectAgent={setCurrentAgent}
-        isLiveBackend={isLiveBackend}
-        isDemoMode={isDemoMode}
-        onToggleDemoMode={() => setIsDemoMode(!isDemoMode)}
-      />
+    <>
+      {/* Zero-Lag Fixed Hardware-Accelerated Ambient Canvas Layer */}
+      <AmbientBackground themeId={themeId} />
 
-      {/* 2. Right Column: Primary Unified Live Operations Console */}
-      <main
+      <div
         style={{
-          flex: 1,
+          width: '100%',
+          maxWidth: '1440px',
+          margin: '0 auto',
+          backgroundColor: '#FFFFFF',
+          borderRadius: '32px',
+          border: currentTheme.isDark ? '1px solid rgba(255, 255, 255, 0.12)' : '1px solid rgba(12, 13, 13, 0.05)',
+          boxShadow: currentTheme.isDark
+            ? '0 32px 80px -16px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08)'
+            : '0 24px 64px -12px rgba(12, 13, 13, 0.08)',
+          padding: '24px 28px',
           display: 'flex',
           flexDirection: 'column',
           gap: '20px',
-          minWidth: 0,
+          position: 'relative',
+          minHeight: '880px',
+          boxSizing: 'border-box',
+          transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
         }}
       >
-        {/* Top Header Bar: Search Input + Action Controls */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-            flexWrap: 'wrap',
-          }}
-        >
-          {/* Search Box */}
-          <div
-            style={{
-              position: 'relative',
-              flex: 1,
-              maxWidth: '480px',
-              minWidth: '240px',
-            }}
-          >
-            <Search
-              size={16}
-              style={{
-                position: 'absolute',
-                left: '14px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: '#888888',
-              }}
-            />
-            <input
-              type="text"
-              placeholder="Search inquiries, order IDs, errors, customers..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '10px 14px 10px 38px',
-                borderRadius: '9999px',
-                backgroundColor: '#FAFAFA',
-                border: '1px solid rgba(12, 13, 13, 0.1)',
-                color: '#0C0D0D',
-                fontSize: '0.84rem',
-                fontFamily: 'var(--font-sans)',
-                outline: 'none',
-                transition: 'border-color 0.15s ease',
-              }}
-            />
-          </div>
+        {/* 1. Global Full-Width Header Bar */}
+        <LoadLogicTopHeader
+          currentAgent={currentAgent}
+          onSelectAgent={setCurrentAgent}
+          isLiveBackend={isLiveBackend}
+          isDemoMode={isDemoMode}
+          onToggleDemoMode={() => setIsDemoMode(!isDemoMode)}
+          isRefreshing={isRefreshing}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onExportAuditLogs={handleExportAuditLogs}
+          onOpenNewInquiryModal={() => setIsNewInquiryModalOpen(true)}
+          onResetLayout={() => setResetSignal((prev) => prev + 1)}
+          isLayoutCustomized={isLayoutCustomized}
+          currentThemeId={themeId}
+          onSelectTheme={handleSelectTheme}
+        />
 
-          {/* Right Action Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-            {/* Live Network Pill */}
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '9999px',
-                backgroundColor: '#ECF4EE',
-                border: '1px solid rgba(12, 13, 13, 0.06)',
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                color: '#0C0D0D',
-              }}
-              title="Zero-internet egress AWS PrivateLink active"
-            >
-              <span className="status-dot status-dot-green" />
-              <span>{isLiveBackend ? 'AWS PrivateLink' : isDemoMode ? 'Demo Sandbox' : 'Local Engine'}</span>
-              {isRefreshing && <RefreshCw size={11} className="animate-spin" style={{ marginLeft: '4px', opacity: 0.6 }} />}
-            </div>
-
-            {/* Export Audit Logs Button */}
-            <button
-              onClick={handleExportAuditLogs}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 14px',
-                borderRadius: '9999px',
-                backgroundColor: '#FFFFFF',
-                border: '1px solid rgba(12, 13, 13, 0.12)',
-                color: '#0C0D0D',
-                fontSize: '0.8rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'background-color 0.15s ease',
-              }}
-              title="Download full operational audit ledger as JSON"
-            >
-              <Download size={14} />
-              <span>Export</span>
-            </button>
-
-            {/* "+ Add New Inquiry" Black Action Button */}
-            <button
-              onClick={() => setIsNewInquiryModalOpen(true)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                borderRadius: '9999px',
-                backgroundColor: '#0C0D0D',
-                color: '#FFFFFF',
-                border: 'none',
-                fontSize: '0.82rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'opacity 0.15s ease, transform 0.1s ease',
-                boxShadow: '0 4px 12px rgba(12, 13, 13, 0.15)',
-              }}
-              title="Open modal to create or test customer inquiry"
-            >
-              <Plus size={15} />
-              <span>+ Add New Inquiry</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Top Row: Two LoadLogic Sage Hero Cards with live telemetry & slate tones */}
-        <LoadLogicHeroCards kpis={kpis} inquiries={searchedInquiries} />
-
-        {/* Bottom Row: LoadLogic Inquiries Table with strict grid alignment & dropdown sort */}
-        <LoadLogicQueueTable
+      {/* 2. Interactive Mobile-Widget Drag & Drop Operations Grid */}
+      <main style={{ width: '100%' }}>
+        <DashboardWidgetGrid
+          kpis={kpis}
           inquiries={searchedInquiries}
           selectedTicket={selectedTicket}
           onSelectTicket={setSelectedTicket}
@@ -384,32 +293,34 @@ export const App: React.FC = () => {
           isClaiming={isClaiming}
           activeTab={queueTab}
           onTabChange={setQueueTab}
+          onLayoutChange={setIsLayoutCustomized}
+          resetSignal={resetSignal}
         />
       </main>
 
-      {/* 3. Slide-Over Ticket Detail Drawer */}
+      {/* 3. Centered Spacious Ticket Detail Modal (Backdrop-Blurred) */}
       {selectedTicket && (
         <div
           style={{
             position: 'fixed',
-            top: 0,
-            right: 0,
-            bottom: 0,
+            inset: 0,
             zIndex: 100,
             display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+            boxSizing: 'border-box',
           }}
         >
-          {/* Backdrop */}
+          {/* High-Blur Darkened Backdrop */}
           <div
             onClick={() => setSelectedTicket(null)}
             style={{
               position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(12, 13, 13, 0.4)',
-              backdropFilter: 'blur(3px)',
+              inset: 0,
+              backgroundColor: 'rgba(12, 13, 13, 0.48)',
+              backdropFilter: 'blur(8px)',
+              animation: 'fadeInMenu 0.15s ease-out',
             }}
           />
 
@@ -444,6 +355,7 @@ export const App: React.FC = () => {
         isSubmitting={isInjecting}
       />
     </div>
+    </>
   );
 };
 

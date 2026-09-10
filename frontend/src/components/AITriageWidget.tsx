@@ -81,7 +81,7 @@ export const AITriageWidget: React.FC<AITriageWidgetProps> = ({
             borderRadius: '9999px',
           }}
         >
-          Bedrock 3.5
+          Bedrock Haiku 4.5
         </span>
       </div>
 

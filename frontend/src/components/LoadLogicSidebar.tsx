@@ -284,7 +284,7 @@ export const LoadLogicSidebar: React.FC<LoadLogicSidebarProps> = ({
               </span>
             </div>
             <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-muted)' }}>
-              Claude 3.5 Haiku
+              Claude Haiku 4.5
             </span>
           </div>
 
