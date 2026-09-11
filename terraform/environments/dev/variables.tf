@@ -27,3 +27,15 @@ variable "availability_zones" {
   description = "Availability Zones"
   default     = ["eu-west-1a", "eu-west-1b"]
 }
+
+variable "domain_name" {
+  type        = string
+  description = "Authoritative apex domain for inbound Amazon SES mail receipt"
+  default     = "example-corp.tech"
+}
+
+variable "support_email" {
+  type        = string
+  description = "Support inbound email mailbox"
+  default     = "support@example-corp.tech"
+}

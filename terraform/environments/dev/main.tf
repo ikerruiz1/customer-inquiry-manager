@@ -125,3 +125,22 @@ module "cicd" {
   production_listener_arn        = module.alb.production_listener_arn
   test_listener_arn              = module.alb.test_listener_arn
 }
+
+# 11. Amazon Route 53 Authoritative Public Hosted Zone
+module "route53" {
+  source       = "../../modules/route53"
+  project_name = var.project_name
+  environment  = var.environment
+  domain_name  = var.domain_name
+}
+
+# 12. Amazon SES Native Inbound Email Ingestion & S3 Encrypted Storage
+module "ses" {
+  source          = "../../modules/ses"
+  project_name    = var.project_name
+  environment     = var.environment
+  domain_name     = var.domain_name
+  support_email   = var.support_email
+  aws_region      = var.aws_region
+  route53_zone_id = module.route53.zone_id
+}

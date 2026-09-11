@@ -1,0 +1,103 @@
+{
+  "company_name": "ExampleCorp Logistics & Platform Services",
+  "domain": "your-company-domain.tech",
+  "support_email": "support@your-company-domain.tech",
+  "inbound_channels": {
+    "email": "support@your-company-domain.tech",
+    "webform_url": "https://portal.your-company-domain.tech/contact",
+    "trustpilot_profile": "https://www.trustpilot.com/review/your-company-domain.tech"
+  },
+  "customer_access_policy": {
+    "require_registered_account": false,
+    "verification_mode": "FLAG_UNVERIFIED",
+    "unregistered_customer_handling": "ACCEPT_WITH_UNVERIFIED_BADGE",
+    "quarantine_unregistered": false
+  },
+  "description": "Enterprise cloud-native logistics, API-driven inventory management, and automated fulfillment platform.",
+  "departments": [
+    {
+      "code": "BILLING",
+      "name": "Billing & Financial Operations",
+      "scope": "Invoices, payment gateway errors, chargebacks, double-charges, subscription renewals, credit card failures, and refund requests.",
+      "precedence_rank": 1
+    },
+    {
+      "code": "SECURITY",
+      "name": "Information Security & Compliance",
+      "scope": "Suspected account takeover, compromised API keys, unauthorized access logs, vulnerability disclosures, and data privacy requests.",
+      "precedence_rank": 2
+    },
+    {
+      "code": "TECH_SUPPORT",
+      "name": "Technical & Developer Support",
+      "scope": "Platform outages, 5xx server errors, REST API integration errors, webhook delivery timeouts, SDK bugs, and performance degradation.",
+      "precedence_rank": 3
+    },
+    {
+      "code": "ACCOUNTS",
+      "name": "Account & Access Management",
+      "scope": "Password reset lockouts, TOTP MFA token desynchronization, role-based access delegation, team invitations, and profile configuration.",
+      "precedence_rank": 4
+    },
+    {
+      "code": "SALES",
+      "name": "Enterprise Sales & Commercial Partnerships",
+      "scope": "Volume tier discounts, enterprise contract upgrades, bespoke SLA negotiation, procurement reviews, and commercial demo scheduling.",
+      "precedence_rank": 5
+    },
+    {
+      "code": "GENERAL",
+      "name": "General Inquiries",
+      "scope": "Public company information, headquarters location, partnership solicitations, feedback surveys, and unclassifiable communications.",
+      "precedence_rank": 6
+    }
+  ],
+  "precedence_rules": [
+    "Financial disputes (double-billing, disputed charges, refund demands) MUST route to BILLING even if caused by technical API glitches.",
+    "Compromised credentials, unauthorized logins, or leaked secrets MUST route to SECURITY even if involving account lockout.",
+    "Service disruptions impacting active warehouse, dispatch, or API operations route to TECH_SUPPORT.",
+    "Authentication failures and TOTP MFA device resets route to ACCOUNTS.",
+    "Pricing inquiries and subscription tier upgrades route to SALES.",
+    "Vague, unclassifiable, or non-actionable inquiries route to GENERAL with the CLARIFICATION_REQUEST strategy."
+  ],
+  "itil_sla_matrix_hours": {
+    "P1": {
+      "name": "CRITICAL",
+      "target_resolution_hours": 1,
+      "criteria": "High Impact (3) AND High Urgency (4 or 5). Total system outage or ongoing financial/security loss."
+    },
+    "P2": {
+      "name": "HIGH",
+      "target_resolution_hours": 4,
+      "criteria": "Medium/High Impact (2 or 3) AND Medium/High Urgency (3 or 4). Core capability degraded without workaround."
+    },
+    "P3": {
+      "name": "MEDIUM",
+      "target_resolution_hours": 12,
+      "criteria": "Low/Medium Impact (1 or 2) AND Low/Medium Urgency (2 or 3). Non-critical feature failure with available workaround."
+    },
+    "P4": {
+      "name": "LOW",
+      "target_resolution_hours": 24,
+      "criteria": "Low Impact (1) AND Low Urgency (1). General questions, documentation requests, minor UI glitches."
+    }
+  },
+  "refund_and_dispute_policy": {
+    "standard_refund_window_days": 30,
+    "automatic_refund_eligibility": [
+      "Duplicate charge on same billing cycle",
+      "Unused prepaid subscription canceled within 14 days of renewal",
+      "Service outage exceeding 99.9% uptime SLA documented by incident report"
+    ],
+    "disallowed_refunds": [
+      "Custom enterprise professional services and architectural onboarding fees",
+      "Charges incurred beyond 60 calendar days without prior notification"
+    ]
+  },
+  "churn_escalation_triggers": [
+    "Negative sentiment score below -0.6",
+    "Explicit threats to switch to competing platforms",
+    "Repeated unresolved P1/P2 tickets within a 7-day window",
+    "Public social review or negative ratings on Trustpilot or Google Reviews"
+  ]
+}

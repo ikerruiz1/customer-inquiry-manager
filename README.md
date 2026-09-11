@@ -238,7 +238,50 @@ python scripts/seed_inquiries.py --scenario billing_dispute # Triggers Stripe Ch
 
 ---
 
-## 6. AWS Cloud Deployment & Teardown
+## 6. Production Inbound Email Ingestion (Custom Domain & Amazon SES)
+
+Customer Inquiry Manager features an authentic, enterprise-grade inbound email pipeline powered by **Amazon SES (Simple Email Service)** and modular Terraform infrastructure. No third-party middleware (e.g. Zapier, Pipedream) is used.
+
+### Unified Infrastructure & Domain Deployment
+To deploy the entire production stack (VPC, ECS, RDS, SES, and ECR containers) with your custom domain:
+
+```bash
+# Linux / macOS
+chmod +x scripts/*.sh
+./scripts/deploy-infra.sh
+
+# Windows (PowerShell)
+.\scripts\deploy-infra.ps1
+```
+
+> **How Domain Configuration Works for Cloners:**
+> - The deployment script reads `domain` and `support_email` directly from `company_profile.json` (or copies from `company_profile.example.json` if initializing for the first time).
+> - You can also customize `terraform/environments/dev/terraform.tfvars` (or copy from `terraform.tfvars.example`).
+> - The script automatically provisions SES, outputs the exact DNS records to enter in your registrar, and restarts the ECS tasks.
+
+### Registrar DNS Records Contract
+Configure the following records in your DNS manager (e.g. `manage.get.tech`, Namecheap, Route 53):
+
+| Record Type | Host / Name | Target / Points To | Priority / TTL | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **MX** | `@` | `inbound-smtp.eu-west-1.amazonaws.com` | `10` (TTL 300) | Routes all inbound SMTP traffic directly to Amazon SES |
+| **TXT** (SPF) | `@` | `"v=spf1 include:amazonses.com ~all"` | TTL 300 | Authorizes Amazon SES mail servers |
+| **TXT** (SES) | `_amazonses` | `<ses_domain_verification_token>` | TTL 300 | Proves domain ownership (from `terraform apply` output) |
+| **CNAME** (x3) | `<token>._domainkey` | `<token>.dkim.amazonses.com` | TTL 300 | Easy DKIM signing tokens (from `terraform apply` output) |
+
+### Automated Provisioning with Terraform
+The SES inbound rule set, encrypted S3 storage, and DKIM tokens are provisioned automatically as part of `./scripts/deploy-infra.sh` / `.\scripts\deploy-infra.ps1` (or standalone via `cd terraform/environments/dev && terraform apply`):
+1. Provisions the SES Domain Identity and DKIM tokens.
+2. Creates the encrypted S3 storage bucket (`customer-inquiry-manager-ses-inbound-dev`) with `force_destroy = true` (0.00 € residual cost).
+3. Creates and activates the inbound Receipt Rule Set for `support@<your-domain>`.
+4. Outputs the exact DNS verification tokens in the console.
+
+### End-to-End Live Verification
+Send an email from your personal email client (e.g. Gmail mobile app) to `support@<your-domain>`. The email arrives natively at Amazon SES, is stored encrypted in S3, and is ingested into the platform for Bedrock Claude Haiku 4.5 triage in real time.
+
+---
+
+## 7. AWS Cloud Deployment & Teardown
 
 ### 1-Click Infrastructure Deployment
 ```bash
@@ -253,7 +296,7 @@ chmod +x scripts/*.sh
 
 ---
 
-## 7. Security & Policy-as-Code Compliance
+## 8. Security & Policy-as-Code Compliance
 
 The CI/CD pipeline enforces automated security gates in AWS CodeBuild before any container image is pushed to ECR:
 - **Pytest:** 100% unit and integration test pass rate across database claiming and auth flows.
