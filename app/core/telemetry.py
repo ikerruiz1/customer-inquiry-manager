@@ -16,7 +16,7 @@ def setup_xray(app=None):
 
     try:
         from aws_xray_sdk.core import xray_recorder, patch_all
-        from aws_xray_sdk.ext.fastapi.middleware import XRayMiddleware
+        from aws_xray_sdk.ext.fastapi.middleware import XRayMiddleware # type: ignore[import-not-found]
 
         xray_recorder.configure(
             service=settings.PROJECT_NAME,

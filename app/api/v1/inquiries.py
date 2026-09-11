@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_tier1_agent, require_operations_manager
 from app.core.telemetry import emit_emf_metric
@@ -78,7 +79,34 @@ async def process_and_persist_inquiry(
         churn_risk=triage_result.churn_risk,
     )
 
-    # 3. Instantiate and persist ORM model
+    # 3. Evaluate Inbound Customer Verification & Identity Policy
+    policy = settings.CUSTOMER_ACCESS_POLICY or {}
+    require_registered = policy.get("require_registered_account", False)
+    verification_mode = policy.get("verification_mode", "FLAG_UNVERIFIED")
+
+    existing_inquiry_query = await db.execute(
+        select(Inquiry.id).where(Inquiry.customer_email == inquiry_in.customer_email).limit(1)
+    )
+    is_registered_customer = existing_inquiry_query.scalar_one_or_none() is not None
+
+    if require_registered and not is_registered_customer:
+        logger.warning(
+            f"Inbound inquiry rejected by access policy: sender {inquiry_in.customer_email} is not registered."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Inbound inquiry rejected: Sender email is not registered under company access policy.",
+        )
+
+    entities = dict(triage_result.key_entities or {})
+    entities["sender_verification"] = "VERIFIED_CUSTOMER" if is_registered_customer else "UNVERIFIED_SENDER"
+
+    agent_notes = triage_result.agent_copilot_notes or ""
+    if verification_mode == "FLAG_UNVERIFIED" and not is_registered_customer:
+        policy_notice = "[SECURITY POLICY WARNING] Inbound sender not found in verified account registry. Verify identity before releasing account telemetry."
+        agent_notes = f"{policy_notice}\n\n{agent_notes}" if agent_notes else policy_notice
+
+    # 4. Instantiate and persist ORM model
     inquiry = Inquiry(
         channel=inquiry_in.channel.value,
         customer_email=inquiry_in.customer_email,
@@ -92,10 +120,10 @@ async def process_and_persist_inquiry(
         impact=triage_result.impact_rating,
         sentiment_score=triage_result.sentiment_score,
         churn_risk=triage_result.churn_risk,
-        entities=triage_result.key_entities,
+        entities=entities,
         suggested_strategy=triage_result.suggested_strategy.value,
         suggested_response=triage_result.suggested_response,
-        agent_copilot_notes=triage_result.agent_copilot_notes,
+        agent_copilot_notes=agent_notes,
         sla_deadline_at=sla_deadline,
     )
 

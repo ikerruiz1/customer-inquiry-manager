@@ -1,6 +1,6 @@
 """Application runtime settings and environment parsing using Pydantic Settings v2."""
-from typing import Optional, List
-from pydantic import Field
+from typing import Optional, List, Dict, Any
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -72,6 +72,59 @@ class Settings(BaseSettings):
 
     # Grounding Document Path
     GROUNDING_CONTEXT_PATH: str = "company_profile.json"
+
+    # Inbound Support Email (Dynamically loaded from company_profile.json)
+    SUPPORT_EMAIL: str = Field(
+        default="support@cloudscale.io",
+        description="Authoritative customer support inbound email address parsed from company profile",
+    )
+
+    # Inbound Customer Verification & Identity Policy (Parsed from company_profile.json)
+    CUSTOMER_ACCESS_POLICY: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "require_registered_account": False,
+            "verification_mode": "FLAG_UNVERIFIED",
+            "unregistered_customer_handling": "ACCEPT_WITH_UNVERIFIED_BADGE",
+            "quarantine_unregistered": False,
+        },
+        description="Declarative customer access policy governing whether inquiries must originate from registered accounts",
+    )
+
+    # AWS Secrets Manager DB Credentials (Injected dynamically into ECS container)
+    DB_CREDENTIALS: Optional[str] = Field(
+        default=None,
+        description="JSON string injected by AWS ECS from AWS Secrets Manager containing RDS master credentials",
+    )
+
+    @model_validator(mode="after")
+    def assemble_db_url_and_profile(self) -> "Settings":
+        """Assemble asyncpg DATABASE_URL from AWS Secrets Manager and load support_email and access policy from profile."""
+        if self.DB_CREDENTIALS:
+            try:
+                import json
+                creds = json.loads(self.DB_CREDENTIALS)
+                user = creds.get("username", "postgres")
+                password = creds.get("password", "")
+                host = creds.get("host", "localhost")
+                port = creds.get("port", 5432)
+                db = creds.get("database", "inquirydb")
+                self.DATABASE_URL = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
+            except Exception:
+                pass
+
+        import os, json
+        if os.path.exists(self.GROUNDING_CONTEXT_PATH):
+            try:
+                with open(self.GROUNDING_CONTEXT_PATH, "r", encoding="utf-8") as f:
+                    profile_data = json.load(f)
+                    if "support_email" in profile_data:
+                        self.SUPPORT_EMAIL = profile_data["support_email"]
+                    if "customer_access_policy" in profile_data:
+                        self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
+            except Exception:
+                pass
+
+        return self
 
     model_config = SettingsConfigDict(
         env_file=".env",
