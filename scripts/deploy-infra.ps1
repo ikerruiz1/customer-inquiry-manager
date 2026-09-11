@@ -50,6 +50,8 @@ Write-Host ""
 
 # 3. Terraform Initialization & Application
 Write-Host "Phase 3: Applying Modular Terraform Infrastructure (VPC, ECS, RDS, SES)..." -ForegroundColor Yellow
+Write-Host "  [FINOPS NOTICE] This provisions full AWS infrastructure (16 PrivateLink ENIs, RDS, ALB, ECS)." -ForegroundColor Yellow
+Write-Host "  Estimated active burn rate: ~$5.00 USD/day. Use .\scripts\teardown-infra.ps1 to destroy when done." -ForegroundColor Yellow
 Push-Location "terraform/environments/dev"
 try {
     terraform init
