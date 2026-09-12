@@ -38,16 +38,11 @@ phases:
       - mkdir -p reports
       - pytest app/tests/ -v --junitxml=reports/pytest.xml
       - echo "Phase 2: Executing Semgrep Static Application Security Testing (SAST)..."
-      - semgrep --config p/security-audit --config p/secrets --error app/
+      - semgrep --config p/security-audit --config p/secrets --config p/owasp-top-ten --error app/
       - echo "Phase 3: Validating Infrastructure Policy-as-Code (Conftest OPA)..."
-      - |
-        if [ -d "terraform/policy" ]; then
-          conftest test terraform/environments/dev/ --policy terraform/policy/
-        else
-          echo "No custom OPA policies found, skipping conftest enforcement."
-        fi
+      - conftest test terraform/ --policy terraform/policy/
       - echo "Phase 4: Running KICS Checkmarx IaC Security & Benchmark Scan..."
-      - kics scan -p terraform/ --fail-on HIGH,CRITICAL --no-progress || true
+      - kics scan -p terraform/ --fail-on HIGH,CRITICAL --no-progress
 
   build:
     commands:
