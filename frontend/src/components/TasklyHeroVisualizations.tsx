@@ -211,7 +211,7 @@ export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHan
           value={complianceRate}
           color="#5EA843"
           hatchStroke="#86EFAC"
-          deltaText="+10%"
+          deltaText={`${complianceRate}%`}
           arrowColor="#5EA843"
         />
       </div>
@@ -270,14 +270,14 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHa
   const avgMttr = dashboardMetrics?.kpis
     ? dashboardMetrics.kpis.avg_mttr_seconds
     : resolvedWithTimes.length > 0
-    ? Number((
+      ? Number((
         resolvedWithTimes.reduce((sum, t) => {
           const created = new Date(t.created_at).getTime();
           const closed = new Date(t.resolved_at!).getTime();
           return sum + Math.max(1, (closed - created) / 1000);
         }, 0) / resolvedWithTimes.length
       ).toFixed(2))
-    : Number((
+      : Number((
         inquiries.reduce((sum, t) => {
           return sum + Math.max(1, (now - new Date(t.created_at).getTime()) / 1000);
         }, 0) / totalInquiries
@@ -299,12 +299,12 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHa
   // 4. Dynamic Queue Dwell Average
   const avgDwellSeconds = claimedOrResolved.length > 0
     ? Math.round(
-        claimedOrResolved.reduce((sum, t) => {
-          const created = new Date(t.created_at).getTime();
-          const claimed = new Date(t.claimed_at!).getTime();
-          return sum + Math.max(1, (claimed - created) / 1000);
-        }, 0) / claimedOrResolved.length
-      )
+      claimedOrResolved.reduce((sum, t) => {
+        const created = new Date(t.created_at).getTime();
+        const claimed = new Date(t.claimed_at!).getTime();
+        return sum + Math.max(1, (claimed - created) / 1000);
+      }, 0) / claimedOrResolved.length
+    )
     : Math.round(avgMttr * 0.35);
 
   // 5. Dynamic Autonomous Routing Rate (% resolved verbatim or unedited)
@@ -392,7 +392,7 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHa
           value={velocityScore}
           color="#1E293B"
           hatchStroke="#CBD5E1"
-          deltaText={`+${Math.round(velocityScore * 0.15)}%`}
+          deltaText={`${avgMttr}s`}
           arrowColor="#1E293B"
         />
       </div>
@@ -1415,32 +1415,36 @@ export const TasklySourcesBarChart: React.FC<TasklySourcesBarChartProps> = ({ in
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Group real inquiries by channel
-  const stripeCount = inquiries.filter(
-    (t) => t.channel === ChannelEnum.BILLING || (t.channel as any) === 'STRIPE'
-  ).length || 4;
-  const emailCount = inquiries.filter((t) => t.channel === ChannelEnum.EMAIL).length || 4;
-  const trustpilotCount = inquiries.filter((t) => t.channel === ChannelEnum.TRUSTPILOT).length || 3;
-  const webFormCount = inquiries.filter((t) => t.channel === ChannelEnum.WEB_FORM).length || 2;
-
-  // Distinct dataset counts for each time range option:
+  // Distinct dataset counts for each time range option based on real inquiry timestamps:
   const getSourcesCountsForRange = (range: typeof selectedRange) => {
-    switch (range) {
-      case 'Last 24 Hours':
-        return { stripe: 28, email: 36, trustpilot: 19, webForm: 16 };
-      case 'Last 7 Days':
-        return { stripe: 154, email: 210, trustpilot: 98, webForm: 85 };
-      case 'Last 8 Weeks':
-        return { stripe: 1120, email: 1480, trustpilot: 690, webForm: 580 };
-      case 'Current Shift':
-      default:
-        return {
-          stripe: stripeCount,
-          email: emailCount,
-          trustpilot: trustpilotCount,
-          webForm: webFormCount,
-        };
+    const cutoffNow = Date.now();
+    let filteredInquiries = inquiries;
+
+    if (range === 'Current Shift') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 8 * 3600 * 1000
+      );
+    } else if (range === 'Last 24 Hours') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 24 * 3600 * 1000
+      );
+    } else if (range === 'Last 7 Days') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 7 * 24 * 3600 * 1000
+      );
     }
+    if (filteredInquiries.length === 0) {
+      filteredInquiries = inquiries;
+    }
+
+    return {
+      stripe: filteredInquiries.filter(
+        (t) => t.channel === ChannelEnum.BILLING || (t.channel as any) === 'STRIPE'
+      ).length,
+      email: filteredInquiries.filter((t) => t.channel === ChannelEnum.EMAIL).length,
+      trustpilot: filteredInquiries.filter((t) => t.channel === ChannelEnum.TRUSTPILOT).length,
+      webForm: filteredInquiries.filter((t) => t.channel === ChannelEnum.WEB_FORM).length,
+    };
   };
 
   const activeSourcesCounts = getSourcesCountsForRange(selectedRange);
@@ -1871,30 +1875,46 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
     };
   }, [filterOpen]);
 
-  // Telemetry multiplier for historical temporal query ranges
-  const multiplier =
-    selectedRange === 'Current Shift'
-      ? 1
-      : selectedRange === 'Last 24 Hours'
-      ? 1.4
-      : selectedRange === 'Last 7 Days'
-      ? 4.2
-      : 19.5;
+  // Dynamic dataset counts for each time range option based on real inquiry timestamps:
+  const getSentimentCountsForRange = (range: typeof selectedRange) => {
+    const cutoffNow = Date.now();
+    let filteredInquiries = inquiries;
 
-  // Real inquiry counts partitioned by Bedrock sentiment_score and churn_risk
-  const rawDelighted = inquiries.filter((t) => (t.sentiment_score ?? 0) >= 0.6).length;
-  const rawSatisfied = inquiries.filter(
-    (t) => (t.sentiment_score ?? 0) >= 0.15 && (t.sentiment_score ?? 0) < 0.6
-  ).length;
-  const rawNeutral = inquiries.filter(
-    (t) => (t.sentiment_score ?? 0) >= -0.15 && (t.sentiment_score ?? 0) < 0.15
-  ).length;
-  const rawFrustrated = inquiries.filter(
-    (t) => (t.sentiment_score ?? 0) >= -0.55 && (t.sentiment_score ?? 0) < -0.15 && !t.churn_risk
-  ).length;
-  const rawChurnRisk = inquiries.filter(
-    (t) => t.churn_risk === true || (t.sentiment_score ?? 0) < -0.55
-  ).length;
+    if (range === 'Current Shift') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 8 * 3600 * 1000
+      );
+    } else if (range === 'Last 24 Hours') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 24 * 3600 * 1000
+      );
+    } else if (range === 'Last 7 Days') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 7 * 24 * 3600 * 1000
+      );
+    }
+    if (filteredInquiries.length === 0) {
+      filteredInquiries = inquiries;
+    }
+
+    return {
+      delighted: filteredInquiries.filter((t) => (t.sentiment_score ?? 0) >= 0.6).length,
+      satisfied: filteredInquiries.filter(
+        (t) => (t.sentiment_score ?? 0) >= 0.15 && (t.sentiment_score ?? 0) < 0.6
+      ).length,
+      neutral: filteredInquiries.filter(
+        (t) => (t.sentiment_score ?? 0) >= -0.15 && (t.sentiment_score ?? 0) < 0.15
+      ).length,
+      frustrated: filteredInquiries.filter(
+        (t) => (t.sentiment_score ?? 0) >= -0.55 && (t.sentiment_score ?? 0) < -0.15 && !t.churn_risk
+      ).length,
+      churnRisk: filteredInquiries.filter(
+        (t) => t.churn_risk === true || (t.sentiment_score ?? 0) < -0.55
+      ).length,
+    };
+  };
+
+  const activeSentimentCounts = getSentimentCountsForRange(selectedRange);
 
   const sentimentTiers = [
     {
@@ -1902,7 +1922,7 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
       label: 'Delighted',
       short: 'Delighted',
       scoreRange: '≥ +0.60',
-      count: Math.max(1, Math.round(rawDelighted * multiplier)),
+      count: activeSentimentCounts.delighted,
       color: '#059669',
       bgLight: '#ECFDF5',
       hatchLight: '#A7F3D0',
@@ -1914,7 +1934,7 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
       label: 'Satisfied',
       short: 'Satisfied',
       scoreRange: '+0.15..+0.60',
-      count: Math.max(1, Math.round(rawSatisfied * multiplier)),
+      count: activeSentimentCounts.satisfied,
       color: '#10B981',
       bgLight: '#F0FDF4',
       hatchLight: '#BBF7D0',
@@ -1926,7 +1946,7 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
       label: 'Neutral',
       short: 'Neutral',
       scoreRange: '-0.15..+0.15',
-      count: Math.max(1, Math.round(rawNeutral * multiplier)),
+      count: activeSentimentCounts.neutral,
       color: '#6366F1',
       bgLight: '#EEF2FF',
       hatchLight: '#C7D2FE',
@@ -1938,7 +1958,7 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
       label: 'Frustrated',
       short: 'Frustrated',
       scoreRange: '-0.55..-0.15',
-      count: Math.max(1, Math.round(rawFrustrated * multiplier)),
+      count: activeSentimentCounts.frustrated,
       color: '#EA580C',
       bgLight: '#FFF7ED',
       hatchLight: '#FED7AA',
@@ -1950,7 +1970,7 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
       label: 'Churn Risk',
       short: 'Churn Risk',
       scoreRange: '< -0.55 / Flagged',
-      count: Math.max(1, Math.round(rawChurnRisk * multiplier)),
+      count: activeSentimentCounts.churnRisk,
       color: '#DC2626',
       bgLight: '#FEF2F2',
       hatchLight: '#FECACA',
@@ -1961,7 +1981,7 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
 
   const currentTotal = sentimentTiers.reduce((acc, curr) => acc + curr.count, 0) || 1;
   const maxVal = Math.max(...sentimentTiers.map((c) => c.count), 4);
-  const activeChurnRiskCount = Math.round(rawChurnRisk * multiplier);
+  const activeChurnRiskCount = activeSentimentCounts.churnRisk;
   const activeChurnRatePct = Math.round((activeChurnRiskCount / currentTotal) * 100);
 
   // Dynamic Y-axis ticks
