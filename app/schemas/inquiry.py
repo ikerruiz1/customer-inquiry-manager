@@ -96,10 +96,16 @@ class InquiryResponse(BaseModel):
     churn_risk: bool
     entities: Dict[str, Any]
 
-    # Copilot Drafting
+    # Copilot Drafting & Explainable AI
     suggested_strategy: Optional[ResponseStrategyEnum] = None
     suggested_response: Optional[str] = None
     agent_copilot_notes: Optional[str] = None
+    confidence_score: Optional[float] = None
+    triage_rationale: Optional[str] = None
+    bedrock_latency_ms: Optional[int] = None
+    model_id: Optional[str] = None
+    cost_eur: Optional[float] = None
+
 
     # Temporal SLAs
     sla_deadline_at: datetime

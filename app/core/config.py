@@ -18,9 +18,9 @@ class Settings(BaseSettings):
     PORT: int = 8000
     CORS_ORIGINS: List[str] = ["*"]
 
-    # Database connection (PostgreSQL 16 via asyncpg)
+    # Database connection (SQLite on-disk for local dev, PostgreSQL 16 via asyncpg in cloud/prod)
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/customer_inquiries",
+        default="sqlite+aiosqlite:///customer_inquiries.db",
         description="Async SQLAlchemy database connection string",
     )
     DB_POOL_SIZE: int = 10
@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     BEDROCK_GUARDRAIL_VERSION: str = Field(
         default="DRAFT",
         description="Amazon Bedrock Guardrail version",
+    )
+    BEDROCK_OFFLINE_MODE: Optional[bool] = Field(
+        default=None,
+        description="When true, bypasses live AWS Bedrock API calls and executes local heuristic triage engine. Automatically defaults to True in 'dev' and False in 'prod'/'staging'.",
     )
 
     # Amazon Cognito Identity & RBAC
@@ -75,7 +79,7 @@ class Settings(BaseSettings):
 
     # Inbound Support Email (Dynamically loaded from company_profile.json)
     SUPPORT_EMAIL: str = Field(
-        default="support@cloudscale.io",
+        default="support@company.internal",
         description="Authoritative customer support inbound email address parsed from company profile",
     )
 
@@ -123,6 +127,10 @@ class Settings(BaseSettings):
                         self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
             except Exception:
                 pass
+
+        # Environment-aware offline mode: default to True in local 'dev' (zero spend), False in cloud ('prod' / 'staging')
+        if self.BEDROCK_OFFLINE_MODE is None:
+            self.BEDROCK_OFFLINE_MODE = (self.ENVIRONMENT.lower() == "dev")
 
         return self
 

@@ -62,7 +62,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             gap: '0.35rem',
           }}
         >
-          <span>cloudscale</span>
+          <span>operations</span>
           <span style={{ color: 'var(--pastel-lilac)', fontSize: '1.6rem', lineHeight: '0.8' }}>.</span>
         </div>
         <span

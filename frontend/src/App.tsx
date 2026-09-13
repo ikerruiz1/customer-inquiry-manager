@@ -7,6 +7,11 @@ import {
   fetchInquiries,
   overrideInquiry,
   resolveInquiry,
+  getStoredUser,
+  logoutOperator,
+  fetchCurrentOperator,
+  fetchDashboardMetrics,
+  fetchRegisteredOperators,
 } from './api/client';
 import { INITIAL_AGENTS, INITIAL_INQUIRIES } from './api/mockData';
 import { LoadLogicTopHeader } from './components/LoadLogicTopHeader';
@@ -17,9 +22,13 @@ import { THEMES, type ThemeId } from './types/theme';
 import { type QueueTab } from './components/LoadLogicQueueTable';
 import { NewInquiryModal } from './components/NewInquiryModal';
 import { OverrideModal } from './components/OverrideModal';
+import { AuthModal } from './components/AuthModal';
 import type {
   AgentProfile,
   Inquiry,
+  AuthUser,
+  DashboardMetricsResponse,
+  KPIStats,
 } from './types/inquiry';
 import {
   ChannelEnum,
@@ -30,7 +39,24 @@ import {
 export const App: React.FC = () => {
   const [inquiries, setInquiries] = useState<Inquiry[]>(INITIAL_INQUIRIES);
   const [selectedTicket, setSelectedTicket] = useState<Inquiry | null>(null);
-  const [currentAgent, setCurrentAgent] = useState<AgentProfile>(INITIAL_AGENTS[0]); // Carlos M. / Ethan Miller
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(getStoredUser()));
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => !Boolean(getStoredUser()));
+  const [currentAgent, setCurrentAgent] = useState<AgentProfile>(() => {
+    const stored = getStoredUser();
+    if (stored) {
+      return {
+        id: stored.id,
+        name: stored.name,
+        email: stored.email,
+        role: stored.role,
+        initials: stored.initials || 'OP',
+        color: stored.color || (stored.role === 'Operations_Manager' ? '#8b5cf6' : '#3b82f6'),
+      };
+    }
+    return INITIAL_AGENTS[0];
+  });
+  const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetricsResponse | null>(null);
+  const [registeredOperators, setRegisteredOperators] = useState<AgentProfile[]>(INITIAL_AGENTS);
   const [queueTab, setQueueTab] = useState<QueueTab>('DEFAULT');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isLiveBackend, setIsLiveBackend] = useState<boolean>(false);
@@ -45,9 +71,9 @@ export const App: React.FC = () => {
   const [resetSignal, setResetSignal] = useState<number>(0);
   const [themeId, setThemeId] = useState<ThemeId>(() => {
     try {
-      const saved = localStorage.getItem('cloudscale_ambient_theme');
+      const saved = localStorage.getItem('ambient_theme_v2');
       if (saved === 'aura') {
-        localStorage.setItem('cloudscale_ambient_theme', 'cobalt');
+        localStorage.setItem('ambient_theme_v2', 'cobalt');
         return 'cobalt';
       }
       if (saved && THEMES.some((t) => t.id === saved)) {
@@ -62,13 +88,50 @@ export const App: React.FC = () => {
   const handleSelectTheme = (newTheme: ThemeId) => {
     setThemeId(newTheme);
     try {
-      localStorage.setItem('cloudscale_ambient_theme', newTheme);
+      localStorage.setItem('ambient_theme_v2', newTheme);
     } catch {
       // ignore
     }
   };
 
-  // Load inquiries from client
+  // Check stored session or validate token on initial mount
+  useEffect(() => {
+    const stored = getStoredUser();
+    if (!stored) {
+      setIsAuthenticated(false);
+      setIsAuthModalOpen(true);
+    } else {
+      fetchCurrentOperator()
+        .then(() => setIsAuthenticated(true))
+        .catch(() => {
+          setIsAuthenticated(false);
+          setIsAuthModalOpen(true);
+        });
+    }
+  }, []);
+
+  const handleAuthSuccess = (user: AuthUser) => {
+    const profile: AgentProfile = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      initials: user.initials || user.name.slice(0, 2).toUpperCase(),
+      color: user.color || (user.role === 'Operations_Manager' ? '#8b5cf6' : '#3b82f6'),
+    };
+    setCurrentAgent(profile);
+    setIsAuthenticated(true);
+    setIsAuthModalOpen(false);
+    loadData();
+  };
+
+  const handleLogout = () => {
+    logoutOperator();
+    setIsAuthenticated(false);
+    setIsAuthModalOpen(true);
+  };
+
+  // Load inquiries and live dashboard metrics from client
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -76,8 +139,16 @@ export const App: React.FC = () => {
         const alive = await checkBackendHealth();
         setIsLiveBackend(alive);
       }
-      const data = await fetchInquiries();
+      const [data, metrics, ops] = await Promise.all([
+        fetchInquiries(),
+        fetchDashboardMetrics(),
+        fetchRegisteredOperators(),
+      ]);
       setInquiries(data);
+      setDashboardMetrics(metrics);
+      if (ops && ops.length > 0) {
+        setRegisteredOperators(ops);
+      }
 
       // Keep selected ticket in sync if open
       if (selectedTicket) {
@@ -96,15 +167,15 @@ export const App: React.FC = () => {
     loadData();
   }, []);
 
-  // Periodic polling interval (every 4 seconds for real-time synchronization)
+  // Periodic short-polling interval (every 3000ms for multi-agent real-time concurrency)
   useEffect(() => {
     const interval = setInterval(() => {
       loadData();
-    }, 4000);
+    }, 3000);
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Handle ticket claim
+  // Handle ticket claim with concurrency conflict guard
   const handleClaimTicket = async (ticketId: string) => {
     setIsClaiming(true);
     try {
@@ -112,7 +183,8 @@ export const App: React.FC = () => {
       setInquiries((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
       setSelectedTicket(updated);
     } catch (err: any) {
-      alert(err.message || 'Error claiming ticket');
+      alert(err.message || 'Error al asignar el ticket');
+      await loadData();
     } finally {
       setIsClaiming(false);
     }
@@ -171,8 +243,10 @@ export const App: React.FC = () => {
     setIsInjecting(true);
     try {
       const newInquiry = await createInquiry(payload);
-      setInquiries((prev) => [newInquiry, ...prev]);
-      setSelectedTicket(newInquiry);
+      setInquiries((prev) => [newInquiry, ...prev.filter((i) => i.id !== newInquiry.id)]);
+      setQueueTab('DEFAULT');
+      setSearchQuery('');
+      setSelectedTicket(null);
       setIsNewInquiryModalOpen(false);
     } catch (err: any) {
       alert(err.message || 'Error creating inquiry');
@@ -185,7 +259,7 @@ export const App: React.FC = () => {
   const handleExportAuditLogs = () => {
     const exportData = {
       exportTimestamp: new Date().toISOString(),
-      platform: 'Customer Inquiry Manager (ExampleCorp)',
+      platform: 'Customer Inquiry Management Platform',
       operator: currentAgent.name,
       inquiriesCount: inquiries.length,
       inquiries: inquiries.map((i) => ({
@@ -202,7 +276,6 @@ export const App: React.FC = () => {
         sentiment_score: i.sentiment_score,
         churn_risk: i.churn_risk,
         was_edited: i.was_edited,
-        is_simulation: i.is_simulation,
         assigned_agent_id: i.assigned_agent_id,
         resolution_text: i.resolution_text,
       })),
@@ -222,20 +295,56 @@ export const App: React.FC = () => {
     if (!searchQuery.trim()) return inquiries;
     const q = searchQuery.toLowerCase();
     return inquiries.filter((ticket) => {
-      const matchSubj = ticket.subject.toLowerCase().includes(q);
-      const matchBody = ticket.body.toLowerCase().includes(q);
-      const matchCust = ticket.customer_name.toLowerCase().includes(q);
-      const matchEmail = ticket.customer_email.toLowerCase().includes(q);
-      const matchId = ticket.id.toLowerCase().includes(q);
-      const matchDept = ticket.department.toLowerCase().includes(q);
-      const matchOrder = ticket.entities?.order_id?.toLowerCase().includes(q);
+      const matchSubj = ticket.subject ? ticket.subject.toLowerCase().includes(q) : false;
+      const matchBody = ticket.body ? ticket.body.toLowerCase().includes(q) : false;
+      const matchCust = ticket.customer_name ? ticket.customer_name.toLowerCase().includes(q) : false;
+      const matchEmail = ticket.customer_email ? ticket.customer_email.toLowerCase().includes(q) : false;
+      const matchId = ticket.id ? ticket.id.toLowerCase().includes(q) : false;
+      const matchDept = ticket.department ? ticket.department.toLowerCase().includes(q) : false;
+      const matchOrder = ticket.entities?.order_id ? String(ticket.entities.order_id).toLowerCase().includes(q) : false;
       return matchSubj || matchBody || matchCust || matchEmail || matchId || matchDept || matchOrder;
     });
   }, [inquiries, searchQuery]);
 
-  // Derived KPIs
-  const kpis = useMemo(() => calculateKPIs(inquiries), [inquiries]);
+  // Derived KPIs with live SQL aggregation priority
+  const kpis: KPIStats = useMemo(() => {
+    if (dashboardMetrics?.kpis) {
+      return {
+        slaComplianceRate: dashboardMetrics.kpis.sla_compliance_rate,
+        aiAcceptanceRate: dashboardMetrics.kpis.ai_acceptance_rate,
+        avgMttrSeconds: dashboardMetrics.kpis.avg_mttr_seconds,
+        activeCount: dashboardMetrics.kpis.active_count,
+        p1Count: dashboardMetrics.kpis.p1_count,
+        estimatedCostTodayEur: dashboardMetrics.kpis.estimated_cost_today_eur,
+      };
+    }
+    return calculateKPIs(inquiries);
+  }, [dashboardMetrics, inquiries]);
   const currentTheme = THEMES.find((t) => t.id === themeId) || THEMES[0];
+
+  // Completely gate project rendering behind active authentication (Zero-Trust)
+  if (!isAuthenticated) {
+    return (
+      <div
+        style={{
+          minHeight: '100vh',
+          width: '100%',
+          backgroundColor: '#0B0F17',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px',
+          boxSizing: 'border-box',
+        }}
+      >
+        <AuthModal
+          isOpen={true}
+          onSuccess={handleAuthSuccess}
+          canClose={false}
+        />
+      </div>
+    );
+  }
 
   return (
     <>
@@ -267,6 +376,8 @@ export const App: React.FC = () => {
         <LoadLogicTopHeader
           currentAgent={currentAgent}
           onSelectAgent={setCurrentAgent}
+          onLogout={handleLogout}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
           isLiveBackend={isLiveBackend}
           isDemoMode={isDemoMode}
           onToggleDemoMode={() => setIsDemoMode(!isDemoMode)}
@@ -279,6 +390,7 @@ export const App: React.FC = () => {
           isLayoutCustomized={isLayoutCustomized}
           currentThemeId={themeId}
           onSelectTheme={handleSelectTheme}
+          modelName={inquiries.find((i) => i.model_id)?.model_id || 'Claude Haiku 4.5'}
         />
 
       {/* 2. Interactive Mobile-Widget Drag & Drop Operations Grid */}
@@ -295,6 +407,8 @@ export const App: React.FC = () => {
           onTabChange={setQueueTab}
           onLayoutChange={setIsLayoutCustomized}
           resetSignal={resetSignal}
+          dashboardMetrics={dashboardMetrics}
+          operators={registeredOperators}
         />
       </main>
 
@@ -332,6 +446,7 @@ export const App: React.FC = () => {
             onOpenOverrideModal={() => setIsOverrideModalOpen(true)}
             onClaimTicket={handleClaimTicket}
             isResolving={isResolving}
+            operators={registeredOperators}
           />
         </div>
       )}
@@ -353,6 +468,14 @@ export const App: React.FC = () => {
         onClose={() => setIsNewInquiryModalOpen(false)}
         onSubmit={handleCreateCustomerInquiry}
         isSubmitting={isInjecting}
+      />
+
+      {/* 6. Enforced RFC 6238 Software Token TOTP MFA Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onSuccess={handleAuthSuccess}
+        onClose={() => setIsAuthModalOpen(false)}
+        canClose={Boolean(getStoredUser())}
       />
     </div>
     </>

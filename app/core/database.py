@@ -12,14 +12,16 @@ from app.core.config import settings
 logger = logging.getLogger("app.core.database")
 
 # Build async engine with connection pooling and statement timeout guardrails
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    pool_size=settings.DB_POOL_SIZE,
-    max_overflow=settings.DB_MAX_OVERFLOW,
-    pool_timeout=settings.DB_POOL_TIMEOUT,
-    pool_pre_ping=True,
-    echo=settings.DEBUG,
-)
+engine_kwargs: dict = {"echo": settings.DEBUG}
+if "sqlite" in settings.DATABASE_URL:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    engine_kwargs["pool_size"] = settings.DB_POOL_SIZE
+    engine_kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
+    engine_kwargs["pool_timeout"] = settings.DB_POOL_TIMEOUT
+    engine_kwargs["pool_pre_ping"] = True
+
+engine = create_async_engine(settings.DATABASE_URL, **engine_kwargs)
 
 # Async session factory
 AsyncSessionLocal = async_sessionmaker(

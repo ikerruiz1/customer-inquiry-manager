@@ -100,6 +100,13 @@ async def process_and_persist_inquiry(
 
     entities = dict(triage_result.key_entities or {})
     entities["sender_verification"] = "VERIFIED_CUSTOMER" if is_registered_customer else "UNVERIFIED_SENDER"
+    entities["confidence_score"] = triage_result.confidence_score
+    entities["bedrock_latency_ms"] = triage_result.latency_ms
+    entities["model_id"] = triage_result.model_id
+    entities["input_tokens"] = triage_result.input_tokens
+    entities["output_tokens"] = triage_result.output_tokens
+    entities["cost_eur"] = triage_result.cost_eur
+
 
     agent_notes = triage_result.agent_copilot_notes or ""
     if verification_mode == "FLAG_UNVERIFIED" and not is_registered_customer:
