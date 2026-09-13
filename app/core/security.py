@@ -49,7 +49,7 @@ async def get_current_user(
     if settings.ENVIRONMENT == "dev" and (not credentials or credentials.credentials == "dev-token"):
         return {
             "sub": "00000000-0000-0000-0000-000000000001",
-            "email": "lead.agent@cloudscale.io",
+            "email": "lead.agent@company.internal",
             "cognito:groups": ["Operations_Managers", "Tier1_Agents"],
             "token_use": "access",
         }
@@ -84,6 +84,15 @@ async def get_current_user(
         except JWTError as exc:
             logger.warning(f"JWT signature verification failed: {exc}")
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+
+    # In production, signature verification against Cognito JWKS is strictly mandatory
+    if settings.ENVIRONMENT != "dev":
+        logger.error("Cognito JWKS verification failed or JWKS unavailable in production")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token signature verification failed: Cognito JWKS unavailable or untrusted signature",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Fallback to unverified claims strictly in local dev/testing environments
     try:

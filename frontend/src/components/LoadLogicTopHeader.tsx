@@ -7,17 +7,19 @@ import {
   Lock,
   ChevronDown,
   Server,
-  Check,
   RotateCcw,
+  LogOut,
+  UserCheck,
 } from 'lucide-react';
 import type { AgentProfile } from '../types/inquiry';
-import { INITIAL_AGENTS } from '../api/mockData';
 import { ThemeSelector } from './ThemeSelector';
 import type { ThemeId } from '../types/theme';
 
 interface LoadLogicTopHeaderProps {
   currentAgent: AgentProfile;
-  onSelectAgent: (agent: AgentProfile) => void;
+  onSelectAgent?: (agent: AgentProfile) => void;
+  onLogout?: () => void;
+  onOpenAuthModal?: () => void;
   isLiveBackend: boolean;
   isDemoMode: boolean;
   onToggleDemoMode: () => void;
@@ -30,11 +32,14 @@ interface LoadLogicTopHeaderProps {
   isLayoutCustomized: boolean;
   currentThemeId: ThemeId;
   onSelectTheme: (themeId: ThemeId) => void;
+  modelName?: string;
 }
 
 export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   currentAgent,
-  onSelectAgent,
+  onSelectAgent: _onSelectAgent,
+  onLogout,
+  onOpenAuthModal,
   isLiveBackend,
   isDemoMode,
   onToggleDemoMode,
@@ -47,7 +52,9 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   isLayoutCustomized,
   currentThemeId,
   onSelectTheme,
+  modelName,
 }) => {
+
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -97,16 +104,16 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                 <div
                   style={{
-                    width: '13px',
-                    height: '8px',
-                    backgroundColor: 'var(--color-black)',
+                    width: '12px',
+                    height: '10px',
+                    backgroundColor: 'var(--color-dot-green)',
                     borderRadius: '2px',
                   }}
                 />
                 <div
                   style={{
-                    width: '13px',
-                    height: '12px',
+                    width: '12px',
+                    height: '10px',
                     backgroundColor: 'var(--color-black)',
                     borderRadius: '2px',
                   }}
@@ -124,15 +131,15 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                   lineHeight: 1.1,
                 }}
               >
-                ExampleCorp
+                Inquiry Operations
               </span>
               <span style={{ fontSize: '0.67rem', color: 'var(--color-text-muted)', fontWeight: 600 }}>
-                AI Triage Operations
+                Incident & Triage Console
               </span>
             </div>
           </div>
 
-          {/* Operator Profile Card with Cognito TOTP MFA Switcher */}
+          {/* Operator Profile Card with Authenticated Session Menu */}
           <div style={{ position: 'relative' }} ref={dropdownRef}>
             <div
               onClick={() => setAgentMenuOpen(!agentMenuOpen)}
@@ -148,7 +155,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                 transition: 'border-color 0.15s ease',
                 boxShadow: '0 1px 3px rgba(12, 13, 13, 0.04)',
               }}
-              title="Switch Active Operator (Cognito RFC 6238 TOTP MFA Enforced)"
+              title="Authenticated Operator Profile (RFC 6238 TOTP Verified)"
             >
               <div
                 style={{
@@ -173,7 +180,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                   {currentAgent.name}
                 </span>
                 <span style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                  ({currentAgent.role === 'Operations_Manager' ? 'Supervisor' : 'Tier 1 Agent'})
+                  ({currentAgent.role === 'Operations_Manager' ? 'Operations Manager' : 'Tier 1 Agent'})
                 </span>
               </div>
 
@@ -181,75 +188,126 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
               <ChevronDown size={13} style={{ color: 'var(--color-text-muted)' }} />
             </div>
 
-            {/* Operator Switcher Dropdown */}
+            {/* Operator Session Dropdown */}
             {agentMenuOpen && (
               <div
                 style={{
                   position: 'absolute',
                   top: 'calc(100% + 6px)',
                   left: 0,
-                  width: '240px',
+                  width: '280px',
                   backgroundColor: '#FFFFFF',
                   border: '1px solid var(--color-border)',
                   borderRadius: '16px',
                   boxShadow: '0 12px 30px rgba(0, 0, 0, 0.12)',
-                  padding: '6px',
+                  padding: '12px',
                   zIndex: 60,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '2px',
+                  gap: '8px',
                 }}
               >
-                <div style={{ padding: '6px 8px', fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-text-faint)', textTransform: 'uppercase' }}>
-                  Select Operator Context
-                </div>
-                {INITIAL_AGENTS.map((agent) => (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', paddingBottom: '8px', borderBottom: '1px solid rgba(12, 13, 13, 0.08)' }}>
                   <div
-                    key={agent.id}
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      backgroundColor: currentAgent.color || '#0C0D0D',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.88rem',
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {currentAgent.initials}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--color-black)' }}>
+                      {currentAgent.name}
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
+                      {currentAgent.email}
+                    </span>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        fontSize: '0.66rem',
+                        fontWeight: 700,
+                        color: currentAgent.role === 'Operations_Manager' ? '#6D28D9' : '#1D4ED8',
+                        backgroundColor: currentAgent.role === 'Operations_Manager' ? '#EDE9FE' : '#DBEAFE',
+                        padding: '2px 6px',
+                        borderRadius: '4px',
+                        marginTop: '4px',
+                        width: 'fit-content',
+                      }}
+                    >
+                      {currentAgent.role === 'Operations_Manager'
+                        ? 'Operations Manager'
+                        : 'Tier 1 Support Agent'}
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', color: 'var(--color-text-muted)', padding: '2px 4px' }}>
+                  <UserCheck size={13} style={{ color: 'var(--color-dot-green)' }} />
+                  <span>Two-Factor Authentication Active</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px' }}>
+                  <button
+                    type="button"
                     onClick={() => {
-                      onSelectAgent(agent);
                       setAgentMenuOpen(false);
+                      if (onOpenAuthModal) onOpenAuthModal();
                     }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '6px 10px',
-                      borderRadius: '10px',
-                      backgroundColor: currentAgent.id === agent.id ? 'var(--color-sage)' : 'transparent',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--color-border)',
+                      backgroundColor: '#FAFAFA',
+                      color: 'var(--color-black)',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
                       cursor: 'pointer',
-                      transition: 'background-color 0.12s ease',
+                      textAlign: 'left',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div
-                        style={{
-                          width: '24px',
-                          height: '24px',
-                          borderRadius: '6px',
-                          backgroundColor: agent.color,
-                          color: '#ffffff',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                        }}
-                      >
-                        {agent.initials}
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--color-black)' }}>
-                          {agent.name}
-                        </span>
-                        <span style={{ fontSize: '0.67rem', color: 'var(--color-text-muted)' }}>
-                          {agent.role === 'Operations_Manager' ? 'Operations Manager' : 'Tier 1 Agent'}
-                        </span>
-                      </div>
-                    </div>
-                    {currentAgent.id === agent.id && <Check size={14} color="var(--color-black)" />}
-                  </div>
-                ))}
+                    <Lock size={13} />
+                    <span>Switch Operator / Sign In</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAgentMenuOpen(false);
+                      if (onLogout) onLogout();
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      backgroundColor: '#FEE2E2',
+                      color: '#991B1B',
+                      fontSize: '0.76rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <LogOut size={13} />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -298,7 +356,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
           >
             <span className="status-dot status-dot-green" />
             <strong style={{ color: '#0C0D0D', fontWeight: 800 }}>Bedrock GenAI</strong>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem' }}>Claude Haiku 4.5</span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem' }}>{modelName || 'Claude Haiku 4.5'}</span>
           </div>
         </div>
       </div>

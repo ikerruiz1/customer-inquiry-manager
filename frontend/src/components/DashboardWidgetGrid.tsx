@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GripVertical } from 'lucide-react';
-import type { KPIStats, Inquiry, AgentProfile } from '../types/inquiry';
+import type { KPIStats, Inquiry, AgentProfile, DashboardMetricsResponse } from '../types/inquiry';
 import {
   TasklySlaCard,
   TasklyMttrCard,
@@ -32,7 +32,7 @@ const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   'sentiment_distribution',
   'queue_table',
 ];
-const STORAGE_KEY = 'cloudscale_widget_order_v7';
+const STORAGE_KEY = 'enterprise_widget_order_v8';
 
 interface DashboardWidgetGridProps {
   kpis: KPIStats;
@@ -46,6 +46,8 @@ interface DashboardWidgetGridProps {
   onTabChange: (tab: QueueTab) => void;
   onLayoutChange?: (isCustom: boolean) => void;
   resetSignal?: number;
+  dashboardMetrics?: DashboardMetricsResponse | null;
+  operators?: AgentProfile[];
 }
 
 export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
@@ -60,6 +62,8 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
   onTabChange,
   onLayoutChange,
   resetSignal,
+  dashboardMetrics,
+  operators,
 }) => {
   const [widgets, setWidgets] = useState<WidgetId[]>(() => {
     try {
@@ -320,6 +324,7 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
                 kpis={kpis}
                 inquiries={inquiries}
                 dragHandle={renderDragHandle('kpi_sla')}
+                dashboardMetrics={dashboardMetrics}
               />
             )}
 
@@ -329,6 +334,7 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
                 kpis={kpis}
                 inquiries={inquiries}
                 dragHandle={renderDragHandle('kpi_mttr')}
+                dashboardMetrics={dashboardMetrics}
               />
             )}
 
@@ -338,6 +344,7 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
                 kpis={kpis}
                 inquiries={inquiries}
                 dragHandle={renderDragHandle(id)}
+                dashboardMetrics={dashboardMetrics}
               />
             )}
 
@@ -346,15 +353,16 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               <TasklyDomainBarChart
                 inquiries={inquiries}
                 dragHandle={renderDragHandle('domain_distribution')}
+                dashboardMetrics={dashboardMetrics}
               />
             )}
 
             {/* 4. Middle Row Right: Priority & SLA Hatched Pill Bar Chart */}
             {id === 'priority_distribution' && (
               <TasklyPriorityBarChart
-                kpis={kpis}
                 inquiries={inquiries}
                 dragHandle={renderDragHandle('priority_distribution')}
+                dashboardMetrics={dashboardMetrics}
               />
             )}
 
@@ -363,6 +371,7 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               <TasklySourcesBarChart
                 inquiries={inquiries}
                 dragHandle={renderDragHandle('sources_distribution')}
+                dashboardMetrics={dashboardMetrics}
               />
             )}
 
@@ -371,6 +380,7 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               <TasklySentimentBarChart
                 inquiries={inquiries}
                 dragHandle={renderDragHandle('sentiment_distribution')}
+                dashboardMetrics={dashboardMetrics}
               />
             )}
 
@@ -387,6 +397,7 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
                   activeTab={activeTab}
                   onTabChange={onTabChange}
                   dragHandle={renderDragHandle('queue_table')}
+                  operators={operators}
                 />
               </div>
             )}

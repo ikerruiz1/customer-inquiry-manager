@@ -77,3 +77,28 @@ class BedrockTriageOutput(BaseModel):
         le=1.0,
         description="Model confidence level in classification accuracy",
     )
+    latency_ms: int = Field(
+        default=0,
+        ge=0,
+        description="Inference execution latency in milliseconds",
+    )
+    model_id: str = Field(
+        default="eu.anthropic.claude-haiku-4-5-20251001-v1:0",
+        description="Authoritative AWS Bedrock model identifier",
+    )
+    input_tokens: int = Field(
+        default=0,
+        ge=0,
+        description="Bedrock Converse input token count",
+    )
+    output_tokens: int = Field(
+        default=0,
+        ge=0,
+        description="Bedrock Converse output token count",
+    )
+    cost_eur: float = Field(
+        default=0.0,
+        ge=0.0,
+        description="Calculated FinOps ingestion cost in EUR",
+    )
+

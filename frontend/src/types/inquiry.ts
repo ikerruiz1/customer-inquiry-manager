@@ -78,9 +78,14 @@ export interface Inquiry {
   confidence_score?: number; // 0.0 to 1.0
   triage_rationale?: string;
   bedrock_latency_ms?: number;
+  model_id?: string;
+  cost_eur?: number;
+  input_tokens?: number;
+  output_tokens?: number;
   suggested_strategy?: ResponseStrategyEnum;
   suggested_response?: string;
   agent_copilot_notes?: string;
+
 
   // SLA Management
   sla_deadline_at: string; // ISO 8601 UTC
@@ -94,7 +99,6 @@ export interface Inquiry {
   human_reviewed: boolean;
   was_edited?: boolean;
   edit_character_distance?: number;
-  is_simulation?: boolean;
 
   created_at: string;
   updated_at: string;
@@ -120,6 +124,35 @@ export interface AgentProfile {
   color: string;
 }
 
+export interface MFAChallenge {
+  challenge_name: string;
+  session: string;
+  message: string;
+  totp_secret?: string;
+  otpauth_url?: string;
+  email?: string;
+}
+
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+  role: 'Tier1_Agent' | 'Operations_Manager';
+  initials: string;
+  color: string;
+  groups?: string[];
+}
+
+export interface TokenAuthResponse {
+  access_token: string;
+  id_token: string;
+  refresh_token?: string;
+  token_type: string;
+  expires_in: number;
+  groups?: string[];
+  user?: AuthUser;
+}
+
 export interface KPIStats {
   activeCount: number;
   p1Count: number;
@@ -129,6 +162,28 @@ export interface KPIStats {
   estimatedCostTodayEur: number; // e.g. 0.008 EUR
 }
 
+export interface KPISummary {
+  sla_compliance_rate: number;
+  ai_acceptance_rate: number;
+  avg_mttr_seconds: number;
+  active_count: number;
+  p1_count: number;
+  estimated_cost_today_eur: number;
+}
+
+export interface DistributionMetrics {
+  departments: Record<string, number>;
+  priorities: Record<string, number>;
+  channels: Record<string, number>;
+  sentiments: Record<string, number>;
+}
+
+export interface DashboardMetricsResponse {
+  kpis: KPISummary;
+  distributions: DistributionMetrics;
+  total_inquiries: number;
+}
+
 export interface InquiryFilters {
   statusTab: 'ACTIVE' | 'IN_PROGRESS' | 'RESOLVED' | 'ALL';
   department?: DepartmentEnum | 'ALL';
@@ -136,3 +191,4 @@ export interface InquiryFilters {
   churnOnly: boolean;
   searchQuery: string;
 }
+

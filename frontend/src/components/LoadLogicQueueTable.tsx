@@ -8,7 +8,6 @@ import {
   CreditCard,
   Star,
   ChevronRight,
-  Zap,
   Flame,
   User,
   SlidersHorizontal,
@@ -49,6 +48,7 @@ interface LoadLogicQueueTableProps {
   activeTab: QueueTab;
   onTabChange: (tab: QueueTab) => void;
   dragHandle?: React.ReactNode;
+  operators?: AgentProfile[];
 }
 
 export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
@@ -61,6 +61,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
   activeTab,
   onTabChange,
   dragHandle,
+  operators,
 }) => {
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
   const [activeFacetFilter, setActiveFacetFilter] = useState<FacetFilter>('ALL');
@@ -73,6 +74,13 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Reset quick facet filter when switching to DEFAULT or ALL queue view
+  useEffect(() => {
+    if (activeTab === 'DEFAULT' || activeTab === 'ALL') {
+      setActiveFacetFilter('ALL');
+    }
+  }, [activeTab]);
 
   // Compute tab counts
   const tabCounts = {
@@ -120,8 +128,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     return true;
   });
 
-  // 3. Automated ITIL Q38 Urgency Hierarchy Sorting (Strict Default Mode)
-  // Precedence: 1. is_sla_breached DESC -> 2. priority (P1>P2>P3>P4) -> 3. churn_risk DESC -> 4. sla_deadline_at ASC -> 5. created_at ASC
+  // 3. Sorting Engine: ITIL SLA Urgency Prioritization (Breached > P1-P4 > Churn Risk > SLA Deadline > Newest)
   const sortedInquiries = [...facetFilteredInquiries].sort((a, b) => {
     const now = currentTime;
     const aDeadline = new Date(a.sla_deadline_at).getTime();
@@ -148,8 +155,8 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     // 4. sla_deadline_at ASC
     if (aDeadline !== bDeadline) return aDeadline - bDeadline;
 
-    // 5. created_at ASC
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    // 5. created_at DESC (tie-breaker: newer inquiries first)
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
   const getChannelBadge = (channel: ChannelEnum) => {
@@ -433,7 +440,8 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
 
   const getAssignedAgent = (agentId?: string | null) => {
     if (!agentId) return null;
-    return INITIAL_AGENTS.find((a) => a.id === agentId);
+    const pool = operators && operators.length > 0 ? operators : INITIAL_AGENTS;
+    return pool.find((a) => a.id === agentId || a.email === agentId);
   };
 
   // Fixed CSS Grid Layout across Table Headers and Data Rows (6 Columns matching Image 2)
@@ -563,27 +571,8 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
             </div>
           </div>
 
-          {/* Right indicator: Active Sort Policy & Drag Handle */}
+          {/* Right indicator: Drag Handle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '5px 12px',
-                borderRadius: '9999px',
-                backgroundColor: '#FAFAFA',
-                border: '1px solid rgba(12, 13, 13, 0.08)',
-                fontSize: '0.72rem',
-                fontWeight: 700,
-                color: '#4B5563',
-              }}
-              title="Automated ITIL Tie-Breaking: Breached -> P1..P4 -> Churn Risk -> Nearest SLA -> FIFO"
-            >
-              <Zap size={11} color="#047857" />
-              <span>ITIL Auto-Urgent Priority Active</span>
-            </div>
-
             {dragHandle}
           </div>
         </div>
@@ -950,23 +939,23 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                 {/* Col 3: Issue & Key Entities (Flexible 1fr) */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {ticket.is_simulation && (
+                    {Date.now() - new Date(ticket.created_at).getTime() < 180000 && (
                       <span
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: '2px',
-                          padding: '1px 5px',
-                          borderRadius: '4px',
-                          backgroundColor: '#FEF3C7',
-                          color: '#92400E',
-                          border: '1px solid #FDE68A',
-                          fontSize: '0.65rem',
+                          gap: '4px',
+                          padding: '2px 7px',
+                          borderRadius: '9999px',
+                          backgroundColor: '#ECFDF5',
+                          color: '#047857',
+                          border: '1px solid #A7F3D0',
+                          fontSize: '0.64rem',
                           fontWeight: 800,
-                          letterSpacing: '0.03em',
+                          letterSpacing: '0.04em',
                         }}
                       >
-                        <Zap size={9} /> SIM
+                        <span className="status-dot status-dot-green" /> NEW INTAKE
                       </span>
                     )}
 

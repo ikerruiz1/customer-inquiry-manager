@@ -11,7 +11,7 @@ export const INITIAL_AGENTS: AgentProfile[] = [
   {
     id: '00000000-0000-0000-0000-000000000001',
     name: 'Carlos M.',
-    email: 'carlos.m@cloudscale.io',
+    email: 'carlos.m@company.internal',
     role: 'Tier1_Agent',
     initials: 'CM',
     color: '#3b82f6', // Blue
@@ -19,7 +19,7 @@ export const INITIAL_AGENTS: AgentProfile[] = [
   {
     id: '00000000-0000-0000-0000-000000000002',
     name: 'Laura G.',
-    email: 'laura.g@cloudscale.io',
+    email: 'laura.g@company.internal',
     role: 'Tier1_Agent',
     initials: 'LG',
     color: '#10b981', // Emerald
@@ -27,7 +27,7 @@ export const INITIAL_AGENTS: AgentProfile[] = [
   {
     id: '00000000-0000-0000-0000-000000000099',
     name: 'Alex Rivera (Lead)',
-    email: 'alex.rivera@cloudscale.io',
+    email: 'alex.rivera@company.internal',
     role: 'Operations_Manager',
     initials: 'AR',
     color: '#8b5cf6', // Purple
@@ -42,8 +42,8 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     channel: ChannelEnum.BILLING,
     customer_email: 'cto@fintech-pay.io',
     customer_name: 'Elena Rostova',
-    subject: '[DISPUTA BANCARIA] Retención de 450.00 EUR en cuenta Enterprise',
-    body: 'Nos han bloqueado 450.00 EUR por una supuesta disputa no reconocida en Stripe (ref: dp_88421). Si los fondos no son liberados antes de las 18:00 UTC, cancelaremos nuestras 25 licencias Enterprise y trasladaremos nuestra infraestructura a la competencia.',
+    subject: '[BANK DISPUTE] 450.00 EUR hold on Enterprise account',
+    body: 'We have an active 450.00 EUR hold placed on our account due to an unrecognized Stripe dispute (ref: dp_88421). If these funds are not released by 18:00 UTC today, we will terminate our 25 Enterprise licenses and migrate our infrastructure to a competitor.',
     status: InquiryStatusEnum.UNASSIGNED,
     department: DepartmentEnum.BILLING,
     priority: PriorityEnum.P1,
@@ -54,18 +54,18 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     entities: {
       order_id: 'dp_88421',
       monetary_amount: '450.00 EUR',
-      customer_deadline: 'Hoy 18:00 UTC',
-      product_affected: 'ExampleCorp Billing Gateway',
+      customer_deadline: 'Today 18:00 UTC',
+      product_affected: 'Billing Gateway',
     },
     confidence_score: 0.98,
     triage_rationale:
-      'Clasificado en BILLING (P1) debido a retención indebida de 450.00 EUR en disputa bancaria Stripe con amenaza explícita de rescisión de 25 licencias Enterprise (riesgo crítico de churn).',
+      'Classified under BILLING (P1) due to improper 450.00 EUR banking hold in Stripe dispute with explicit threat to terminate 25 Enterprise licenses (critical churn risk).',
     bedrock_latency_ms: 612,
     suggested_strategy: ResponseStrategyEnum.EMPATHETIC_DEFUSING,
     suggested_response:
-      'Estimado equipo de FinTech Pay, hemos paralizado cautelarmente la retención de fondos y transferido el expediente al equipo de tesorería senior para conciliar la disputa dp_88421 con la entidad bancaria. Nos pondremos en contacto antes de las 18:00 UTC con la resolución definitiva.',
+      'Dear FinTech Pay team, we have placed an immediate administrative hold on the fund retention and escalated the case to our senior treasury group to reconcile dispute dp_88421 directly with the acquiring institution. We will provide a definitive resolution before 18:00 UTC today.',
     agent_copilot_notes:
-      'Nota Interna: El cliente tiene contratado el plan Enterprise anual (MRR: 4.800€). No rechazar la disputa sin consultar antes con el departamento de cuentas clave.',
+      'Internal Note: Customer is on an annual Enterprise tier (MRR: 4,800 EUR). Do not dispute reject without consulting key accounts lead.',
     sla_deadline_at: new Date(now + 28 * 60 * 1000).toISOString(), // 28 mins left
     human_reviewed: false,
     created_at: new Date(now - 15 * 60 * 1000).toISOString(),
@@ -76,8 +76,8 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     channel: ChannelEnum.EMAIL,
     customer_email: 'sre-team@nexuscloud.com',
     customer_name: 'David Vance',
-    subject: 'Caída general: 504 Gateway Timeout en clúster gestionado de Kubernetes',
-    body: 'Desde el release de las 14:00, todos los pods en el clúster k8s-prod-eu1 están arrojando error 504 Gateway Timeout y fallando con código ERR_POD_OOMKILLED. Nuestros clientes no pueden acceder al checkout de pagos.',
+    subject: 'Outage Alert: 504 Gateway Timeout on managed Kubernetes cluster',
+    body: 'Since the 14:00 deployment, all pods in cluster k8s-prod-eu1 are throwing 504 Gateway Timeout errors and failing with ERR_POD_OOMKILLED status. End users are unable to reach the payment checkout flow.',
     status: InquiryStatusEnum.CLAIMED,
     department: DepartmentEnum.TECH_SUPPORT,
     priority: PriorityEnum.P1,
@@ -87,18 +87,18 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     churn_risk: true,
     entities: {
       error_code: '504 Gateway Timeout / ERR_POD_OOMKILLED',
-      product_affected: 'ExampleCorp Managed K8s',
+      product_affected: 'Managed Kubernetes',
       order_id: 'k8s-prod-eu1',
     },
     confidence_score: 0.99,
     triage_rationale:
-      'Incidencia crítica de servicio (P1): interrupción total del pipeline de pagos por fallo de memoria OOM en clúster k8s de producción.',
+      'Critical service outage (P1): complete disruption of payment checkout pipeline due to OOM memory exhaustion in production Kubernetes cluster.',
     bedrock_latency_ms: 580,
     suggested_strategy: ResponseStrategyEnum.DIRECT_RESOLUTION,
     suggested_response:
-      'Hola David, hemos identificado un estrangulamiento de memoria en los nodos de control de k8s-prod-eu1. Nuestro equipo SRE está aprovisionando nodos de cómputo adicionales para restablecer el tráfico de pods de inmediato.',
+      'Hello David, we have identified memory throttling across the control plane nodes of k8s-prod-eu1. Our SRE team is provisioning additional compute worker capacity to restore pod traffic immediately.',
     agent_copilot_notes:
-      'Nota Interna: Se ha verificado en CloudWatch que el nodo worker-04 alcanzó 99% de RAM. Desplegando autoscaling.',
+      'Internal Note: CloudWatch metrics confirmed node worker-04 reached 99% RAM saturation. Initiated autoscaling group surge capacity.',
     sla_deadline_at: new Date(now + 42 * 60 * 1000).toISOString(), // 42 mins left
     assigned_agent_id: '00000000-0000-0000-0000-000000000001', // Claimed by Carlos M.
     claimed_at: new Date(now - 5 * 60 * 1000).toISOString(),
@@ -111,8 +111,8 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     channel: ChannelEnum.TRUSTPILOT,
     customer_email: 'marcos.dev@outlook.com',
     customer_name: 'Marcos Benítez',
-    subject: '[Trustpilot 1★] Pésimo soporte y lentitud extrema en la API',
-    body: 'Llevo 3 días esperando a que me activen el certificado SSL en mi dominio personalizado. El soporte es inexistente y mi tienda online sigue dando aviso de sitio inseguro. Una vergüenza.',
+    subject: '[Trustpilot 1-Star] Unacceptable support delay and API latency',
+    body: 'I have been waiting for 3 days for custom domain SSL certificate provisioning. Support has been completely absent and my storefront continues to show insecure connection warnings. Highly disappointing.',
     status: InquiryStatusEnum.UNASSIGNED,
     department: DepartmentEnum.ACCOUNTS,
     priority: PriorityEnum.P2,
@@ -121,17 +121,17 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     sentiment_score: -0.92,
     churn_risk: true,
     entities: {
-      product_affected: 'ExampleCorp Custom Domains / SSL',
+      product_affected: 'Custom Domains / SSL',
     },
     confidence_score: 0.94,
     triage_rationale:
-      'Reseña pública de 1 estrella en Trustpilot con alto impacto reputacional. Requiere protocolo urgente de desescalada.',
+      'Public 1-star Trustpilot review with severe reputational impact. Requires immediate de-escalation protocol.',
     bedrock_latency_ms: 630,
     suggested_strategy: ResponseStrategyEnum.EMPATHETIC_DEFUSING,
     suggested_response:
-      'Hola Marcos, lamentamos profundamente el retraso en la emisión de tu certificado SSL. Hemos forzado la validación DNS de tu dominio de forma prioritaria para que quede activo en los próximos 10 minutos.',
+      'Hello Marcos, we sincerely apologize for the delay in issuing your SSL certificate. We have expedited DNS validation for your domain with highest priority, and it will be active within the next 10 minutes.',
     agent_copilot_notes:
-      'Nota Interna: Validar en Route53 que los registros CNAME no tengan conflicto antes de contestar.',
+      'Internal Note: Verify in Route 53 that CNAME challenge records have no conflicting CAA policies before replying.',
     sla_deadline_at: new Date(now + 95 * 60 * 1000).toISOString(), // 1h 35m left
     human_reviewed: false,
     created_at: new Date(now - 45 * 60 * 1000).toISOString(),
@@ -142,8 +142,8 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     channel: ChannelEnum.WEB_FORM,
     customer_email: 'jorge.developer@saasapp.es',
     customer_name: 'Jorge Salgado',
-    subject: 'Duda sobre configuración de cabeceras CORS en Gateway API',
-    body: 'Estamos integrando el frontend en React con el Gateway API de ExampleCorp y recibimos error de CORS origin not allowed desde localhost:5173. ¿Podríais indicarnos cómo añadir el origen en el archivo de configuración?',
+    subject: 'Configuration question regarding CORS headers on Gateway API',
+    body: 'We are integrating our React frontend with the Gateway API and encountering a CORS origin not allowed error from localhost:5173. Could you advise on how to configure the allowed origin in the configuration file?',
     status: InquiryStatusEnum.UNASSIGNED,
     department: DepartmentEnum.TECH_SUPPORT,
     priority: PriorityEnum.P3,
@@ -152,18 +152,18 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     sentiment_score: 0.1,
     churn_risk: false,
     entities: {
-      product_affected: 'ExampleCorp Gateway API',
+      product_affected: 'API Gateway',
       error_code: 'CORS Origin Not Allowed',
     },
     confidence_score: 0.97,
     triage_rationale:
-      'Consulta técnica habitual de integración (P3). Cero riesgo de churn, tono educado y colaborativo.',
+      'Standard developer integration inquiry (P3). Zero churn risk, polite collaborative tone.',
     bedrock_latency_ms: 540,
     suggested_strategy: ResponseStrategyEnum.DIRECT_RESOLUTION,
     suggested_response:
-      'Hola Jorge, para habilitar orígenes locales en el Gateway API, edita tu bloque de configuración en app/core/config.py o mediante la variable CORS_ORIGINS = ["http://localhost:5173"]. Adjuntamos el enlace a la documentación oficial.',
+      'Hello Jorge, to enable local development origins on the API Gateway, update your configuration in app/core/config.py or configure CORS_ORIGINS = ["http://localhost:5173"]. Refer to the attached microservices documentation for details.',
     agent_copilot_notes:
-      'Nota Interna: Enviar enlace al capítulo 4 de la guía de microservicios.',
+      'Internal Note: Provide direct link to microservices CORS configuration guide.',
     sla_deadline_at: new Date(now + 7 * 60 * 60 * 1000).toISOString(), // 7h left
     human_reviewed: false,
     created_at: new Date(now - 1 * 60 * 60 * 1000).toISOString(),
@@ -174,8 +174,8 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     channel: ChannelEnum.EMAIL,
     customer_email: 'legal@enterprise-corp.de',
     customer_name: 'Klaus Schmidt',
-    subject: 'Solicitud formal de derecho de supresión de datos (Artículo 17 GDPR)',
-    body: 'Por medio de la presente, solicitamos el borrado definitivo e irrevocable de todos los datos personales y registros de telemetría asociados a nuestra cuenta de cliente 991823 antes de 30 días naturales.',
+    subject: 'Formal request for erasure of personal data (GDPR Article 17)',
+    body: 'We hereby formally request the permanent, irrevocable erasure of all personal data and telemetry logs associated with customer account 991823 within 30 calendar days.',
     status: InquiryStatusEnum.UNASSIGNED,
     department: DepartmentEnum.SECURITY,
     priority: PriorityEnum.P2,
@@ -185,17 +185,17 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     churn_risk: false,
     entities: {
       order_id: 'Account-991823',
-      customer_deadline: '30 días naturales',
+      customer_deadline: '30 calendar days',
     },
     confidence_score: 0.99,
     triage_rationale:
-      'Petición formal de cumplimiento normativo legal / GDPR. Asignado a SECURITY con SLA prioritario P2.',
+      'Formal regulatory compliance request under GDPR Article 17. Routed to SECURITY with P2 compliance SLA.',
     bedrock_latency_ms: 605,
     suggested_strategy: ResponseStrategyEnum.ESCALATION,
     suggested_response:
-      'Estimado Klaus Schmidt, acusamos recibo de su solicitud de supresión de datos conforme al RGPD. Hemos iniciado el expediente SEC-GDPR-2026 y nuestro Delegado de Protección de Datos (DPO) le remitirá el certificado de purga en un plazo máximo de 7 días hábiles.',
+      'Dear Klaus Schmidt, we acknowledge receipt of your data erasure request pursuant to GDPR Article 17. Case SEC-GDPR-2026 has been registered, and our Data Protection Officer (DPO) will provide official certification of data purging within 7 business days.',
     agent_copilot_notes:
-      'Nota Interna: Notificar obligatoriamente a dpo@cloudscale.io antes de confirmar el borrado físico en RDS.',
+      'Internal Note: Mandatory notification to dpo@company.internal required prior to executing physical database purge.',
     sla_deadline_at: new Date(now + 3 * 60 * 60 * 1000).toISOString(), // 3h left
     human_reviewed: false,
     created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
@@ -218,11 +218,11 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     entities: {},
     confidence_score: 0.99,
     triage_rationale:
-      'Correo no solicitado de prospección comercial externa (Spam). Sin impacto operativo.',
+      'Unsolicited external sales cold email (Spam). Zero operational impact.',
     bedrock_latency_ms: 450,
     suggested_strategy: ResponseStrategyEnum.DIRECT_RESOLUTION,
-    suggested_response: 'Mensaje archivado automáticamente como irrelevante.',
-    agent_copilot_notes: 'Nota Interna: Sin acción requerida. Proceder a resolución directa.',
+    suggested_response: 'Message automatically archived as irrelevant.',
+    agent_copilot_notes: 'Internal Note: No action required. Auto-resolve directly.',
     sla_deadline_at: new Date(now + 23 * 60 * 60 * 1000).toISOString(), // 23h left
     human_reviewed: false,
     created_at: new Date(now - 3 * 60 * 60 * 1000).toISOString(),
@@ -233,8 +233,8 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
     channel: ChannelEnum.WEB_FORM,
     customer_email: 'sarah.connor@cyberdyne.io',
     customer_name: 'Sarah Connor',
-    subject: 'Problema al actualizar método de pago con tarjeta corporativa',
-    body: 'La pasarela me devolvía error 402 Card Declined con tarjeta corporativa emitida en Reino Unido.',
+    subject: 'Card decline error when updating corporate billing method',
+    body: 'Payment gateway returned error 402 Card Declined when attempting to register a corporate card issued in the United Kingdom.',
     status: InquiryStatusEnum.RESOLVED,
     department: DepartmentEnum.BILLING,
     priority: PriorityEnum.P2,
@@ -246,13 +246,13 @@ export const INITIAL_INQUIRIES: Inquiry[] = [
       error_code: '402 Card Declined',
     },
     confidence_score: 0.96,
-    triage_rationale: 'Fallo de procesamiento 3DS en facturación resuelto.',
+    triage_rationale: 'Resolved 3DS payment verification failure on corporate billing method.',
     bedrock_latency_ms: 590,
     suggested_strategy: ResponseStrategyEnum.DIRECT_RESOLUTION,
     suggested_response:
-      'Hola Sarah, el banco emisor requería verificación 3DS en dos pasos. Hemos habilitado el enlace seguro de confirmación.',
+      'Hello Sarah, the issuing institution required step-up 3DS two-factor authentication. We have generated a secure confirmation link to complete the authorization.',
     resolution_text:
-      'Hola Sarah, hemos habilitado la pasarela con soporte multi-divisa 3DS v2. Tu tarjeta ha sido verificada y el recibo queda emitido con éxito.',
+      'Hello Sarah, 3DS v2 multi-currency authorization has been completed successfully. Your corporate card is verified and the invoice receipt has been issued.',
     assigned_agent_id: '00000000-0000-0000-0000-000000000001',
     claimed_at: new Date(now - 4 * 60 * 60 * 1000).toISOString(),
     resolved_at: new Date(now - 3 * 60 * 60 * 1000).toISOString(),

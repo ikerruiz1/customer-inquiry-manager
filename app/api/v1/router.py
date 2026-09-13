@@ -1,6 +1,6 @@
 """API v1 master router assembling all domain endpoints."""
 from fastapi import APIRouter
-from app.api.v1 import inquiries, webhooks, auth, attachments
+from app.api.v1 import inquiries, webhooks, auth, attachments, metrics
 
 api_router = APIRouter()
 
@@ -27,3 +27,10 @@ api_router.include_router(
     prefix="/attachments",
     tags=["S3 Attachments"],
 )
+
+api_router.include_router(
+    metrics.router,
+    prefix="/metrics",
+    tags=["Live FinOps & SRE Metrics"],
+)
+

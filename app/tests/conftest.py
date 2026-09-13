@@ -118,6 +118,30 @@ class MockCognitoService(CognitoService):
             "token_type": "Bearer",
         }
 
+    def register_operator(self, name: str, email: str, password: str, role: str) -> dict:
+        return {
+            "id": "mock-operator-uuid",
+            "name": name,
+            "email": email,
+            "role": role,
+            "groups": ["Operations_Managers", "Tier1_Agents"] if role == "Operations_Manager" else ["Tier1_Agents"],
+            "totp_secret": "JBSWY3DPEHPK3PXP",
+            "initials": "MO",
+            "color": "#3b82f6",
+        }
+
+    def get_operator(self, email: str):
+        return {
+            "id": "mock-operator-uuid",
+            "name": "Mock Operator",
+            "email": email,
+            "role": "Tier1_Agent",
+            "groups": ["Tier1_Agents"],
+            "totp_secret": "JBSWY3DPEHPK3PXP",
+            "initials": "MO",
+            "color": "#3b82f6",
+        }
+
 
 class MockS3Service(S3Service):
     """Mock S3 service generating synthetic presigned URLs."""

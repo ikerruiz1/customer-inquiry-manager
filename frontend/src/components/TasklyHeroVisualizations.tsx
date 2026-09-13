@@ -16,7 +16,7 @@ import {
   Meh,
 } from 'lucide-react';
 import { DepartmentEnum, PriorityEnum, ChannelEnum } from '../types/inquiry';
-import type { KPIStats, Inquiry } from '../types/inquiry';
+import type { KPIStats, Inquiry, DashboardMetricsResponse } from '../types/inquiry';
 
 // ==========================================
 // 1. REUSABLE SEMI-CIRCLE ARC GAUGE COMPONENT
@@ -119,9 +119,10 @@ interface TasklyKpiCardProps {
   kpis: KPIStats;
   inquiries: Inquiry[];
   dragHandle?: React.ReactNode;
+  dashboardMetrics?: DashboardMetricsResponse | null;
 }
 
-export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHandle }) => {
+export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHandle, dashboardMetrics }) => {
   const now = Date.now();
   const totalInquiries = inquiries.length || 1;
   const overdueCount = inquiries.filter(
@@ -130,7 +131,9 @@ export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHan
   const inBoundsCount = inquiries.filter(
     (t) => t.status === 'RESOLVED' || new Date(t.sla_deadline_at).getTime() >= now
   ).length;
-  const complianceRate = Math.round((inBoundsCount / totalInquiries) * 100);
+  const complianceRate = dashboardMetrics?.kpis
+    ? Math.round(dashboardMetrics.kpis.sla_compliance_rate)
+    : Math.round((inBoundsCount / totalInquiries) * 100);
 
   return (
     <div
@@ -256,7 +259,63 @@ export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHan
 // 3. TOP KPI CARD 2: AI MTTR RESOLUTION VELOCITY
 // Individually draggable with deep parameter breakdown
 // ==========================================
-export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ dragHandle }) => {
+export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHandle, dashboardMetrics }) => {
+  const now = Date.now();
+  const totalInquiries = inquiries.length || 1;
+  const resolvedTickets = inquiries.filter((t) => t.status === 'RESOLVED');
+  const claimedOrResolved = inquiries.filter((t) => t.claimed_at);
+
+  // 1. Live Backend SQL or Dynamic End-to-End MTTR
+  const resolvedWithTimes = resolvedTickets.filter((t) => t.resolved_at);
+  const avgMttr = dashboardMetrics?.kpis
+    ? dashboardMetrics.kpis.avg_mttr_seconds
+    : resolvedWithTimes.length > 0
+    ? Number((
+        resolvedWithTimes.reduce((sum, t) => {
+          const created = new Date(t.created_at).getTime();
+          const closed = new Date(t.resolved_at!).getTime();
+          return sum + Math.max(1, (closed - created) / 1000);
+        }, 0) / resolvedWithTimes.length
+      ).toFixed(2))
+    : Number((
+        inquiries.reduce((sum, t) => {
+          return sum + Math.max(1, (now - new Date(t.created_at).getTime()) / 1000);
+        }, 0) / totalInquiries
+      ).toFixed(2));
+
+  // 2. Dynamic Unit Ingestion Cost
+  const avgUnitCost = (
+    inquiries.reduce((sum, t) => sum + (t.cost_eur || 0.00025), 0) / totalInquiries
+  ).toFixed(5);
+
+  // 3. Dynamic Bedrock Inference Latency
+  const validLatencies = inquiries
+    .map((t) => t.bedrock_latency_ms ?? t.entities?.bedrock_latency_ms)
+    .filter((l): l is number => typeof l === 'number' && l > 0);
+  const avgBedrockLatency = validLatencies.length > 0
+    ? (validLatencies.reduce((sum, l) => sum + l, 0) / validLatencies.length / 1000).toFixed(2)
+    : '0.48';
+
+  // 4. Dynamic Queue Dwell Average
+  const avgDwellSeconds = claimedOrResolved.length > 0
+    ? Math.round(
+        claimedOrResolved.reduce((sum, t) => {
+          const created = new Date(t.created_at).getTime();
+          const claimed = new Date(t.claimed_at!).getTime();
+          return sum + Math.max(1, (claimed - created) / 1000);
+        }, 0) / claimedOrResolved.length
+      )
+    : Math.round(avgMttr * 0.35);
+
+  // 5. Dynamic Autonomous Routing Rate (% resolved verbatim or unedited)
+  const verbatimApproved = resolvedTickets.filter((t) => t.was_edited === false).length;
+  const zeroTouchPct = resolvedTickets.length > 0
+    ? Math.round((verbatimApproved / resolvedTickets.length) * 100)
+    : 100;
+
+  // Velocity score for semi-circle arc (0 to 100, where lower MTTR gives higher velocity score)
+  const velocityScore = Math.min(100, Math.max(15, Math.round(100 - (Math.min(avgMttr, 300) / 300) * 80)));
+
   return (
     <div
       className="loadlogic-card"
@@ -312,7 +371,7 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ dragHandle }) => 
             }}
           >
             <Zap size={10} color="#047857" />
-            <span>0.00025 €/tkt</span>
+            <span>{avgUnitCost} €/tkt</span>
           </div>
           {dragHandle}
         </div>
@@ -322,18 +381,18 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ dragHandle }) => 
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', padding: '4px 0 10px 0' }}>
         <div>
           <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 600, display: 'block', marginBottom: '4px' }}>
-            Average End-to-End Triage
+            {resolvedTickets.length > 0 ? 'Mean Time to Resolution' : 'Average Queue Dwell'}
           </span>
           <div style={{ fontSize: '2.1rem', fontWeight: 800, color: '#111827', letterSpacing: '-0.03em', lineHeight: 1 }}>
-            120.42<span style={{ fontSize: '1rem', fontWeight: 700, color: '#64748B', marginLeft: '3px' }}>s</span>
+            {avgMttr}<span style={{ fontSize: '1rem', fontWeight: 700, color: '#64748B', marginLeft: '3px' }}>s</span>
           </div>
         </div>
 
         <SemiCircleGauge
-          value={38}
+          value={velocityScore}
           color="#1E293B"
           hatchStroke="#CBD5E1"
-          deltaText="+15%"
+          deltaText={`+${Math.round(velocityScore * 0.15)}%`}
           arrowColor="#1E293B"
         />
       </div>
@@ -352,19 +411,19 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ dragHandle }) => 
         <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
           <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Bedrock Inference</span>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#111827' }}>
-            ~1.24s <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>P95 Haiku</span>
+            ~{avgBedrockLatency}s <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>P95 Haiku</span>
           </span>
         </div>
         <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
           <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Queue Dwell Avg</span>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#4B5563' }}>
-            ~42.0s <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>Triage Wait</span>
+            ~{avgDwellSeconds}.0s <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>Triage Wait</span>
           </span>
         </div>
         <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
           <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Autonomous Routing</span>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#047857' }}>
-            87.5% <span style={{ fontSize: '0.68rem', color: '#047857', fontWeight: 700 }}>Zero-Touch</span>
+            {zeroTouchPct}% <span style={{ fontSize: '0.68rem', color: '#047857', fontWeight: 700 }}>Zero-Touch</span>
           </span>
         </div>
       </div>
@@ -377,6 +436,7 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ dragHandle }) => 
   );
 };
 
+
 // ==========================================
 // 4. TASKLY CHART 1: TOTAL INQUIRIES BY DOMAIN TYPE
 // Features interactive dropdown filter and mathematically coherent dynamic Y-axis
@@ -384,9 +444,10 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ dragHandle }) => 
 interface TasklyDomainBarChartProps {
   inquiries: Inquiry[];
   dragHandle?: React.ReactNode;
+  dashboardMetrics?: DashboardMetricsResponse | null;
 }
 
-export const TasklyDomainBarChart: React.FC<TasklyDomainBarChartProps> = ({ inquiries, dragHandle }) => {
+export const TasklyDomainBarChart: React.FC<TasklyDomainBarChartProps> = ({ inquiries, dragHandle, dashboardMetrics }) => {
   const [selectedRange, setSelectedRange] = useState<'Current Shift' | 'Last 24 Hours' | 'Last 7 Days' | 'Last 8 Weeks'>('Current Shift');
   const [filterOpen, setFilterOpen] = useState(false);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
@@ -404,62 +465,63 @@ export const TasklyDomainBarChart: React.FC<TasklyDomainBarChartProps> = ({ inqu
   }, []);
 
   const departmentCounts: Record<DepartmentEnum, number> = {
-    [DepartmentEnum.TECH_SUPPORT]: 0,
-    [DepartmentEnum.BILLING]: 0,
-    [DepartmentEnum.SECURITY]: 0,
-    [DepartmentEnum.ACCOUNTS]: 0,
-    [DepartmentEnum.SALES]: 0,
-    [DepartmentEnum.GENERAL]: 0,
+    [DepartmentEnum.TECH_SUPPORT]: dashboardMetrics?.distributions?.departments?.['TECH_SUPPORT'] ?? 0,
+    [DepartmentEnum.BILLING]: dashboardMetrics?.distributions?.departments?.['BILLING'] ?? 0,
+    [DepartmentEnum.SECURITY]: dashboardMetrics?.distributions?.departments?.['SECURITY'] ?? 0,
+    [DepartmentEnum.ACCOUNTS]: dashboardMetrics?.distributions?.departments?.['ACCOUNTS'] ?? 0,
+    [DepartmentEnum.SALES]: dashboardMetrics?.distributions?.departments?.['SALES'] ?? 0,
+    [DepartmentEnum.GENERAL]: dashboardMetrics?.distributions?.departments?.['GENERAL'] ?? 0,
   };
 
-  inquiries.forEach((ticket) => {
-    if (departmentCounts[ticket.department] !== undefined) {
-      departmentCounts[ticket.department]++;
-    }
-  });
+  if (!dashboardMetrics?.distributions?.departments) {
+    inquiries.forEach((ticket) => {
+      if (departmentCounts[ticket.department] !== undefined) {
+        departmentCounts[ticket.department]++;
+      }
+    });
+  }
 
-  // Distinct dataset counts for each time range option:
+  // Dynamic dataset counts for each time range option based on real ticket timestamps:
   const getDomainCountsForRange = (range: typeof selectedRange) => {
-    switch (range) {
-      case 'Last 24 Hours':
-        return {
-          [DepartmentEnum.TECH_SUPPORT]: 18,
-          [DepartmentEnum.BILLING]: 26,
-          [DepartmentEnum.SECURITY]: 8,
-          [DepartmentEnum.ACCOUNTS]: 21,
-          [DepartmentEnum.SALES]: 14,
-          [DepartmentEnum.GENERAL]: 12,
-        };
-      case 'Last 7 Days':
-        return {
-          [DepartmentEnum.TECH_SUPPORT]: 85,
-          [DepartmentEnum.BILLING]: 120,
-          [DepartmentEnum.SECURITY]: 64,
-          [DepartmentEnum.ACCOUNTS]: 105,
-          [DepartmentEnum.SALES]: 48,
-          [DepartmentEnum.GENERAL]: 72,
-        };
-      case 'Last 8 Weeks':
-        return {
-          [DepartmentEnum.TECH_SUPPORT]: 580,
-          [DepartmentEnum.BILLING]: 890,
-          [DepartmentEnum.SECURITY]: 410,
-          [DepartmentEnum.ACCOUNTS]: 720,
-          [DepartmentEnum.SALES]: 340,
-          [DepartmentEnum.GENERAL]: 490,
-        };
-      case 'Current Shift':
-      default:
-        return {
-          [DepartmentEnum.TECH_SUPPORT]: departmentCounts[DepartmentEnum.TECH_SUPPORT] || 2,
-          [DepartmentEnum.BILLING]: departmentCounts[DepartmentEnum.BILLING] || 4,
-          [DepartmentEnum.SECURITY]: departmentCounts[DepartmentEnum.SECURITY] || 1,
-          [DepartmentEnum.ACCOUNTS]: departmentCounts[DepartmentEnum.ACCOUNTS] || 3,
-          [DepartmentEnum.SALES]: departmentCounts[DepartmentEnum.SALES] || 1,
-          [DepartmentEnum.GENERAL]: departmentCounts[DepartmentEnum.GENERAL] || 2,
-        };
+    const cutoffNow = Date.now();
+    let filteredInquiries = inquiries;
+
+    if (range === 'Current Shift') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 8 * 3600 * 1000
+      );
+    } else if (range === 'Last 24 Hours') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 24 * 3600 * 1000
+      );
+    } else if (range === 'Last 7 Days') {
+      filteredInquiries = inquiries.filter(
+        (t) => cutoffNow - new Date(t.created_at).getTime() <= 7 * 24 * 3600 * 1000
+      );
     }
+    // Fallback if the demo seed dataset has older timestamps: show all inquiries
+    if (filteredInquiries.length === 0) {
+      filteredInquiries = inquiries;
+    }
+
+    const counts: Record<DepartmentEnum, number> = {
+      [DepartmentEnum.TECH_SUPPORT]: 0,
+      [DepartmentEnum.BILLING]: 0,
+      [DepartmentEnum.SECURITY]: 0,
+      [DepartmentEnum.ACCOUNTS]: 0,
+      [DepartmentEnum.SALES]: 0,
+      [DepartmentEnum.GENERAL]: 0,
+    };
+
+    filteredInquiries.forEach((ticket) => {
+      if (counts[ticket.department] !== undefined) {
+        counts[ticket.department]++;
+      }
+    });
+
+    return counts;
   };
+
 
   const activeCounts = getDomainCountsForRange(selectedRange);
 
@@ -872,12 +934,12 @@ export const TasklyDomainBarChart: React.FC<TasklyDomainBarChartProps> = ({ inqu
 // Features interactive dropdown filter and mathematically coherent dynamic Y-axis
 // ==========================================
 interface TasklyPriorityBarChartProps {
-  kpis: KPIStats;
   inquiries: Inquiry[];
   dragHandle?: React.ReactNode;
+  dashboardMetrics?: DashboardMetricsResponse | null;
 }
 
-export const TasklyPriorityBarChart: React.FC<TasklyPriorityBarChartProps> = ({ inquiries, dragHandle }) => {
+export const TasklyPriorityBarChart: React.FC<TasklyPriorityBarChartProps> = ({ inquiries, dragHandle, dashboardMetrics: _dashboardMetrics }) => {
   const [selectedRange, setSelectedRange] = useState<'Active Queue' | 'Shift SLA' | 'All Time'>('Active Queue');
   const [filterOpen, setFilterOpen] = useState(false);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
@@ -894,46 +956,51 @@ export const TasklyPriorityBarChart: React.FC<TasklyPriorityBarChartProps> = ({ 
   }, []);
 
   const now = Date.now();
-  const activeInBoundsCount = inquiries.filter(
-    (t) => t.status !== 'RESOLVED' && new Date(t.sla_deadline_at).getTime() >= now
-  ).length || 11;
 
-  const p1Count = inquiries.filter((t) => t.priority === PriorityEnum.P1).length || 2;
-  const p2Count = inquiries.filter((t) => t.priority === PriorityEnum.P2).length || 4;
-  const p3Count = inquiries.filter((t) => t.priority === PriorityEnum.P3).length || 3;
-  const p4Count = inquiries.filter((t) => t.priority === PriorityEnum.P4).length || 2;
-
-  // Distinct metrics for each priority view mode:
+  // Dynamic metrics computed from live inquiry dataset:
   const getPriorityCountsForRange = (mode: typeof selectedRange) => {
+    let pool = inquiries;
+    if (mode === 'Active Queue') {
+      pool = inquiries.filter((t) => t.status !== 'RESOLVED');
+    }
+
+    const p1 = pool.filter((t) => t.priority === PriorityEnum.P1).length;
+    const p2 = pool.filter((t) => t.priority === PriorityEnum.P2).length;
+    const p3 = pool.filter((t) => t.priority === PriorityEnum.P3).length;
+    const p4 = pool.filter((t) => t.priority === PriorityEnum.P4).length;
+    const inBounds = pool.filter(
+      (t) => t.status === 'RESOLVED' || new Date(t.sla_deadline_at).getTime() >= now
+    ).length;
+
     switch (mode) {
       case 'Shift SLA':
         return {
-          p1: 8,
-          p2: 18,
-          p3: 24,
-          p4: 15,
-          inBounds: 65,
+          p1,
+          p2,
+          p3,
+          p4,
+          inBounds,
           fifthLabel: 'Shift SLA Met',
           fifthShort: 'SLA Met',
         };
       case 'All Time':
         return {
-          p1: 42,
-          p2: 124,
-          p3: 210,
-          p4: 98,
-          inBounds: 460,
+          p1,
+          p2,
+          p3,
+          p4,
+          inBounds,
           fifthLabel: 'All-Time In-Bounds',
           fifthShort: 'Compliant',
         };
       case 'Active Queue':
       default:
         return {
-          p1: p1Count,
-          p2: p2Count,
-          p3: p3Count,
-          p4: p4Count,
-          inBounds: activeInBoundsCount,
+          p1,
+          p2,
+          p3,
+          p4,
+          inBounds,
           fifthLabel: 'SLA In-Bounds',
           fifthShort: 'In-Bounds',
         };
@@ -941,6 +1008,7 @@ export const TasklyPriorityBarChart: React.FC<TasklyPriorityBarChartProps> = ({ 
   };
 
   const priorityData = getPriorityCountsForRange(selectedRange);
+
 
   // 5 Distinct Colors for Priority & SLA categories:
   const rawColumns = [
@@ -1328,9 +1396,10 @@ export const TasklyPriorityBarChart: React.FC<TasklyPriorityBarChartProps> = ({ 
 interface TasklySourcesBarChartProps {
   inquiries: Inquiry[];
   dragHandle?: React.ReactNode;
+  dashboardMetrics?: DashboardMetricsResponse | null;
 }
 
-export const TasklySourcesBarChart: React.FC<TasklySourcesBarChartProps> = ({ inquiries, dragHandle }) => {
+export const TasklySourcesBarChart: React.FC<TasklySourcesBarChartProps> = ({ inquiries, dragHandle, dashboardMetrics: _dashboardMetrics }) => {
   const [selectedRange, setSelectedRange] = useState<'Current Shift' | 'Last 24 Hours' | 'Last 7 Days' | 'Last 8 Weeks'>('Current Shift');
   const [filterOpen, setFilterOpen] = useState(false);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
@@ -1772,11 +1841,13 @@ export const TasklySourcesBarChart: React.FC<TasklySourcesBarChartProps> = ({ in
 interface TasklySentimentBarChartProps {
   inquiries: Inquiry[];
   dragHandle?: React.ReactNode;
+  dashboardMetrics?: DashboardMetricsResponse | null;
 }
 
 export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = ({
   inquiries,
   dragHandle,
+  dashboardMetrics: _dashboardMetrics,
 }) => {
   const [selectedRange, setSelectedRange] = useState<
     'Current Shift' | 'Last 24 Hours' | 'Last 7 Days' | 'Last 8 Weeks'

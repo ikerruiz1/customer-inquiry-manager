@@ -1,6 +1,15 @@
 """Authentication and Software Token TOTP MFA schemas."""
-from typing import Optional, List
-from pydantic import BaseModel, Field
+from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, EmailStr
+
+
+class RegisterRequest(BaseModel):
+    """New support operator registration."""
+
+    name: str = Field(..., min_length=2, max_length=100, description="Full operator name")
+    email: EmailStr = Field(..., description="Corporate operator email")
+    password: str = Field(..., min_length=6, description="Account password")
+    role: str = Field(default="Tier1_Agent", description="RBAC role: Tier1_Agent or Operations_Manager")
 
 
 class LoginRequest(BaseModel):
@@ -16,6 +25,9 @@ class MFAChallengeResponse(BaseModel):
     challenge_name: str = "SOFTWARE_TOKEN_MFA"
     session: str = Field(..., description="Ephemeral session token passed to verify challenge")
     message: str = "Multi-Factor Authentication required. Provide 6-digit TOTP token."
+    totp_secret: Optional[str] = Field(None, description="Base32 TOTP secret for manual authenticator app setup")
+    otpauth_url: Optional[str] = Field(None, description="Standard otpauth:// URI for Google/Microsoft Authenticator QR scanning")
+    email: Optional[str] = Field(None, description="Account email being verified")
 
 
 class MFAVerifyRequest(BaseModel):
@@ -34,3 +46,17 @@ class TokenResponse(BaseModel):
     token_type: str = "Bearer"
     expires_in: int = 3600
     groups: List[str] = []
+    user: Optional[Dict[str, Any]] = None
+
+
+class OperatorProfileResponse(BaseModel):
+    """Operator identity and visual profile for ticket assignments."""
+
+    id: str
+    name: str
+    email: str
+    role: str
+    initials: str
+    color: str
+
+

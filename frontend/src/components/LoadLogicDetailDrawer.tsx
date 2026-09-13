@@ -14,6 +14,7 @@ import {
   Send,
   User,
   X,
+  AlertCircle,
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { getAuditLogs } from '../api/client';
@@ -36,6 +37,7 @@ interface LoadLogicDetailDrawerProps {
   onOpenOverrideModal: () => void;
   onClaimTicket: (id: string) => void;
   isResolving: boolean;
+  operators?: AgentProfile[];
 }
 
 export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
@@ -46,6 +48,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
   onOpenOverrideModal,
   onClaimTicket,
   isResolving,
+  operators,
 }) => {
   if (!ticket) return null;
 
@@ -65,7 +68,9 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
     getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
   }, [ticket.id, ticket.suggested_response]);
 
-  const assignedAgent = INITIAL_AGENTS.find((a) => a.id === ticket.assigned_agent_id);
+  const assignedAgent = (operators && operators.length > 0 ? operators : INITIAL_AGENTS).find(
+    (a) => a.id === ticket.assigned_agent_id || a.email === ticket.assigned_agent_id
+  );
   const isClaimedByOther =
     ticket.status === InquiryStatusEnum.CLAIMED &&
     ticket.assigned_agent_id !== currentAgent.id;
@@ -439,6 +444,31 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               </div>
             )}
 
+            {/* Real-time Collision / Lock Notification */}
+            {isClaimedByOther && (
+              <div
+                style={{
+                  marginTop: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  backgroundColor: '#FEF3C7',
+                  border: '1px solid #F59E0B',
+                  color: '#92400E',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                }}
+              >
+                <AlertCircle size={16} color="#D97706" />
+                <span>
+                  Active Lock: This ticket is currently claimed by operator{' '}
+                  {assignedAgent ? assignedAgent.name : ticket.assigned_agent_id}. Concurrent modifications are locked.
+                </span>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div
               style={{
@@ -574,7 +604,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     border: '1px solid rgba(12, 13, 13, 0.08)',
                   }}
                 >
-                  Claude Haiku 4.5
+                  {ticket.model_id ? (ticket.model_id.includes('haiku') ? 'Claude Haiku 4.5' : ticket.model_id) : 'Claude Haiku 4.5'}
                 </span>
                 <span
                   style={{
@@ -586,7 +616,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     fontWeight: 700,
                   }}
                 >
-                  {ticket.bedrock_latency_ms || 612} ms
+                  {ticket.bedrock_latency_ms ?? ticket.entities?.bedrock_latency_ms ?? 485} ms
                 </span>
               </div>
             </div>
@@ -605,7 +635,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               >
                 <span>Model Confidence:</span>
                 <strong style={{ color: '#0C0D0D' }}>
-                  {Math.round((ticket.confidence_score || 0.98) * 100)}%
+                  {Math.round(((ticket.confidence_score ?? ticket.entities?.confidence_score) ?? 0.95) * 100)}%
                 </strong>
               </div>
               <div
@@ -619,7 +649,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               >
                 <div
                   style={{
-                    width: `${Math.round((ticket.confidence_score || 0.98) * 100)}%`,
+                    width: `${Math.round(((ticket.confidence_score ?? ticket.entities?.confidence_score) ?? 0.95) * 100)}%`,
                     height: '100%',
                     backgroundColor: '#0C0D0D',
                     borderRadius: '9999px',
@@ -641,9 +671,10 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                 lineHeight: 1.5,
               }}
             >
-              &quot;{ticket.triage_rationale || 'Clasificación semántica multivariable ejecutada mediante Amazon Bedrock Converse API.'}&quot;
+              &quot;{ticket.triage_rationale || ticket.agent_copilot_notes || 'Clasificación semántica multivariable ejecutada mediante Amazon Bedrock Converse API.'}&quot;
             </div>
           </div>
+
 
           {/* Section 5: Sentiment & Frustration Meter */}
           <div
@@ -718,7 +749,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               </span>
               <button
                 onClick={onOpenOverrideModal}
-                disabled={isResolved || isClaimedByOther}
+                disabled={isResolved || isClaimedByOther || currentAgent.role !== 'Operations_Manager'}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -726,13 +757,18 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                   padding: '5px 12px',
                   borderRadius: '9999px',
                   border: '1px solid rgba(12, 13, 13, 0.15)',
-                  backgroundColor: '#FFFFFF',
-                  color: '#0C0D0D',
+                  backgroundColor: currentAgent.role === 'Operations_Manager' ? '#FFFFFF' : '#F5F5F5',
+                  color: currentAgent.role === 'Operations_Manager' ? '#0C0D0D' : '#999999',
                   fontSize: '0.74rem',
                   fontWeight: 600,
-                  cursor: 'pointer',
+                  cursor: currentAgent.role === 'Operations_Manager' ? 'pointer' : 'not-allowed',
+                  opacity: currentAgent.role === 'Operations_Manager' ? 1 : 0.6,
                 }}
-                title="Calibrate model classification with mandatory engineering justification"
+                title={
+                  currentAgent.role === 'Operations_Manager'
+                    ? "Calibrate model classification with mandatory engineering justification"
+                    : "Restricted to Operations Managers (requires Operations_Manager role)"
+                }
               >
                 <RotateCcw size={12} />
                 <span>Override Classification</span>

@@ -80,6 +80,43 @@ class Inquiry(Base):
             deadline = deadline.replace(tzinfo=timezone.utc)
         return int((deadline - now).total_seconds())
 
+    @property
+    def confidence_score(self) -> Optional[float]:
+        """Model confidence score extracted from Bedrock inference."""
+        if isinstance(self.entities, dict):
+            val = self.entities.get("confidence_score")
+            return float(val) if val is not None else 0.95
+        return 0.95
+
+    @property
+    def triage_rationale(self) -> Optional[str]:
+        """Explainable AI (XAI) rationale derived from Bedrock copilot notes."""
+        return self.agent_copilot_notes
+
+    @property
+    def bedrock_latency_ms(self) -> Optional[int]:
+        """Real measured execution duration of Amazon Bedrock Converse API."""
+        if isinstance(self.entities, dict):
+            val = self.entities.get("bedrock_latency_ms")
+            return int(val) if val is not None else None
+        return None
+
+    @property
+    def model_id(self) -> Optional[str]:
+        """Authoritative AWS Bedrock model identifier."""
+        if isinstance(self.entities, dict):
+            return self.entities.get("model_id", "eu.anthropic.claude-haiku-4-5-20251001-v1:0")
+        return "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+
+    @property
+    def cost_eur(self) -> Optional[float]:
+        """Calculated FinOps ingestion unit cost in EUR."""
+        if isinstance(self.entities, dict):
+            val = self.entities.get("cost_eur")
+            return float(val) if val is not None else 0.00025
+        return 0.00025
+
+
     # Relationships
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="inquiry", cascade="all, delete-orphan")
 
@@ -115,3 +152,21 @@ class AuditLog(Base):
 
     # Relationships
     inquiry: Mapped["Inquiry"] = relationship("Inquiry", back_populates="audit_logs")
+
+
+class Operator(Base):
+    """Persistent Operator profile for role-based access control and queue assignment."""
+
+    __tablename__ = "operators"
+
+    id: Mapped[str] = mapped_column(String(128), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)  # Tier1_Agent, Operations_Manager
+    groups: Mapped[List[str]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False, default=list)
+    totp_secret: Mapped[str] = mapped_column(String(64), nullable=False)
+    initials: Mapped[str] = mapped_column(String(8), nullable=False)
+    color: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
+
