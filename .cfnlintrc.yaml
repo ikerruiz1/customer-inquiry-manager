@@ -1,6 +1,0 @@
-# AWS CloudFormation Linter (cfn-lint) configuration
-# Ignore AWS CodeDeploy AppSpec files which share keywords (Resources, AWS::ECS::Service)
-# but follow CodeDeploy specifications rather than CloudFormation template syntax.
-ignore_templates:
-  - appspec.yaml
-  - appspec.yml
