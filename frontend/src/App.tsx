@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  calculateKPIs,
   checkBackendHealth,
   claimInquiry,
   createInquiry,
@@ -13,7 +12,6 @@ import {
   fetchDashboardMetrics,
   fetchRegisteredOperators,
 } from './api/client';
-import { INITIAL_AGENTS, INITIAL_INQUIRIES } from './api/mockData';
 import { LoadLogicTopHeader } from './components/LoadLogicTopHeader';
 import { DashboardWidgetGrid } from './components/DashboardWidgetGrid';
 import { LoadLogicDetailDrawer } from './components/LoadLogicDetailDrawer';
@@ -36,8 +34,17 @@ import {
   PriorityEnum,
 } from './types/inquiry';
 
+const DEFAULT_KPIS: KPIStats = {
+  activeCount: 0,
+  p1Count: 0,
+  slaComplianceRate: 100,
+  aiAcceptanceRate: 100,
+  avgMttrSeconds: 0,
+  estimatedCostTodayEur: 0,
+};
+
 export const App: React.FC = () => {
-  const [inquiries, setInquiries] = useState<Inquiry[]>(INITIAL_INQUIRIES);
+  const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<Inquiry | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(getStoredUser()));
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(() => !Boolean(getStoredUser()));
@@ -53,14 +60,20 @@ export const App: React.FC = () => {
         color: stored.color || (stored.role === 'Operations_Manager' ? '#8b5cf6' : '#3b82f6'),
       };
     }
-    return INITIAL_AGENTS[0];
+    return {
+      id: '',
+      name: 'Operator',
+      email: '',
+      role: 'Tier1_Agent',
+      initials: 'OP',
+      color: '#3b82f6',
+    };
   });
   const [dashboardMetrics, setDashboardMetrics] = useState<DashboardMetricsResponse | null>(null);
-  const [registeredOperators, setRegisteredOperators] = useState<AgentProfile[]>(INITIAL_AGENTS);
+  const [registeredOperators, setRegisteredOperators] = useState<AgentProfile[]>([]);
   const [queueTab, setQueueTab] = useState<QueueTab>('DEFAULT');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isLiveBackend, setIsLiveBackend] = useState<boolean>(false);
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [isInjecting, setIsInjecting] = useState<boolean>(false);
   const [isClaiming, setIsClaiming] = useState<boolean>(false);
@@ -131,14 +144,12 @@ export const App: React.FC = () => {
     setIsAuthModalOpen(true);
   };
 
-  // Load inquiries and live dashboard metrics from client
+  // Load inquiries and live dashboard metrics from backend
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      if (!isDemoMode) {
-        const alive = await checkBackendHealth();
-        setIsLiveBackend(alive);
-      }
+      const alive = await checkBackendHealth();
+      setIsLiveBackend(alive);
       const [data, metrics, ops] = await Promise.all([
         fetchInquiries(),
         fetchDashboardMetrics(),
@@ -146,9 +157,7 @@ export const App: React.FC = () => {
       ]);
       setInquiries(data);
       setDashboardMetrics(metrics);
-      if (ops && ops.length > 0) {
-        setRegisteredOperators(ops);
-      }
+      setRegisteredOperators(ops);
 
       // Keep selected ticket in sync if open
       if (selectedTicket) {
@@ -156,11 +165,11 @@ export const App: React.FC = () => {
         if (updated) setSelectedTicket(updated);
       }
     } catch (err) {
-      console.warn('Queue sync error:', err);
+      console.warn('Backend sync warning:', err);
     } finally {
       setIsRefreshing(false);
     }
-  }, [isDemoMode, selectedTicket]);
+  }, [selectedTicket]);
 
   // Initial load
   useEffect(() => {
@@ -318,8 +327,8 @@ export const App: React.FC = () => {
         estimatedCostTodayEur: dashboardMetrics.kpis.estimated_cost_today_eur,
       };
     }
-    return calculateKPIs(inquiries);
-  }, [dashboardMetrics, inquiries]);
+    return DEFAULT_KPIS;
+  }, [dashboardMetrics]);
   const currentTheme = THEMES.find((t) => t.id === themeId) || THEMES[0];
 
   // Completely gate project rendering behind active authentication (Zero-Trust)
@@ -379,8 +388,6 @@ export const App: React.FC = () => {
           onLogout={handleLogout}
           onOpenAuthModal={() => setIsAuthModalOpen(true)}
           isLiveBackend={isLiveBackend}
-          isDemoMode={isDemoMode}
-          onToggleDemoMode={() => setIsDemoMode(!isDemoMode)}
           isRefreshing={isRefreshing}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}

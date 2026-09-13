@@ -22,7 +22,6 @@ import type {
   Inquiry,
   AgentProfile,
 } from '../types/inquiry';
-import { INITIAL_AGENTS } from '../api/mockData';
 
 export type QueueTab = 'DEFAULT' | 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'ASSIGNED' | 'COMPLETED' | 'FILTERS';
 
@@ -440,8 +439,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
 
   const getAssignedAgent = (agentId?: string | null) => {
     if (!agentId) return null;
-    const pool = operators && operators.length > 0 ? operators : INITIAL_AGENTS;
-    return pool.find((a) => a.id === agentId || a.email === agentId);
+    return operators?.find((a) => a.id === agentId || a.email === agentId) || null;
   };
 
   // Fixed CSS Grid Layout across Table Headers and Data Rows (6 Columns matching Image 2)

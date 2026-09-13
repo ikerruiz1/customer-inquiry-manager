@@ -21,8 +21,6 @@ interface LoadLogicTopHeaderProps {
   onLogout?: () => void;
   onOpenAuthModal?: () => void;
   isLiveBackend: boolean;
-  isDemoMode: boolean;
-  onToggleDemoMode: () => void;
   isRefreshing: boolean;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -41,8 +39,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   onLogout,
   onOpenAuthModal,
   isLiveBackend,
-  isDemoMode,
-  onToggleDemoMode,
   isRefreshing,
   searchQuery,
   onSearchChange,
@@ -315,28 +311,33 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
 
         {/* Center/Right: Compliance & FinOps Telemetry Badges */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* 1. AWS PrivateLink Zero-Internet Egress Pill */}
+          {/* 1. Live Backend Engine Status Pill */}
           <div
-            onClick={onToggleDemoMode}
-            title="Zero-internet egress verified: All communications traverse AWS PrivateLink VPC Endpoints. Click to toggle Demo Sandbox."
+            title={isLiveBackend ? "Connected to live FastAPI microservice (SQLite/PostgreSQL persistence)" : "Disconnected from backend microservice"}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
               padding: '6px 12px',
               borderRadius: '9999px',
-              backgroundColor: '#ECF4EE',
+              backgroundColor: isLiveBackend ? '#ECF4EE' : '#FEF2F2',
               border: '1px solid rgba(12, 13, 13, 0.06)',
               fontSize: '0.74rem',
               fontWeight: 700,
-              color: '#0C0D0D',
-              cursor: 'pointer',
-              transition: 'background-color 0.15s ease',
+              color: isLiveBackend ? '#065F46' : '#991B1B',
+              cursor: 'default',
             }}
           >
-            <Server size={12} style={{ color: isLiveBackend ? '#047857' : '#B45309' }} />
-            <span className="status-dot status-dot-green" />
-            <span>{isLiveBackend ? 'AWS PrivateLink' : isDemoMode ? 'Demo Sandbox' : 'Local Engine'}</span>
+            <Server size={12} style={{ color: isLiveBackend ? '#047857' : '#DC2626' }} />
+            <span
+              style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                backgroundColor: isLiveBackend ? '#10B981' : '#EF4444',
+              }}
+            />
+            <span>{isLiveBackend ? 'Live Backend Connected' : 'Backend Disconnected'}</span>
             {isRefreshing && <RefreshCw size={11} className="animate-spin" style={{ marginLeft: '4px', opacity: 0.6 }} />}
           </div>
 

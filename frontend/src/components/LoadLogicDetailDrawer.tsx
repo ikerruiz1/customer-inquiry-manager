@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { getAuditLogs } from '../api/client';
-import { INITIAL_AGENTS } from '../api/mockData';
 import type {
   AgentProfile,
   AuditLog,
@@ -68,7 +67,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
     getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
   }, [ticket.id, ticket.suggested_response]);
 
-  const assignedAgent = (operators && operators.length > 0 ? operators : INITIAL_AGENTS).find(
+  const assignedAgent = operators?.find(
     (a) => a.id === ticket.assigned_agent_id || a.email === ticket.assigned_agent_id
   );
   const isClaimedByOther =
