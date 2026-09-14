@@ -57,3 +57,5 @@ output "route53_name_servers" {
   description = "Authoritative Route 53 Name Servers to configure in get.tech"
   value       = module.route53.name_servers
 }
+
+
