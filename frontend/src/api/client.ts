@@ -345,3 +345,19 @@ export async function fetchRegisteredOperators(): Promise<AgentProfile[]> {
   const data = await res.json();
   return Array.isArray(data) ? data : [];
 }
+
+/**
+ * Reset dev inquiries and audit logs to canonical seed state
+ */
+export async function resetDemoInquiries(): Promise<{ message: string; total_inquiries: number }> {
+  const res = await fetch('/api/v1/inquiries/reset-demo-data', {
+    method: 'POST',
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP error ${res.status}: Failed to reset demo inquiries`);
+  }
+  return await res.json();
+}
+

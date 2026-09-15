@@ -381,3 +381,32 @@ async def get_inquiry_audit_logs(
     res = await db.execute(stmt)
     logs = res.scalars().all()
     return logs
+
+
+@router.post("/reset-demo-data", status_code=status.HTTP_200_OK)
+async def reset_demo_inquiries(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_tier1_agent),
+):
+    """Zero-manual reset: restores canonical dev inquiries and clears audit logs.
+    Strictly restricted to 'dev' environments to prevent production data corruption.
+    """
+    from app.core.config import settings
+
+    if settings.ENVIRONMENT.lower() != "dev":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Resetting demo inquiries is strictly prohibited in non-development environments.",
+        )
+
+    from app.core.seeder import build_canonical_sample_inquiries
+    from sqlalchemy import delete
+
+    await db.execute(delete(AuditLog))
+    await db.execute(delete(Inquiry))
+    canonical_items = build_canonical_sample_inquiries()
+    db.add_all(canonical_items)
+    await db.commit()
+    return {"message": "Demo inquiries successfully reset", "total_inquiries": len(canonical_items)}
+
+

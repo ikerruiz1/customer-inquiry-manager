@@ -1,5 +1,5 @@
 {
-  "company_name": "ExampleCorp Logistics & Platform Services",
+  "company_name": "ExampleCorp Technologies",
   "domain": "your-company-domain.tech",
   "support_email": "support@your-company-domain.tech",
   "inbound_channels": {
@@ -13,7 +13,7 @@
     "unregistered_customer_handling": "ACCEPT_WITH_UNVERIFIED_BADGE",
     "quarantine_unregistered": false
   },
-  "description": "Enterprise cloud-native logistics, API-driven inventory management, and automated fulfillment platform.",
+  "description": "Enterprise cloud infrastructure, managed Kubernetes clusters, high-throughput API gateways, and developer platform services.",
   "departments": [
     {
       "code": "BILLING",
@@ -55,7 +55,7 @@
   "precedence_rules": [
     "Financial disputes (double-billing, disputed charges, refund demands) MUST route to BILLING even if caused by technical API glitches.",
     "Compromised credentials, unauthorized logins, or leaked secrets MUST route to SECURITY even if involving account lockout.",
-    "Service disruptions impacting active warehouse, dispatch, or API operations route to TECH_SUPPORT.",
+    "Service disruptions impacting managed Kubernetes clusters, API gateways, or developer infrastructure route to TECH_SUPPORT.",
     "Authentication failures and TOTP MFA device resets route to ACCOUNTS.",
     "Pricing inquiries and subscription tier upgrades route to SALES.",
     "Vague, unclassifiable, or non-actionable inquiries route to GENERAL with the CLARIFICATION_REQUEST strategy."

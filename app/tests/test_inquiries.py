@@ -200,3 +200,32 @@ async def test_presigned_attachment_lifecycle(client: AsyncClient):
     assert "download_url" in download_data
     assert object_key in download_data["download_url"]
 
+
+@pytest.mark.asyncio
+async def test_reset_demo_inquiries_allowed_in_dev(client: AsyncClient):
+    """Verify reset-demo-data successfully re-seeds canonical dev inquiries in dev environment."""
+    from app.core.config import settings
+
+    settings.ENVIRONMENT = "dev"
+    res = await client.post("/api/v1/inquiries/reset-demo-data")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total_inquiries"] == 7
+    assert "successfully reset" in data["message"]
+
+
+@pytest.mark.asyncio
+async def test_reset_demo_inquiries_forbidden_in_production(client: AsyncClient):
+    """Verify reset-demo-data is strictly rejected with HTTP 403 in non-dev environments."""
+    from app.core.config import settings
+
+    original_env = settings.ENVIRONMENT
+    try:
+        settings.ENVIRONMENT = "prod"
+        res = await client.post("/api/v1/inquiries/reset-demo-data")
+        assert res.status_code == 403
+        assert "strictly prohibited in non-development environments" in res.json()["detail"]
+    finally:
+        settings.ENVIRONMENT = original_env
+
+
