@@ -18,10 +18,7 @@ export type WidgetId =
   | 'priority_distribution'
   | 'sources_distribution'
   | 'sentiment_distribution'
-  | 'queue_table'
-  | 'kpi_gauges'
-  | 'sla_matrix'
-  | 'bedrock_routing';
+  | 'queue_table';
 
 const DEFAULT_WIDGET_ORDER: WidgetId[] = [
   'kpi_sla',
@@ -175,7 +172,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
       case 'kpi_mttr':
         return 'AI MTTR Resolution Velocity';
       case 'domain_distribution':
-      case 'bedrock_routing':
         return 'Total Inquiries by Domain Type';
       case 'priority_distribution':
         return 'Inquiries by Priority Tier & SLA Health';
@@ -338,18 +334,8 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               />
             )}
 
-            {/* Legacy fallback if stored in cache */}
-            {(id === 'kpi_gauges' || id === 'sla_matrix') && (
-              <TasklySlaCard
-                kpis={kpis}
-                inquiries={inquiries}
-                dragHandle={renderDragHandle(id)}
-                dashboardMetrics={dashboardMetrics}
-              />
-            )}
-
             {/* 3. Middle Row Left: Domain Hatched Pill Bar Chart */}
-            {(id === 'domain_distribution' || id === 'bedrock_routing') && (
+            {id === 'domain_distribution' && (
               <TasklyDomainBarChart
                 inquiries={inquiries}
                 dragHandle={renderDragHandle('domain_distribution')}
@@ -386,7 +372,14 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
 
             {/* 7. Lower Section: Inquiries Queue Table */}
             {id === 'queue_table' && (
-              <div className="loadlogic-card" style={{ width: '100%' }}>
+              <div
+                className="loadlogic-card"
+                style={{
+                  width: '100%',
+                  padding: '22px 24px',
+                  boxSizing: 'border-box',
+                }}
+              >
                 <LoadLogicQueueTable
                   inquiries={inquiries}
                   selectedTicket={selectedTicket}

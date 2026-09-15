@@ -568,7 +568,113 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
 
         {/* RIGHT COLUMN: AI Triage Intelligence & Operations Center */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {/* Section 4: Bedrock Explainable AI (XAI) & Latency Card */}
+          {/* Section: Operator Ownership & Lifecycle Card */}
+          {(ticket.assigned_agent_id || ticket.claimed_at || ticket.status !== InquiryStatusEnum.UNASSIGNED) && (
+            <div
+              style={{
+                backgroundColor: '#FFFFFF',
+                border: '1px solid rgba(12, 13, 13, 0.1)',
+                borderRadius: '18px',
+                padding: '16px 18px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Operator Assignment & Ownership
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '9999px',
+                    backgroundColor: ticket.status === InquiryStatusEnum.RESOLVED ? '#ECFDF5' : '#EFF6FF',
+                    color: ticket.status === InquiryStatusEnum.RESOLVED ? '#047857' : '#1D4ED8',
+                    border: ticket.status === InquiryStatusEnum.RESOLVED ? '1px solid #A7F3D0' : '1px solid #BFDBFE',
+                  }}
+                >
+                  {ticket.status === InquiryStatusEnum.RESOLVED ? 'Resolved' : 'Active In Triage'}
+                </span>
+              </div>
+
+              {/* Operator Info Row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  style={{
+                    width: '34px',
+                    height: '34px',
+                    borderRadius: '50%',
+                    backgroundColor: assignedAgent?.color || '#3b82f6',
+                    color: '#FFFFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}
+                >
+                  {assignedAgent?.initials || (ticket.assigned_agent_id ? ticket.assigned_agent_id.slice(0, 2).toUpperCase() : 'OP')}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '0.86rem', fontWeight: 800, color: '#0C0D0D' }}>
+                      {assignedAgent?.name || ticket.assigned_agent_id || 'Assigned Operator'}
+                    </span>
+                    {(ticket.assigned_agent_id === currentAgent.id || assignedAgent?.id === currentAgent.id) && (
+                      <span style={{ fontSize: '0.66rem', backgroundColor: '#ECFDF5', color: '#047857', fontWeight: 700, padding: '1px 6px', borderRadius: '4px' }}>
+                        You
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontSize: '0.74rem', color: '#64748B' }}>
+                    {assignedAgent?.role?.replace('_', ' ') || 'Support Agent'} • {assignedAgent?.email || 'enterprise.internal'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Timestamp Details */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '8px',
+                  backgroundColor: '#FAFAFA',
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(12, 13, 13, 0.05)',
+                  fontSize: '0.74rem',
+                }}
+              >
+                <div>
+                  <span style={{ display: 'block', color: '#94A3B8', fontWeight: 600, fontSize: '0.68rem', marginBottom: '2px' }}>
+                    Assigned At
+                  </span>
+                  <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                    {ticket.claimed_at ? new Date(ticket.claimed_at).toLocaleString() : 'In intake queue'}
+                  </span>
+                </div>
+                <div>
+                  <span style={{ display: 'block', color: '#94A3B8', fontWeight: 600, fontSize: '0.68rem', marginBottom: '2px' }}>
+                    {ticket.status === InquiryStatusEnum.RESOLVED ? 'Resolved At' : 'Dwell Elapsed'}
+                  </span>
+                  <span style={{ color: '#0F172A', fontWeight: 700 }}>
+                    {ticket.status === InquiryStatusEnum.RESOLVED
+                      ? (ticket.resolved_at ? new Date(ticket.resolved_at).toLocaleString() : 'Closed')
+                      : ticket.claimed_at
+                        ? `${Math.max(1, Math.round((Date.now() - new Date(ticket.claimed_at).getTime()) / 60000))}m in triage`
+                        : 'Pending pick-up'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Section 4: AI Triage Intelligence Card */}
           <div
             style={{
               backgroundColor: '#ECF4EE',
@@ -588,7 +694,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Brain size={16} color="#0C0D0D" />
                 <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0C0D0D', textTransform: 'uppercase' }}>
-                  Bedrock Explainable AI (XAI)
+                  AI Triage Intelligence
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -603,7 +709,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     border: '1px solid rgba(12, 13, 13, 0.08)',
                   }}
                 >
-                  {ticket.model_id ? (ticket.model_id.includes('haiku') ? 'Claude Haiku 4.5' : ticket.model_id) : 'Claude Haiku 4.5'}
+                  AI Copilot
                 </span>
                 <span
                   style={{
@@ -670,7 +776,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                 lineHeight: 1.5,
               }}
             >
-              &quot;{ticket.triage_rationale || ticket.agent_copilot_notes || 'Clasificación semántica multivariable ejecutada mediante Amazon Bedrock Converse API.'}&quot;
+              &quot;{ticket.triage_rationale || ticket.agent_copilot_notes || 'Automated semantic triage and classification analysis.'}&quot;
             </div>
           </div>
 

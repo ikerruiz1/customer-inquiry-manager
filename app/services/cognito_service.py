@@ -54,46 +54,10 @@ def verify_rfc6238_totp(secret_b32: str, code: str, interval: int = 30, window: 
     return False
 
 
-# In-memory persistent operator registry for local dev and testing
-_OPERATOR_REGISTRY: Dict[str, Dict[str, Any]] = {
-    "carlos.m@company.internal": {
-        "id": "00000000-0000-0000-0000-000000000001",
-        "name": "Carlos M.",
-        "email": "carlos.m@company.internal",
-        "password": "Agent123!",
-        "role": "Tier1_Agent",
-        "groups": ["Tier1_Agents"],
-        "totp_secret": "JBSWY3DPEHPK3PXP",  # standard Base32 secret
-        "initials": "CM",
-        "color": "#3b82f6",
-    },
-    "laura.g@company.internal": {
-        "id": "00000000-0000-0000-0000-000000000002",
-        "name": "Laura G.",
-        "email": "laura.g@company.internal",
-        "password": "Agent123!",
-        "role": "Tier1_Agent",
-        "groups": ["Tier1_Agents"],
-        "totp_secret": "MZXW6YTBOIXW6YTB",
-        "initials": "LG",
-        "color": "#10b981",
-    },
-    "alex.rivera@company.internal": {
-        "id": "00000000-0000-0000-0000-000000000099",
-        "name": "Alex Rivera",
-        "email": "alex.rivera@company.internal",
-        "password": "Manager123!",
-        "role": "Operations_Manager",
-        "groups": ["Operations_Managers", "Tier1_Agents"],
-        "totp_secret": "NBSWY3DPEHPK3PXP",
-        "initials": "AR",
-        "color": "#8b5cf6",
-    },
-}
-# Maintain backwards-compatible aliases for legacy test clients
-_OPERATOR_REGISTRY["carlos.m@company.local"] = _OPERATOR_REGISTRY["carlos.m@company.internal"]
-_OPERATOR_REGISTRY["laura.g@company.local"] = _OPERATOR_REGISTRY["laura.g@company.internal"]
-_OPERATOR_REGISTRY["alex.rivera@company.local"] = _OPERATOR_REGISTRY["alex.rivera@company.internal"]
+from app.core.seeder import build_canonical_operator_registry
+
+# In-memory persistent operator registry populated from Single Source of Truth
+_OPERATOR_REGISTRY: Dict[str, Dict[str, Any]] = build_canonical_operator_registry()
 
 # Ephemeral session map for MFA challenge verification
 _MFA_SESSIONS: Dict[str, Dict[str, Any]] = {}

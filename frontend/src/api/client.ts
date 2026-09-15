@@ -82,6 +82,9 @@ export async function loginOperator(
     body: JSON.stringify({ username, password }),
   });
   if (!res.ok) {
+    if (res.status >= 500) {
+      throw new Error(`Backend service unavailable (HTTP ${res.status}). Ensure FastAPI is running on port 8000.`);
+    }
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Invalid credentials or user not found');
   }
@@ -103,6 +106,9 @@ export async function registerOperator(payload: {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
+    if (res.status >= 500) {
+      throw new Error(`Backend service unavailable (HTTP ${res.status}). Ensure FastAPI is running on port 8000.`);
+    }
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Operator registration failed');
   }
@@ -122,9 +128,13 @@ export async function verifyMfaCode(
     body: JSON.stringify({ session, totp_code: totpCode }),
   });
   if (!res.ok) {
+    if (res.status >= 500) {
+      throw new Error(`Backend service unavailable (HTTP ${res.status}). Ensure FastAPI is running on port 8000.`);
+    }
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Invalid or expired verification code');
   }
+
   const tokenData: TokenAuthResponse = await res.json();
   if (tokenData.access_token) {
     setAuthToken(tokenData.access_token);

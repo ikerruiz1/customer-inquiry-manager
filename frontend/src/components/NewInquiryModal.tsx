@@ -103,7 +103,7 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
                 New Customer Inquiry
               </h3>
               <span style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)' }}>
-                Ingest customer inquiry with live Amazon Bedrock autonomous triage
+                Submit customer inquiry for automated classification and triage
               </span>
             </div>
           </div>
@@ -316,7 +316,7 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
             </label>
             <textarea
               rows={4}
-              placeholder="Write customer message here to test Bedrock autonomous classification..."
+              placeholder="Enter customer inquiry message or ticket description..."
               value={body}
               onChange={(e) => setBody(e.target.value)}
               required

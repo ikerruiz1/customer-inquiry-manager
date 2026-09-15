@@ -21,7 +21,6 @@ class BedrockService:
     def __init__(self):
         self.region = settings.AWS_REGION
         self.model_id = settings.BEDROCK_MODEL_ID
-        self.high_reasoning_model_id = settings.BEDROCK_HIGH_REASONING_MODEL_ID
         self.guardrail_id = settings.BEDROCK_GUARDRAIL_ID
         self.guardrail_version = settings.BEDROCK_GUARDRAIL_VERSION
         self.grounding_context = self._load_grounding_context()
