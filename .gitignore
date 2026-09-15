@@ -87,3 +87,7 @@ yarn-error.log*
 # OS files
 Thumbs.db
 .DS_Store
+
+# Temporary scratch & debug scripts
+scratch/
+.scratch/

@@ -25,6 +25,7 @@ interface LoadLogicTopHeaderProps {
   onExportAuditLogs: () => void;
   onOpenNewInquiryModal: () => void;
   onResetLayout: () => void;
+  onResetData?: () => void;
   isLayoutCustomized: boolean;
   currentThemeId: ThemeId;
   onSelectTheme: (themeId: ThemeId) => void;
@@ -43,6 +44,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   onExportAuditLogs,
   onOpenNewInquiryModal,
   onResetLayout,
+  onResetData,
   isLayoutCustomized,
   currentThemeId,
   onSelectTheme,
@@ -383,6 +385,31 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
             >
               <RotateCcw size={12} />
               <span>Reset Layout</span>
+            </button>
+          )}
+
+          {/* Reset Demo Inquiries Button */}
+          {onResetData && (
+            <button
+              onClick={onResetData}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '8px 14px',
+                borderRadius: '9999px',
+                backgroundColor: '#FFFFFF',
+                border: '1px solid rgba(12, 13, 13, 0.16)',
+                color: '#4B5563',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title="Reset customer inquiries back to initial demo dataset"
+            >
+              <RotateCcw size={12} />
+              <span>Reset Data</span>
             </button>
           )}
 
