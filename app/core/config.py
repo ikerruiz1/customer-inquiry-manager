@@ -36,10 +36,6 @@ class Settings(BaseSettings):
         default="eu.anthropic.claude-haiku-4-5-20251001-v1:0",
         description="Primary fast Bedrock model ID for triage and classification",
     )
-    BEDROCK_HIGH_REASONING_MODEL_ID: str = Field(
-        default="eu.anthropic.claude-haiku-4-5-20251001-v1:0",
-        description="Bedrock model ID for triage and escalation drafting (Claude Haiku 4.5)",
-    )
     BEDROCK_GUARDRAIL_ID: Optional[str] = Field(
         default=None,
         description="Amazon Bedrock Guardrails identifier for prompt attack & PII DLP filtering",

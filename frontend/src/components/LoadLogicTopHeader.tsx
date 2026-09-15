@@ -3,10 +3,8 @@ import {
   Search,
   Plus,
   Download,
-  RefreshCw,
   Lock,
   ChevronDown,
-  Server,
   RotateCcw,
   LogOut,
   UserCheck,
@@ -38,8 +36,8 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   onSelectAgent: _onSelectAgent,
   onLogout,
   onOpenAuthModal,
-  isLiveBackend,
-  isRefreshing,
+  isLiveBackend: _isLiveBackend,
+  isRefreshing: _isRefreshing,
   searchQuery,
   onSearchChange,
   onExportAuditLogs,
@@ -48,7 +46,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   isLayoutCustomized,
   currentThemeId,
   onSelectTheme,
-  modelName,
+  modelName: _modelName,
 }) => {
 
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
@@ -309,57 +307,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
           </div>
         </div>
 
-        {/* Center/Right: Compliance & FinOps Telemetry Badges */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* 1. Live Backend Engine Status Pill */}
-          <div
-            title={isLiveBackend ? "Connected to live FastAPI microservice (SQLite/PostgreSQL persistence)" : "Disconnected from backend microservice"}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 12px',
-              borderRadius: '9999px',
-              backgroundColor: isLiveBackend ? '#ECF4EE' : '#FEF2F2',
-              border: '1px solid rgba(12, 13, 13, 0.06)',
-              fontSize: '0.74rem',
-              fontWeight: 700,
-              color: isLiveBackend ? '#065F46' : '#991B1B',
-              cursor: 'default',
-            }}
-          >
-            <Server size={12} style={{ color: isLiveBackend ? '#047857' : '#DC2626' }} />
-            <span
-              style={{
-                width: '6px',
-                height: '6px',
-                borderRadius: '50%',
-                backgroundColor: isLiveBackend ? '#10B981' : '#EF4444',
-              }}
-            />
-            <span>{isLiveBackend ? 'Live Backend Connected' : 'Backend Disconnected'}</span>
-            {isRefreshing && <RefreshCw size={11} className="animate-spin" style={{ marginLeft: '4px', opacity: 0.6 }} />}
-          </div>
 
-          {/* 2. Bedrock GenAI Telemetry Badge */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '6px 14px',
-              borderRadius: '9999px',
-              backgroundColor: '#ECF4EE',
-              border: '1px solid rgba(12, 13, 13, 0.06)',
-              fontSize: '0.74rem',
-            }}
-            title="AWS Bedrock Converse API: Claude Haiku 4.5 autonomous triage engine."
-          >
-            <span className="status-dot status-dot-green" />
-            <strong style={{ color: '#0C0D0D', fontWeight: 800 }}>Bedrock GenAI</strong>
-            <span style={{ color: 'var(--color-text-muted)', fontSize: '0.7rem' }}>{modelName || 'Claude Haiku 4.5'}</span>
-          </div>
-        </div>
       </div>
 
       {/* Lower Row: Full-Width Search Omnibar + Action Controls */}

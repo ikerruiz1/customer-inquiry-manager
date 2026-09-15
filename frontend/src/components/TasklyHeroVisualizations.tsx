@@ -246,11 +246,6 @@ export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHan
           </span>
         </div>
       </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.66rem', color: '#94A3B8' }}>
-        <span>Formula: (In-Bounds ÷ Total Evaluated) × 100</span>
-        <span style={{ color: '#047857', fontWeight: 700 }}>Deterministic Engine</span>
-      </div>
     </div>
   );
 };
@@ -351,7 +346,7 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHa
               AI MTTR Resolution Velocity
             </span>
             <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
-              Claude Haiku 4.5 autonomous inference & agent triage time
+              Automated inference velocity & mean resolution time
             </span>
           </div>
         </div>
@@ -409,9 +404,9 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHa
         }}
       >
         <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
-          <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Bedrock Inference</span>
+          <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Inference Latency</span>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#111827' }}>
-            ~{avgBedrockLatency}s <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>P95 Haiku</span>
+            ~{avgBedrockLatency}s <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>P95 Latency</span>
           </span>
         </div>
         <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
@@ -426,11 +421,6 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHa
             {zeroTouchPct}% <span style={{ fontSize: '0.68rem', color: '#047857', fontWeight: 700 }}>Zero-Touch</span>
           </span>
         </div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.66rem', color: '#94A3B8' }}>
-        <span>Telemetry: AWS CloudWatch Agent + X-Ray</span>
-        <span style={{ color: '#047857', fontWeight: 700 }}>Zero NAT Egress</span>
       </div>
     </div>
   );
@@ -624,7 +614,7 @@ export const TasklyDomainBarChart: React.FC<TasklyDomainBarChartProps> = ({ inqu
             Total Inquiries by Domain Type
           </h3>
           <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
-            Claude Haiku 4.5 autonomous traffic classification across 6 enterprise domains
+            Autonomous ticket classification across enterprise domains
           </span>
         </div>
 
@@ -1093,7 +1083,7 @@ export const TasklyPriorityBarChart: React.FC<TasklyPriorityBarChartProps> = ({ 
             Inquiries by Priority Tier & SLA Health
           </h3>
           <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
-            ITIL severity tiering and deterministic SLA deadline compliance
+            ITIL severity tiering and SLA deadline tracking
           </span>
         </div>
 
@@ -1539,7 +1529,7 @@ export const TasklySourcesBarChart: React.FC<TasklySourcesBarChartProps> = ({ in
               Inquiries by Ingestion Channel
             </h3>
             <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
-              Autonomous multi-channel intake across Stripe, Email, Trustpilot & Web Portal
+              Multi-channel intake across Stripe, Email, Trustpilot & Web Form
             </span>
           </div>
         </div>
@@ -2042,7 +2032,7 @@ export const TasklySentimentBarChart: React.FC<TasklySentimentBarChartProps> = (
               </span>
             </div>
             <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
-              AWS Bedrock single-pass sentiment score & churn defusing (Flow 30)
+              Sentiment score and churn risk analysis
             </span>
           </div>
         </div>

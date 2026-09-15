@@ -81,35 +81,37 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     }
   }, [activeTab]);
 
-  // Compute tab counts
+  // Compute tab counts: 'all' represents active unresolved tickets in the operational backlog
+  const activeInquiries = inquiries.filter((t) => t.status !== InquiryStatusEnum.RESOLVED);
   const tabCounts = {
-    all: inquiries.length,
+    all: activeInquiries.length,
     pending: inquiries.filter((t) => t.status === InquiryStatusEnum.UNASSIGNED).length,
     inProgress: inquiries.filter((t) => t.status === InquiryStatusEnum.CLAIMED).length,
     assigned: inquiries.filter((t) => t.assigned_agent_id === currentAgent.id && t.status !== InquiryStatusEnum.RESOLVED).length,
     completed: inquiries.filter((t) => t.status === InquiryStatusEnum.RESOLVED).length,
   };
 
-  // Compute facet counts for quick filter chips
+  // Compute facet counts for quick filter chips (strictly on active unresolved inquiries)
   const facetCounts = {
-    p1: inquiries.filter((t) => t.priority === PriorityEnum.P1).length,
-    p2: inquiries.filter((t) => t.priority === PriorityEnum.P2).length,
-    p3: inquiries.filter((t) => t.priority === PriorityEnum.P3).length,
-    p4: inquiries.filter((t) => t.priority === PriorityEnum.P4).length,
-    churn: inquiries.filter((t) => t.churn_risk).length,
-    stripe: inquiries.filter((t) => t.channel === ChannelEnum.BILLING).length,
-    email: inquiries.filter((t) => t.channel === ChannelEnum.EMAIL).length,
-    trustpilot: inquiries.filter((t) => t.channel === ChannelEnum.TRUSTPILOT).length,
-    webForm: inquiries.filter((t) => t.channel === ChannelEnum.WEB_FORM).length,
+    p1: activeInquiries.filter((t) => t.priority === PriorityEnum.P1).length,
+    p2: activeInquiries.filter((t) => t.priority === PriorityEnum.P2).length,
+    p3: activeInquiries.filter((t) => t.priority === PriorityEnum.P3).length,
+    p4: activeInquiries.filter((t) => t.priority === PriorityEnum.P4).length,
+    churn: activeInquiries.filter((t) => t.churn_risk).length,
+    stripe: activeInquiries.filter((t) => t.channel === ChannelEnum.BILLING).length,
+    email: activeInquiries.filter((t) => t.channel === ChannelEnum.EMAIL).length,
+    trustpilot: activeInquiries.filter((t) => t.channel === ChannelEnum.TRUSTPILOT).length,
+    webForm: activeInquiries.filter((t) => t.channel === ChannelEnum.WEB_FORM).length,
   };
 
-  // 1. Filter based on active tab
+  // 1. Filter based on active tab: Resolved tickets strictly disappear from active task lists!
   const tabFilteredInquiries = inquiries.filter((ticket) => {
     if (activeTab === 'PENDING') return ticket.status === InquiryStatusEnum.UNASSIGNED;
     if (activeTab === 'IN_PROGRESS') return ticket.status === InquiryStatusEnum.CLAIMED;
     if (activeTab === 'ASSIGNED') return ticket.assigned_agent_id === currentAgent.id && ticket.status !== InquiryStatusEnum.RESOLVED;
     if (activeTab === 'COMPLETED') return ticket.status === InquiryStatusEnum.RESOLVED;
-    return true; // 'DEFAULT', 'ALL', 'FILTERS'
+    // For 'DEFAULT', 'ALL', and 'FILTERS': exclude resolved inquiries from the active task queue
+    return ticket.status !== InquiryStatusEnum.RESOLVED;
   });
 
   // 2. Filter based on active quick facet
@@ -480,7 +482,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
 
             {/* Status Pills */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              {/* Default Tab: Auto Urgent First via Q38 ITIL Algorithm */}
+              {/* Default Tab: Auto Urgent First */}
               <button
                 onClick={() => {
                   onTabChange('DEFAULT');
@@ -488,7 +490,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                   setIsFiltersBarOpen(false);
                 }}
                 className={`pill-btn ${activeTab === 'DEFAULT' || (activeTab === 'ALL' && activeFacetFilter === 'ALL' && !isFiltersBarOpen) ? 'active' : ''}`}
-                title="Default Mode: Automatic ITIL Urgent First Prioritization (Q38 Algorithm)"
+                title="Active Operational Queue: Urgent first prioritization"
               >
                 Default (Urgent First) {tabCounts.all}
               </button>
@@ -1097,19 +1099,26 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                       style={{
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        padding: '3px 9px',
+                        gap: '5px',
+                        padding: '3px 10px',
                         borderRadius: '9999px',
-                        backgroundColor: 'rgba(37, 99, 235, 0.08)',
-                        color: '#1D4ED8',
+                        backgroundColor: (assignedAgent?.id === currentAgent.id || ticket.assigned_agent_id === currentAgent.id) ? '#ECFDF5' : 'rgba(37, 99, 235, 0.08)',
+                        color: (assignedAgent?.id === currentAgent.id || ticket.assigned_agent_id === currentAgent.id) ? '#047857' : '#1D4ED8',
+                        border: (assignedAgent?.id === currentAgent.id || ticket.assigned_agent_id === currentAgent.id) ? '1px solid #A7F3D0' : '1px solid rgba(37, 99, 235, 0.2)',
                         fontSize: '0.72rem',
                         fontWeight: 700,
                         whiteSpace: 'nowrap',
                       }}
-                      title={`Claimed by ${assignedAgent ? assignedAgent.name : 'Operator'}`}
+                      title={`Assigned to ${assignedAgent ? `${assignedAgent.name} (${assignedAgent.role})` : (ticket.assigned_agent_id || 'Operator')}`}
                     >
                       <User size={11} />
-                      <span>{assignedAgent ? assignedAgent.name : 'Assigned'}</span>
+                      <span>
+                        {(assignedAgent?.id === currentAgent.id || ticket.assigned_agent_id === currentAgent.id)
+                          ? 'Assigned to You'
+                          : assignedAgent
+                            ? assignedAgent.name
+                            : 'Assigned'}
+                      </span>
                     </span>
                   )}
                 </div>
