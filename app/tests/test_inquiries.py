@@ -10,29 +10,34 @@ def test_itil_sla_matrix_calculation():
     now = datetime.now(timezone.utc)
 
     # P1 Test: Critical Urgency (4) + Critical Impact (3)
-    p1_prio, p1_deadline = calculate_sla(urgency=4, impact=3, churn_risk=False)
+    p1_prio, p1_deadline, p1_frt = calculate_sla(urgency=4, impact=3, churn_risk=False)
     assert p1_prio == "P1"
     assert int((p1_deadline - now).total_seconds() / 3600) == 1
+    assert int((p1_frt - now).total_seconds() / 60) == 15
 
     # P2 Test: High Urgency (3) + High Impact (2)
-    p2_prio, p2_deadline = calculate_sla(urgency=3, impact=2, churn_risk=False)
+    p2_prio, p2_deadline, p2_frt = calculate_sla(urgency=3, impact=2, churn_risk=False)
     assert p2_prio == "P2"
     assert int((p2_deadline - now).total_seconds() / 3600) == 4
+    assert int((p2_frt - now).total_seconds() / 60) == 60
 
     # P3 Test: Medium Urgency (2) + Low Impact (1)
-    p3_prio, p3_deadline = calculate_sla(urgency=2, impact=1, churn_risk=False)
+    p3_prio, p3_deadline, p3_frt = calculate_sla(urgency=2, impact=1, churn_risk=False)
     assert p3_prio == "P3"
     assert int((p3_deadline - now).total_seconds() / 3600) == 12
+    assert int((p3_frt - now).total_seconds() / 3600) == 4
 
     # P4 Test: Low Urgency (1) + Low Impact (1)
-    p4_prio, p4_deadline = calculate_sla(urgency=1, impact=1, churn_risk=False)
+    p4_prio, p4_deadline, p4_frt = calculate_sla(urgency=1, impact=1, churn_risk=False)
     assert p4_prio == "P4"
     assert int((p4_deadline - now).total_seconds() / 3600) == 24
+    assert int((p4_frt - now).total_seconds() / 3600) == 8
 
     # Churn Risk Escalation Guardrail: P3 escalated to P2 due to high churn probability
-    escalated_prio, escalated_deadline = calculate_sla(urgency=2, impact=1, churn_risk=True)
+    escalated_prio, escalated_deadline, escalated_frt = calculate_sla(urgency=2, impact=1, churn_risk=True)
     assert escalated_prio == "P2"
     assert int((escalated_deadline - now).total_seconds() / 3600) == 4
+    assert int((escalated_frt - now).total_seconds() / 60) == 60
 
 
 @pytest.mark.asyncio
@@ -227,5 +232,128 @@ async def test_reset_demo_inquiries_forbidden_in_production(client: AsyncClient)
         assert "strictly prohibited in non-development environments" in res.json()["detail"]
     finally:
         settings.ENVIRONMENT = original_env
+
+
+@pytest.mark.asyncio
+async def test_conversation_thread_and_sla_clock_pause_resume(client: AsyncClient):
+    """Verify multi-turn conversation thread, SLA clock pause on REQUEST_INFO, and resumption on customer reply."""
+    # 1. Ingest inquiry
+    create_res = await client.post("/api/v1/inquiries/", json={
+        "channel": "EMAIL",
+        "customer_email": "cto@medtech-devices.de",
+        "customer_name": "Dr. Klaus Becker",
+        "subject": "Ultrasound Telemetry Sync Disconnected",
+        "body": "CardioScan 3000 unit fails to sync telemetry payloads. Error code SEC-TLS-ERR-403.",
+    })
+    assert create_res.status_code == 201
+    inquiry_data = create_res.json()
+    inquiry_id = inquiry_data["id"]
+    initial_deadline = datetime.fromisoformat(inquiry_data["sla_deadline_at"])
+
+    # Verify opening customer message was automatically persisted
+    msg_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/messages")
+    assert msg_res.status_code == 200
+    messages = msg_res.json()
+    assert len(messages) == 1
+    assert messages[0]["sender_type"] == "CUSTOMER"
+    assert "CardioScan 3000" in messages[0]["body"]
+
+    # 2. Agent claims ticket
+    await client.patch(f"/api/v1/inquiries/{inquiry_id}/claim")
+
+    # 3. Agent requests information (REQUEST_INFO) -> SLA clock pauses, status becomes PENDING_CUSTOMER
+    pause_payload = {
+        "body": "Hello Dr. Becker, could you please provide the firmware build version from the diagnostic panel?",
+        "action": "REQUEST_INFO",
+        "attachments": [],
+    }
+    agent_msg_res = await client.post(f"/api/v1/inquiries/{inquiry_id}/messages", json=pause_payload)
+    assert agent_msg_res.status_code == 201
+    agent_msg = agent_msg_res.json()
+    assert agent_msg["sender_type"] == "AGENT"
+    assert agent_msg["is_internal_note"] is False
+
+    # Verify inquiry status and pause state
+    inquiry_check = await client.get(f"/api/v1/inquiries/{inquiry_id}")
+    inq = inquiry_check.json()
+    assert inq["status"] == "PENDING_CUSTOMER"
+    assert inq["sla_paused_at"] is not None
+    assert inq["first_responded_at"] is not None  # First agent response recorded
+
+    # Verify audit trail has PAUSE_SLA_PENDING_CUSTOMER
+    audit_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/audit-logs")
+    pause_log = [l for l in audit_res.json() if l["action"] == "PAUSE_SLA_PENDING_CUSTOMER"]
+    assert len(pause_log) == 1
+
+    # 4. Customer responds -> SLA clock resumes, status returns to CLAIMED, deadline is extended
+    customer_reply_payload = {
+        "body": "Firmware build is CardioOS v4.2.1-hotfix3 with TLS 1.3 cert.",
+        "customer_name": "Dr. Klaus Becker",
+        "customer_email": "cto@medtech-devices.de",
+    }
+    reply_res = await client.post(f"/api/v1/inquiries/{inquiry_id}/customer-reply", json=customer_reply_payload)
+    assert reply_res.status_code == 201
+    reply_msg = reply_res.json()
+    assert reply_msg["sender_type"] == "CUSTOMER"
+    assert "CardioOS" in reply_msg["body"]
+
+    # Verify inquiry resumed to CLAIMED and pause cleared
+    inquiry_resumed = await client.get(f"/api/v1/inquiries/{inquiry_id}")
+    resumed_data = inquiry_resumed.json()
+    assert resumed_data["status"] == "CLAIMED"
+    assert resumed_data["sla_paused_at"] is None
+
+    # Verify thread now has 3 messages: Customer -> Agent -> Customer
+    thread_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/messages")
+    thread = thread_res.json()
+    assert len(thread) == 3
+
+
+@pytest.mark.asyncio
+async def test_internal_note_and_resolution_while_paused(client: AsyncClient):
+    """Verify internal notes are invisible to customers and resolving while paused extends SLA properly."""
+    # 1. Create and claim
+    create_res = await client.post("/api/v1/inquiries/", json={
+        "channel": "WEB_FORM",
+        "customer_email": "nurse@hospital.com",
+        "customer_name": "Nurse Sarah",
+        "subject": "Sensor calibration error",
+        "body": "Sensor E-22 is reporting +/- 5% error in calibration.",
+    })
+    inquiry_id = create_res.json()["id"]
+    await client.patch(f"/api/v1/inquiries/{inquiry_id}/claim")
+
+    # 2. Add Internal Note
+    note_payload = {
+        "body": "Internal Note: Known issue with batch 2026-B sensors. Do not replace unit; recalibrate via firmware tool.",
+        "action": "INTERNAL_NOTE",
+    }
+    note_res = await client.post(f"/api/v1/inquiries/{inquiry_id}/messages", json=note_payload)
+    assert note_res.status_code == 201
+    assert note_res.json()["is_internal_note"] is True
+
+    # 3. Request info to pause SLA
+    await client.post(f"/api/v1/inquiries/{inquiry_id}/messages", json={
+        "body": "Could you provide the device serial number?",
+        "action": "REQUEST_INFO",
+    })
+
+    # 4. Agent resolves directly while ticket was in PENDING_CUSTOMER
+    resolve_payload = {
+        "resolution_text": "Calibration patch applied remotely via OTA update. Accuracy verified at 99.8%.",
+        "notes": "OTA recalibration successful.",
+    }
+    resolve_res = await client.patch(f"/api/v1/inquiries/{inquiry_id}/resolve", json=resolve_payload)
+    assert resolve_res.status_code == 200
+    resolved = resolve_res.json()
+    assert resolved["status"] == "RESOLVED"
+    assert resolved["sla_paused_at"] is None
+
+    # Check messages in resolved ticket - must contain initial, note, request_info, and resolution message
+    thread_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/messages")
+    thread = thread_res.json()
+    assert len(thread) == 4
+    assert thread[-1]["body"] == resolve_payload["resolution_text"]
+
 
 

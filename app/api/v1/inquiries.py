@@ -5,13 +5,14 @@ from typing import Optional, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select, update, func
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user, require_tier1_agent, require_operations_manager
 from app.core.telemetry import emit_emf_metric
-from app.models.inquiry import Inquiry, AuditLog
+from app.models.inquiry import Inquiry, AuditLog, InquiryMessage
 from app.schemas.inquiry import (
     InquiryCreate,
     InquiryResponse,
@@ -22,6 +23,11 @@ from app.schemas.inquiry import (
     InquiryStatusEnum,
     DepartmentEnum,
     PriorityEnum,
+    InquiryMessageCreate,
+    InquiryMessageResponse,
+    CustomerReplyCreate,
+    MessageActionEnum,
+    MessageSenderEnum,
 )
 from app.services.bedrock_service import BedrockService, get_bedrock_service
 from app.services.sns_service import SNSService, get_sns_service
@@ -30,32 +36,40 @@ logger = logging.getLogger("app.api.v1.inquiries")
 router = APIRouter()
 
 
-def calculate_sla(urgency: int, impact: int, churn_risk: bool) -> tuple[str, datetime]:
-    """Compute ITIL priority classification and temporal resolution deadline deterministically."""
-    now = datetime.now(timezone.utc)
+def calculate_sla(
+    urgency: int, impact: int, churn_risk: bool, reference_time: Optional[datetime] = None
+) -> tuple[str, datetime, datetime]:
+    """Compute ITIL priority classification, resolution deadline, and First Response Time (FRT) deterministically."""
+    now = reference_time or datetime.now(timezone.utc)
 
     # 1. ITIL Matrix Calculation
     if urgency >= 4 and impact >= 3:
         priority = "P1"
-        hours = 1
+        resolution_hours = 1
+        frt_minutes = 15  # 15 minutes First Response Time for critical outages
     elif urgency >= 3 and impact >= 2:
         priority = "P2"
-        hours = 4
+        resolution_hours = 4
+        frt_minutes = 60  # 1 hour First Response Time
     elif urgency >= 2 and impact >= 1:
         priority = "P3"
-        hours = 12
+        resolution_hours = 12
+        frt_minutes = 240  # 4 hours First Response Time
     else:
         priority = "P4"
-        hours = 24
+        resolution_hours = 24
+        frt_minutes = 480  # 8 hours First Response Time
 
     # 2. Churn Risk Priority Escalation Guardrail
     if churn_risk and priority in ["P3", "P4"]:
         logger.info(f"Escalating priority from {priority} to P2 due to high churn risk factor.")
         priority = "P2"
-        hours = 4
+        resolution_hours = 4
+        frt_minutes = 60
 
-    deadline = now + timedelta(hours=hours)
-    return priority, deadline
+    resolution_deadline = now + timedelta(hours=resolution_hours)
+    frt_deadline = now + timedelta(minutes=frt_minutes)
+    return priority, resolution_deadline, frt_deadline
 
 
 async def process_and_persist_inquiry(
@@ -72,8 +86,8 @@ async def process_and_persist_inquiry(
         body=inquiry_in.body,
     )
 
-    # 2. Compute ITIL SLA deadline
-    priority, sla_deadline = calculate_sla(
+    # 2. Compute ITIL SLA deadline and First Response Time
+    priority, sla_deadline, frt_deadline = calculate_sla(
         urgency=triage_result.urgency_rating,
         impact=triage_result.impact_rating,
         churn_risk=triage_result.churn_risk,
@@ -107,7 +121,6 @@ async def process_and_persist_inquiry(
     entities["output_tokens"] = triage_result.output_tokens
     entities["cost_eur"] = triage_result.cost_eur
 
-
     agent_notes = triage_result.agent_copilot_notes or ""
     if verification_mode == "FLAG_UNVERIFIED" and not is_registered_customer:
         policy_notice = "[SECURITY POLICY WARNING] Inbound sender not found in verified account registry. Verify identity before releasing account telemetry."
@@ -132,11 +145,28 @@ async def process_and_persist_inquiry(
         suggested_response=triage_result.suggested_response,
         agent_copilot_notes=agent_notes,
         sla_deadline_at=sla_deadline,
+        first_response_deadline_at=frt_deadline,
     )
 
     db.add(inquiry)
     await db.flush()
-    await db.refresh(inquiry)
+
+    # Automatically create initial opening InquiryMessage from customer
+    opening_msg = InquiryMessage(
+        inquiry_id=inquiry.id,
+        sender_type="CUSTOMER",
+        sender_name=inquiry.customer_name,
+        sender_email=inquiry.customer_email,
+        body=inquiry.body,
+        is_internal_note=False,
+        attachments=[],
+        created_at=inquiry.created_at,
+    )
+    db.add(opening_msg)
+    await db.flush()
+    fetch_stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry.id)
+    fetch_res = await db.execute(fetch_stmt)
+    inquiry = fetch_res.scalar_one()
 
     # 4. Asynchronous Outbound SNS Dispatch
     inquiry_dict = {
@@ -187,25 +217,27 @@ async def list_inquiries(
     current_user: dict = Depends(require_tier1_agent),
 ):
     """Retrieve prioritized queue utilizing partial index on (priority ASC, sla_deadline_at ASC)."""
-    stmt = select(Inquiry)
+    base_query = select(Inquiry)
 
     if status_filter:
-        stmt = stmt.where(Inquiry.status == status_filter.value)
+        base_query = base_query.where(Inquiry.status == status_filter.value)
     if department:
-        stmt = stmt.where(Inquiry.department == department.value)
+        base_query = base_query.where(Inquiry.department == department.value)
     if priority:
-        stmt = stmt.where(Inquiry.priority == priority.value)
-
-    # Order by ITIL priority, then nearest SLA deadline (Tie-breaking algorithm)
-    stmt = stmt.order_by(Inquiry.priority.asc(), Inquiry.sla_deadline_at.asc())
+        base_query = base_query.where(Inquiry.priority == priority.value)
 
     # Count total
-    count_stmt = select(func.count()).select_from(stmt.subquery())
+    count_stmt = select(func.count()).select_from(base_query.subquery())
     total_res = await db.execute(count_stmt)
     total = total_res.scalar_one()
 
-    # Pagination
-    stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+    # Order by ITIL priority, then nearest SLA deadline (Tie-breaking algorithm)
+    stmt = (
+        base_query.options(selectinload(Inquiry.messages))
+        .order_by(Inquiry.priority.asc(), Inquiry.sla_deadline_at.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
     result = await db.execute(stmt)
     items = result.scalars().all()
 
@@ -225,8 +257,8 @@ async def get_inquiry(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_tier1_agent),
 ):
-    """Retrieve a single inquiry by ID with computed SLA countdown."""
-    stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
+    """Retrieve a single inquiry by ID with computed SLA countdown and messages."""
+    stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
     result = await db.execute(stmt)
     inquiry = result.scalar_one_or_none()
 
@@ -255,13 +287,13 @@ async def claim_inquiry(
             assigned_agent_id=agent_id,
             claimed_at=now,
         )
-        .returning(Inquiry)
+        .returning(Inquiry.id)
     )
 
     result = await db.execute(stmt)
-    updated_inquiry = result.scalar_one_or_none()
+    updated_id = result.scalar_one_or_none()
 
-    if not updated_inquiry:
+    if not updated_id:
         # Check if inquiry exists or was claimed by another agent
         check_stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
         check_res = await db.execute(check_stmt)
@@ -285,7 +317,9 @@ async def claim_inquiry(
     db.add(audit)
     await db.flush()
 
-    return updated_inquiry
+    fetch_stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
+    fetch_res = await db.execute(fetch_stmt)
+    return fetch_res.scalar_one()
 
 
 @router.patch("/{inquiry_id}/resolve", response_model=InquiryResponse)
@@ -297,19 +331,32 @@ async def resolve_inquiry(
 ):
     """Human-in-the-Loop ticket resolution: closes inquiry and captures auditor identity."""
     agent_id = current_user.get("sub", "unknown-agent")
+    agent_name = current_user.get("name") or current_user.get("preferred_username") or "Support Agent"
+    agent_email = current_user.get("email", "agent@company.com")
     now = datetime.now(timezone.utc)
 
-    stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
+    stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
     res = await db.execute(stmt)
     inquiry = res.scalar_one_or_none()
 
     if not inquiry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
 
-    # Capture previous status before mutating
     prev_status = inquiry.status
 
-    # Update inquiry status and resolution text
+    # If resolving while in PENDING_CUSTOMER, unpause and extend deadline
+    if inquiry.status == "PENDING_CUSTOMER" and inquiry.sla_paused_at:
+        paused_at = inquiry.sla_paused_at
+        if paused_at.tzinfo is None:
+            paused_at = paused_at.replace(tzinfo=timezone.utc)
+        pause_delta = max(0, int((now - paused_at).total_seconds()))
+        inquiry.sla_deadline_at = inquiry.sla_deadline_at + timedelta(seconds=pause_delta)
+        inquiry.total_paused_seconds += pause_delta
+        inquiry.sla_paused_at = None
+
+    if inquiry.first_responded_at is None:
+        inquiry.first_responded_at = now
+
     inquiry.status = "RESOLVED"
     inquiry.resolution_text = payload.resolution_text
     inquiry.resolved_at = now
@@ -325,9 +372,25 @@ async def resolve_inquiry(
         reason=payload.notes or "Ticket resolved by support agent",
     )
     db.add(audit)
+
+    # Append resolution message to thread
+    resolution_msg = InquiryMessage(
+        inquiry_id=inquiry.id,
+        sender_type="AGENT",
+        sender_name=agent_name,
+        sender_email=agent_email,
+        body=payload.resolution_text,
+        is_internal_note=False,
+        attachments=[],
+        created_at=now,
+    )
+    db.add(resolution_msg)
+
     await db.flush()
 
-    return inquiry
+    fetch_stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
+    fetch_res = await db.execute(fetch_stmt)
+    return fetch_res.scalar_one()
 
 
 @router.patch("/{inquiry_id}/override", response_model=InquiryResponse)
@@ -340,7 +403,7 @@ async def override_inquiry_classification(
     """MLOps audit log calibration: override AI department or priority classification with audit reasoning."""
     agent_id = current_user.get("sub", "unknown-agent")
 
-    stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
+    stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
     res = await db.execute(stmt)
     inquiry = res.scalar_one_or_none()
 
@@ -367,7 +430,162 @@ async def override_inquiry_classification(
     db.add(audit)
     await db.flush()
 
-    return inquiry
+    fetch_stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
+    fetch_res = await db.execute(fetch_stmt)
+    return fetch_res.scalar_one()
+
+
+@router.get("/{inquiry_id}/messages", response_model=List[InquiryMessageResponse])
+async def list_inquiry_messages(
+    inquiry_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_tier1_agent),
+):
+    """Retrieve chronological conversation thread for a ticket."""
+    stmt = (
+        select(InquiryMessage)
+        .where(InquiryMessage.inquiry_id == inquiry_id)
+        .order_by(InquiryMessage.created_at.asc())
+    )
+    res = await db.execute(stmt)
+    return res.scalars().all()
+
+
+@router.post("/{inquiry_id}/messages", response_model=InquiryMessageResponse, status_code=status.HTTP_201_CREATED)
+async def post_inquiry_message(
+    inquiry_id: UUID,
+    payload: InquiryMessageCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_tier1_agent),
+):
+    """Send an agent reply, ask customer for info (pausing SLA), or append an internal note."""
+    agent_id = current_user.get("sub", "unknown-agent")
+    agent_name = current_user.get("name") or current_user.get("preferred_username") or "Support Agent"
+    agent_email = current_user.get("email", "agent@company.com")
+    now = datetime.now(timezone.utc)
+
+    stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
+    res = await db.execute(stmt)
+    inquiry = res.scalar_one_or_none()
+    if not inquiry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+
+    is_internal = payload.action == MessageActionEnum.INTERNAL_NOTE
+
+    # If first external response from human agent, record first_responded_at
+    if not is_internal and inquiry.first_responded_at is None:
+        inquiry.first_responded_at = now
+
+    # Handle REQUEST_INFO: Pause SLA and switch status to PENDING_CUSTOMER
+    if payload.action == MessageActionEnum.REQUEST_INFO:
+        prev_status = inquiry.status
+        inquiry.status = "PENDING_CUSTOMER"
+        inquiry.sla_paused_at = now
+
+        audit = AuditLog(
+            inquiry_id=inquiry_id,
+            agent_id=agent_id,
+            action="PAUSE_SLA_PENDING_CUSTOMER",
+            previous_value={"status": prev_status, "sla_paused_at": None},
+            new_value={"status": "PENDING_CUSTOMER", "sla_paused_at": now.isoformat()},
+            reason="Agent requested additional information from customer; SLA clock frozen.",
+        )
+        db.add(audit)
+    elif payload.action == MessageActionEnum.REPLY:
+        audit = AuditLog(
+            inquiry_id=inquiry_id,
+            agent_id=agent_id,
+            action="AGENT_REPLY",
+            previous_value={"status": inquiry.status},
+            new_value={"status": inquiry.status},
+            reason="Agent replied to customer.",
+        )
+        db.add(audit)
+    else:
+        audit = AuditLog(
+            inquiry_id=inquiry_id,
+            agent_id=agent_id,
+            action="INTERNAL_NOTE",
+            previous_value=None,
+            new_value={"is_internal_note": True},
+            reason="Internal operator note appended to inquiry thread.",
+        )
+        db.add(audit)
+
+    msg = InquiryMessage(
+        inquiry_id=inquiry_id,
+        sender_type="AGENT",
+        sender_name=agent_name,
+        sender_email=agent_email,
+        body=payload.body,
+        is_internal_note=is_internal,
+        attachments=payload.attachments or [],
+        created_at=now,
+    )
+    db.add(msg)
+    await db.flush()
+    await db.refresh(msg)
+    return msg
+
+
+@router.post("/{inquiry_id}/customer-reply", response_model=InquiryMessageResponse, status_code=status.HTTP_201_CREATED)
+async def post_customer_reply(
+    inquiry_id: UUID,
+    payload: CustomerReplyCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Receive customer reply. If ticket was PENDING_CUSTOMER, dynamically extends SLA deadline and resumes queue."""
+    now = datetime.now(timezone.utc)
+
+    stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
+    res = await db.execute(stmt)
+    inquiry = res.scalar_one_or_none()
+    if not inquiry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+
+    # If ticket was in PENDING_CUSTOMER, unpause and extend SLA deadline by paused duration
+    if inquiry.status == "PENDING_CUSTOMER":
+        paused_at = inquiry.sla_paused_at or inquiry.updated_at
+        if paused_at.tzinfo is None:
+            paused_at = paused_at.replace(tzinfo=timezone.utc)
+        pause_delta = max(0, int((now - paused_at).total_seconds()))
+
+        old_deadline = inquiry.sla_deadline_at
+        inquiry.sla_deadline_at = inquiry.sla_deadline_at + timedelta(seconds=pause_delta)
+        inquiry.total_paused_seconds += pause_delta
+        inquiry.sla_paused_at = None
+
+        resumed_status = "CLAIMED" if inquiry.assigned_agent_id else "UNASSIGNED"
+        inquiry.status = resumed_status
+
+        audit = AuditLog(
+            inquiry_id=inquiry_id,
+            agent_id="customer",
+            action="RESUME_SLA_CUSTOMER_REPLY",
+            previous_value={"status": "PENDING_CUSTOMER", "sla_deadline_at": old_deadline.isoformat()},
+            new_value={
+                "status": resumed_status,
+                "sla_deadline_at": inquiry.sla_deadline_at.isoformat(),
+                "total_paused_seconds": inquiry.total_paused_seconds,
+            },
+            reason=f"Customer responded. SLA clock resumed and deadline extended by {pause_delta} seconds.",
+        )
+        db.add(audit)
+
+    msg = InquiryMessage(
+        inquiry_id=inquiry_id,
+        sender_type="CUSTOMER",
+        sender_name=payload.customer_name or inquiry.customer_name,
+        sender_email=payload.customer_email or inquiry.customer_email,
+        body=payload.body,
+        is_internal_note=False,
+        attachments=payload.attachments or [],
+        created_at=now,
+    )
+    db.add(msg)
+    await db.flush()
+    await db.refresh(msg)
+    return msg
 
 
 @router.get("/{inquiry_id}/audit-logs", response_model=List[AuditLogResponse])

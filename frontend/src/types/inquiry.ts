@@ -33,9 +33,37 @@ export type PriorityEnum = (typeof PriorityEnum)[keyof typeof PriorityEnum];
 export const InquiryStatusEnum = {
   UNASSIGNED: 'UNASSIGNED',
   CLAIMED: 'CLAIMED',
+  PENDING_CUSTOMER: 'PENDING_CUSTOMER',
   RESOLVED: 'RESOLVED',
 } as const;
 export type InquiryStatusEnum = (typeof InquiryStatusEnum)[keyof typeof InquiryStatusEnum];
+
+export const MessageSenderEnum = {
+  CUSTOMER: 'CUSTOMER',
+  AGENT: 'AGENT',
+  SYSTEM: 'SYSTEM',
+  AI_COPILOT: 'AI_COPILOT',
+} as const;
+export type MessageSenderEnum = (typeof MessageSenderEnum)[keyof typeof MessageSenderEnum];
+
+export const MessageActionEnum = {
+  REPLY: 'REPLY',
+  REQUEST_INFO: 'REQUEST_INFO',
+  INTERNAL_NOTE: 'INTERNAL_NOTE',
+} as const;
+export type MessageActionEnum = (typeof MessageActionEnum)[keyof typeof MessageActionEnum];
+
+export interface InquiryMessage {
+  id: string;
+  inquiry_id: string;
+  sender_type: MessageSenderEnum | string;
+  sender_name: string;
+  sender_email: string;
+  body: string;
+  is_internal_note: boolean;
+  attachments?: any[];
+  created_at: string;
+}
 
 export const ResponseStrategyEnum = {
   DIRECT_RESOLUTION: 'DIRECT_RESOLUTION',
@@ -86,12 +114,15 @@ export interface Inquiry {
   suggested_response?: string;
   agent_copilot_notes?: string;
 
-
-  // SLA Management
+  // Temporal SLAs (ITIL v4 Compliant)
   sla_deadline_at: string; // ISO 8601 UTC
   sla_remaining_seconds?: number;
+  first_response_deadline_at?: string;
+  first_responded_at?: string;
+  sla_paused_at?: string;
+  total_paused_seconds?: number;
 
-  // Ownership & Human-in-the-Loop Audit
+  // Human-in-the-Loop Ownership & Audit
   assigned_agent_id?: string | null;
   claimed_at?: string | null;
   resolved_at?: string | null;
@@ -99,6 +130,9 @@ export interface Inquiry {
   human_reviewed: boolean;
   was_edited?: boolean;
   edit_character_distance?: number;
+
+  // Conversation thread
+  messages?: InquiryMessage[];
 
   created_at: string;
   updated_at: string;
@@ -185,7 +219,7 @@ export interface DashboardMetricsResponse {
 }
 
 export interface InquiryFilters {
-  statusTab: 'ACTIVE' | 'IN_PROGRESS' | 'RESOLVED' | 'ALL';
+  statusTab: 'ACTIVE' | 'IN_PROGRESS' | 'PENDING_CUSTOMER' | 'RESOLVED' | 'ALL';
   department?: DepartmentEnum | 'ALL';
   priority?: PriorityEnum | 'ALL';
   churnOnly: boolean;

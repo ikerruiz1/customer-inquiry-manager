@@ -23,7 +23,7 @@ import type {
   AgentProfile,
 } from '../types/inquiry';
 
-export type QueueTab = 'DEFAULT' | 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'ASSIGNED' | 'COMPLETED' | 'FILTERS';
+export type QueueTab = 'DEFAULT' | 'ALL' | 'PENDING' | 'IN_PROGRESS' | 'PENDING_CUSTOMER' | 'ASSIGNED' | 'COMPLETED' | 'FILTERS';
 
 export type FacetFilter =
   | 'ALL'
@@ -87,6 +87,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     all: activeInquiries.length,
     pending: inquiries.filter((t) => t.status === InquiryStatusEnum.UNASSIGNED).length,
     inProgress: inquiries.filter((t) => t.status === InquiryStatusEnum.CLAIMED).length,
+    pendingCustomer: inquiries.filter((t) => t.status === InquiryStatusEnum.PENDING_CUSTOMER).length,
     assigned: inquiries.filter((t) => t.assigned_agent_id === currentAgent.id && t.status !== InquiryStatusEnum.RESOLVED).length,
     completed: inquiries.filter((t) => t.status === InquiryStatusEnum.RESOLVED).length,
   };
@@ -108,6 +109,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
   const tabFilteredInquiries = inquiries.filter((ticket) => {
     if (activeTab === 'PENDING') return ticket.status === InquiryStatusEnum.UNASSIGNED;
     if (activeTab === 'IN_PROGRESS') return ticket.status === InquiryStatusEnum.CLAIMED;
+    if (activeTab === 'PENDING_CUSTOMER') return ticket.status === InquiryStatusEnum.PENDING_CUSTOMER;
     if (activeTab === 'ASSIGNED') return ticket.assigned_agent_id === currentAgent.id && ticket.status !== InquiryStatusEnum.RESOLVED;
     if (activeTab === 'COMPLETED') return ticket.status === InquiryStatusEnum.RESOLVED;
     // For 'DEFAULT', 'ALL', and 'FILTERS': exclude resolved inquiries from the active task queue
@@ -346,6 +348,40 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
       );
     }
 
+    if (ticket.status === InquiryStatusEnum.PENDING_CUSTOMER) {
+      let remaining = ticket.sla_remaining_seconds;
+      if (remaining === undefined && ticket.sla_deadline_at && ticket.sla_paused_at) {
+        const d = new Date(ticket.sla_deadline_at).getTime();
+        const p = new Date(ticket.sla_paused_at).getTime();
+        remaining = Math.max(0, Math.floor((d - p) / 1000));
+      }
+      const remSec = remaining ?? 0;
+      const h = Math.floor(remSec / 3600);
+      const m = Math.floor((remSec % 3600) / 60);
+      const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+
+      return (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 8px',
+            borderRadius: '9999px',
+            backgroundColor: 'rgba(254, 243, 199, 0.95)',
+            color: '#B45309',
+            border: '1px solid rgba(245, 158, 11, 0.4)',
+            fontSize: '0.7rem',
+            fontWeight: 800,
+            whiteSpace: 'nowrap',
+          }}
+          title="SLA clock frozen in PENDING_CUSTOMER state until customer responds"
+        >
+          <span>⏸</span> SLA PAUSED ({timeStr})
+        </span>
+      );
+    }
+
     const deadline = new Date(ticket.sla_deadline_at).getTime();
     const diffSeconds = Math.floor((deadline - currentTime) / 1000);
 
@@ -513,6 +549,17 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                 className={`pill-btn ${activeTab === 'IN_PROGRESS' ? 'active' : ''}`}
               >
                 In Progress {tabCounts.inProgress}
+              </button>
+
+              <button
+                onClick={() => {
+                  onTabChange('PENDING_CUSTOMER');
+                  setActiveFacetFilter('ALL');
+                }}
+                className={`pill-btn ${activeTab === 'PENDING_CUSTOMER' ? 'active' : ''}`}
+                title="Tickets awaiting customer response with SLA paused"
+              >
+                ⏸ Pending Customer {tabCounts.pendingCustomer}
               </button>
 
               <button
@@ -1093,6 +1140,25 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                       }}
                     >
                       <CheckCircle2 size={12} /> Resolved
+                    </span>
+                  ) : ticket.status === InquiryStatusEnum.PENDING_CUSTOMER ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 10px',
+                        borderRadius: '9999px',
+                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                        color: '#B45309',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Ticket awaiting customer response. SLA countdown is paused."
+                    >
+                      <span>⏸</span> Waiting Info
                     </span>
                   ) : (
                     <span

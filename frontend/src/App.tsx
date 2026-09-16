@@ -469,6 +469,10 @@ export const App: React.FC = () => {
             onClaimTicket={handleClaimTicket}
             isResolving={isResolving}
             operators={registeredOperators}
+            onTicketUpdated={(updated) => {
+              setInquiries((prev) => prev.map((i) => (i.id === updated.id ? updated : i)));
+              setSelectedTicket(updated);
+            }}
           />
         </div>
       )}
