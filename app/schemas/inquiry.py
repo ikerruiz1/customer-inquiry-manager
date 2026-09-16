@@ -28,7 +28,54 @@ class InquiryStatusEnum(str, Enum):
     """Lifecycle state machine for inquiries."""
     UNASSIGNED = "UNASSIGNED"
     CLAIMED = "CLAIMED"
+    PENDING_CUSTOMER = "PENDING_CUSTOMER"
     RESOLVED = "RESOLVED"
+
+
+class MessageSenderEnum(str, Enum):
+    """Authoritative sender identity for conversation messages."""
+    CUSTOMER = "CUSTOMER"
+    AGENT = "AGENT"
+    SYSTEM = "SYSTEM"
+    AI_COPILOT = "AI_COPILOT"
+
+
+class MessageActionEnum(str, Enum):
+    """Dispatch action taken by support operator."""
+    REPLY = "REPLY"
+    REQUEST_INFO = "REQUEST_INFO"  # Transitions ticket to PENDING_CUSTOMER & pauses SLA
+    INTERNAL_NOTE = "INTERNAL_NOTE"  # Private team note
+
+
+class InquiryMessageCreate(BaseModel):
+    """Operator message submission payload."""
+    body: str = Field(..., min_length=1, description="Message text content")
+    action: MessageActionEnum = Field(default=MessageActionEnum.REPLY, description="Operator action mode")
+    attachments: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Pre-signed S3 attachment references")
+
+
+class CustomerReplyCreate(BaseModel):
+    """Inbound reply from customer (via email thread, portal, or simulation)."""
+    body: str = Field(..., min_length=1, description="Customer reply message text")
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+
+
+class InquiryMessageResponse(BaseModel):
+    """Serialized conversation message record."""
+    id: UUID
+    inquiry_id: UUID
+    sender_type: str
+    sender_name: str
+    sender_email: str
+    body: str
+    is_internal_note: bool = False
+    attachments: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class InquiryCreate(BaseModel):
@@ -107,9 +154,13 @@ class InquiryResponse(BaseModel):
     cost_eur: Optional[float] = None
 
 
-    # Temporal SLAs
+    # Temporal SLAs (ITIL v4 Compliant)
     sla_deadline_at: datetime
     sla_remaining_seconds: Optional[int] = None
+    first_response_deadline_at: Optional[datetime] = None
+    first_responded_at: Optional[datetime] = None
+    sla_paused_at: Optional[datetime] = None
+    total_paused_seconds: int = 0
 
     # Ownership
     assigned_agent_id: Optional[str] = None
@@ -117,6 +168,9 @@ class InquiryResponse(BaseModel):
     resolved_at: Optional[datetime] = None
     resolution_text: Optional[str] = None
     human_reviewed: bool
+
+    # Conversation thread
+    messages: Optional[List[InquiryMessageResponse]] = None
 
     created_at: datetime
     updated_at: datetime

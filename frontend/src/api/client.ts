@@ -3,6 +3,7 @@ import {
   PriorityEnum,
   InquiryStatusEnum,
   ChannelEnum,
+  MessageActionEnum,
 } from '../types/inquiry';
 import type {
   Inquiry,
@@ -12,6 +13,7 @@ import type {
   TokenAuthResponse,
   DashboardMetricsResponse,
   AgentProfile,
+  InquiryMessage,
 } from '../types/inquiry';
 
 // Active session token keys
@@ -360,4 +362,75 @@ export async function resetDemoInquiries(): Promise<{ message: string; total_inq
   }
   return await res.json();
 }
+
+/**
+ * Retrieve chronological conversation thread for a ticket
+ */
+export async function getInquiryMessages(inquiryId: string): Promise<InquiryMessage[]> {
+  const res = await fetch(`/api/v1/inquiries/${inquiryId}/messages`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP error ${res.status}: Failed to fetch messages`);
+  }
+  return await res.json();
+}
+
+/**
+ * Send an agent reply, ask for info (pausing SLA), or add an internal note
+ */
+export async function postInquiryMessage(
+  inquiryId: string,
+  payload: {
+    body: string;
+    action?: MessageActionEnum | string;
+    attachments?: any[];
+  }
+): Promise<InquiryMessage> {
+  const res = await fetch(`/api/v1/inquiries/${inquiryId}/messages`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({
+      body: payload.body,
+      action: payload.action || 'REPLY',
+      attachments: payload.attachments || [],
+    }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP error ${res.status}: Failed to send message`);
+  }
+  return await res.json();
+}
+
+/**
+ * Simulate customer reply to test conversation thread and SLA clock resumption
+ */
+export async function postCustomerReply(
+  inquiryId: string,
+  payload: {
+    body: string;
+    customer_name?: string;
+    customer_email?: string;
+    attachments?: any[];
+  }
+): Promise<InquiryMessage> {
+  const res = await fetch(`/api/v1/inquiries/${inquiryId}/customer-reply`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({
+      body: payload.body,
+      customer_name: payload.customer_name || undefined,
+      customer_email: payload.customer_email || undefined,
+      attachments: payload.attachments || [],
+    }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP error ${res.status}: Failed to send customer reply`);
+  }
+  return await res.json();
+}
+
 

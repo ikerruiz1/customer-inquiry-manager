@@ -9,7 +9,7 @@ from typing import Dict, Any, List, Optional
 from sqlalchemy import select, func
 
 from app.core.database import Base, engine, AsyncSessionLocal
-from app.models.inquiry import Inquiry, Operator
+from app.models.inquiry import Inquiry, Operator, InquiryMessage
 
 logger = logging.getLogger("app.core.seeder")
 
@@ -66,7 +66,7 @@ def build_canonical_operator_registry() -> Dict[str, Dict[str, Any]]:
 def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) -> List[Inquiry]:
     """Construct 7 canonical customer inquiries representing multi-channel ingestion."""
     now = reference_time or datetime.now(timezone.utc)
-    return [
+    inquiries = [
         Inquiry(
             channel="BILLING",
             customer_email="cto@fintech-pay.io",
@@ -96,6 +96,18 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             suggested_response="Dear FinTech Pay team, we have placed an immediate administrative hold on the fund retention and escalated the case to our senior treasury group to reconcile dispute dp_88421 directly with the acquiring institution. We will provide a definitive resolution before 18:00 UTC today.",
             agent_copilot_notes="Internal Note: Customer is on an annual Enterprise tier (MRR: 4,800 EUR). Do not dispute reject without consulting key accounts lead.",
             sla_deadline_at=now + timedelta(minutes=28),
+            first_response_deadline_at=now + timedelta(minutes=15),
+            messages=[
+                InquiryMessage(
+                    sender_type="CUSTOMER",
+                    sender_name="Elena Rostova",
+                    sender_email="cto@fintech-pay.io",
+                    body="We have an active 450.00 EUR hold placed on our account due to an unrecognized Stripe dispute (ref: dp_88421). If these funds are not released by 18:00 UTC today, we will terminate our 25 Enterprise licenses and migrate our infrastructure to a competitor.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(minutes=32),
+                )
+            ],
         ),
         Inquiry(
             channel="EMAIL",
@@ -125,8 +137,30 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             suggested_response="Hello David, we have identified memory throttling across the control plane nodes of k8s-prod-eu1. Our SRE team is provisioning additional compute worker capacity to restore pod traffic immediately.",
             agent_copilot_notes="Internal Note: CloudWatch metrics confirmed node worker-04 reached 99% RAM saturation. Initiated autoscaling group surge capacity.",
             sla_deadline_at=now + timedelta(minutes=42),
+            first_response_deadline_at=now + timedelta(minutes=15),
+            first_responded_at=now - timedelta(minutes=14),
             assigned_agent_id="00000000-0000-0000-0000-000000000001",
             claimed_at=now - timedelta(minutes=18),
+            messages=[
+                InquiryMessage(
+                    sender_type="CUSTOMER",
+                    sender_name="David Vance",
+                    sender_email="sre-team@nexuscloud.com",
+                    body="Since the 14:00 deployment, all pods in cluster k8s-prod-eu1 are throwing 504 Gateway Timeout errors and failing with ERR_POD_OOMKILLED status. End users are unable to reach the payment checkout flow.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(minutes=25),
+                ),
+                InquiryMessage(
+                    sender_type="AGENT",
+                    sender_name="Carlos M.",
+                    sender_email="carlos.m@company.internal",
+                    body="Hello David, we have identified node worker-04 memory saturation. Our SRE team is rolling an updated capacity configuration now.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(minutes=14),
+                ),
+            ],
         ),
         Inquiry(
             channel="TRUSTPILOT",
@@ -154,6 +188,18 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             suggested_response="Hello Marcos, we sincerely apologize for the delay in issuing your SSL certificate. We have expedited DNS validation for your domain with highest priority, and it will be active within the next 10 minutes.",
             agent_copilot_notes="Internal Note: Verify in Route 53 that CNAME challenge records have no conflicting CAA policies before replying.",
             sla_deadline_at=now + timedelta(minutes=95),
+            first_response_deadline_at=now + timedelta(minutes=30),
+            messages=[
+                InquiryMessage(
+                    sender_type="CUSTOMER",
+                    sender_name="Marcos Benítez",
+                    sender_email="marcos.dev@outlook.com",
+                    body="I have been waiting for 3 days for custom domain SSL certificate provisioning. Support has been completely absent and my storefront continues to show insecure connection warnings. Highly disappointing.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(minutes=45),
+                )
+            ],
         ),
         Inquiry(
             channel="WEB_FORM",
@@ -161,7 +207,7 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             customer_name="Jorge Salgado",
             subject="Configuration question regarding CORS headers on Gateway API",
             body="We are integrating our React frontend with the Gateway API and encountering a CORS origin not allowed error from localhost:5173. Could you advise on how to configure the allowed origin in the configuration file?",
-            status="UNASSIGNED",
+            status="PENDING_CUSTOMER",
             department="TECH_SUPPORT",
             priority="P3",
             urgency=2,
@@ -181,7 +227,33 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             suggested_strategy="DIRECT_RESOLUTION",
             suggested_response="Hello Jorge, to enable local development origins on the API Gateway, update your configuration in app/core/config.py or configure CORS_ORIGINS = ['http://localhost:5173']. Refer to the attached microservices documentation for details.",
             agent_copilot_notes="Internal Note: Provide direct link to microservices CORS configuration guide.",
-            sla_deadline_at=now + timedelta(hours=7),
+            sla_deadline_at=now + timedelta(hours=6),
+            first_response_deadline_at=now - timedelta(hours=1),
+            first_responded_at=now - timedelta(hours=1, minutes=15),
+            sla_paused_at=now - timedelta(minutes=45),
+            total_paused_seconds=2700,
+            assigned_agent_id="00000000-0000-0000-0000-000000000001",
+            claimed_at=now - timedelta(hours=2),
+            messages=[
+                InquiryMessage(
+                    sender_type="CUSTOMER",
+                    sender_name="Jorge Salgado",
+                    sender_email="jorge.developer@saasapp.es",
+                    body="We are integrating our React frontend with the Gateway API and encountering a CORS origin not allowed error from localhost:5173. Could you advise on how to configure the allowed origin in the configuration file?",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(hours=2, minutes=30),
+                ),
+                InquiryMessage(
+                    sender_type="AGENT",
+                    sender_name="Carlos M.",
+                    sender_email="carlos.m@company.internal",
+                    body="Hello Jorge, could you please provide your `vite.config.ts` proxy configuration and any custom request headers sent by your client so we can test the exact CORS preflight match?",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(minutes=45),
+                ),
+            ],
         ),
         Inquiry(
             channel="EMAIL",
@@ -210,6 +282,18 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             suggested_response="Dear Klaus Schmidt, we acknowledge receipt of your data erasure request pursuant to GDPR Article 17. Case SEC-GDPR-2026 has been registered, and our Data Protection Officer (DPO) will provide official certification of data purging within 7 business days.",
             agent_copilot_notes="Internal Note: Mandatory notification to dpo@company.internal required prior to executing physical database purge.",
             sla_deadline_at=now + timedelta(hours=3),
+            first_response_deadline_at=now + timedelta(minutes=30),
+            messages=[
+                InquiryMessage(
+                    sender_type="CUSTOMER",
+                    sender_name="Klaus Schmidt",
+                    sender_email="legal@enterprise-corp.de",
+                    body="We hereby formally request the permanent, irrevocable erasure of all personal data and telemetry logs associated with customer account 991823 within 30 calendar days.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(minutes=15),
+                )
+            ],
         ),
         Inquiry(
             channel="EMAIL",
@@ -236,6 +320,18 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             suggested_response="Message automatically archived as irrelevant.",
             agent_copilot_notes="Internal Note: No action required. Auto-resolve directly.",
             sla_deadline_at=now + timedelta(hours=23),
+            first_response_deadline_at=now + timedelta(hours=2),
+            messages=[
+                InquiryMessage(
+                    sender_type="CUSTOMER",
+                    sender_name="Commercial Lead",
+                    sender_email="promo@global-marketing-agency.com",
+                    body="Dear Webmaster, we noticed your website ranking could improve. We offer premium link building packages starting at $99/mo.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(hours=1),
+                )
+            ],
         ),
         Inquiry(
             channel="WEB_FORM",
@@ -263,13 +359,36 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
             suggested_response="Hello Sarah, the issuing institution required step-up 3DS two-factor authentication. We have generated a secure confirmation link to complete the authorization.",
             agent_copilot_notes="Internal Note: 3DS billing processing failure verified and resolved.",
             sla_deadline_at=now - timedelta(hours=2),
+            first_response_deadline_at=now - timedelta(hours=3, minutes=30),
+            first_responded_at=now - timedelta(hours=3, minutes=50),
             resolution_text="Hello Sarah, 3DS v2 multi-currency authorization has been completed successfully. Your corporate card is verified and the invoice receipt has been issued.",
             assigned_agent_id="00000000-0000-0000-0000-000000000001",
             claimed_at=now - timedelta(hours=4),
             resolved_at=now - timedelta(hours=3),
             human_reviewed=True,
+            messages=[
+                InquiryMessage(
+                    sender_type="CUSTOMER",
+                    sender_name="Sarah Connor",
+                    sender_email="sarah.connor@cyberdyne.io",
+                    body="Payment gateway returned error 402 Card Declined when attempting to register a corporate card issued in the United Kingdom.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(hours=4, minutes=15),
+                ),
+                InquiryMessage(
+                    sender_type="AGENT",
+                    sender_name="Carlos M.",
+                    sender_email="carlos.m@company.internal",
+                    body="Hello Sarah, 3DS v2 multi-currency authorization has been completed successfully. Your corporate card is verified and the invoice receipt has been issued.",
+                    is_internal_note=False,
+                    attachments=[],
+                    created_at=now - timedelta(hours=3),
+                ),
+            ],
         ),
     ]
+    return inquiries
 
 
 async def init_db_and_seed() -> None:

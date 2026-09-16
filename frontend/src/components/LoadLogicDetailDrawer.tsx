@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from 'react';
 import {
   AlertTriangle,
   Bot,
@@ -6,7 +7,6 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
-  Edit3,
   Flame,
   History,
   Lock,
@@ -14,18 +14,27 @@ import {
   Send,
   User,
   X,
-  AlertCircle,
+  MessageSquare,
+  Pause,
+  Play,
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
-import { getAuditLogs } from '../api/client';
+import {
+  getAuditLogs,
+  getInquiryMessages,
+  postInquiryMessage,
+  postCustomerReply,
+  getInquiry,
+} from '../api/client';
 import type {
   AgentProfile,
   AuditLog,
   Inquiry,
+  InquiryMessage,
 } from '../types/inquiry';
 import {
   InquiryStatusEnum,
   PriorityEnum,
+  MessageActionEnum,
 } from '../types/inquiry';
 
 interface LoadLogicDetailDrawerProps {
@@ -37,6 +46,7 @@ interface LoadLogicDetailDrawerProps {
   onClaimTicket: (id: string) => void;
   isResolving: boolean;
   operators?: AgentProfile[];
+  onTicketUpdated?: (updated: Inquiry) => void;
 }
 
 export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
@@ -48,20 +58,41 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
   onClaimTicket,
   isResolving,
   operators,
+  onTicketUpdated,
 }) => {
   if (!ticket) return null;
 
-  const [isEditingDraft, setIsEditingDraft] = useState<boolean>(false);
-  const [responseText, setResponseText] = useState<string>(
-    ticket.suggested_response || ''
-  );
+  const [messages, setMessages] = useState<InquiryMessage[]>(ticket.messages || []);
+  const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
+  const [actionType, setActionType] = useState<MessageActionEnum>('REPLY');
+  const [messageText, setMessageText] = useState<string>(ticket.suggested_response || '');
+  const [isSendingMessage, setIsSendingMessage] = useState<boolean>(false);
+  const [simulatedReplyText, setSimulatedReplyText] = useState<string>('');
+  const [isSendingCustomerReply, setIsSendingCustomerReply] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showAuditLogs, setShowAuditLogs] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
 
   useEffect(() => {
-    setResponseText(ticket.suggested_response || '');
-    setIsEditingDraft(false);
+    setMessageText(ticket.suggested_response || '');
+    setSimulatedReplyText('');
+    setActionType('REPLY');
+
+    // Fetch fresh chronological message thread
+    setIsLoadingMessages(true);
+    getInquiryMessages(ticket.id)
+      .then((msgs) => {
+        if (msgs && msgs.length > 0) {
+          setMessages(msgs);
+        } else if (ticket.messages && ticket.messages.length > 0) {
+          setMessages(ticket.messages);
+        }
+      })
+      .catch((err) => {
+        console.warn('Failed to fetch messages:', err);
+        if (ticket.messages) setMessages(ticket.messages);
+      })
+      .finally(() => setIsLoadingMessages(false));
 
     // Fetch audit history
     getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
@@ -74,6 +105,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
     ticket.status === InquiryStatusEnum.CLAIMED &&
     ticket.assigned_agent_id !== currentAgent.id;
   const isResolved = ticket.status === InquiryStatusEnum.RESOLVED;
+  const isPendingCustomer = ticket.status === InquiryStatusEnum.PENDING_CUSTOMER;
 
   const handleCopy = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -81,16 +113,68 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
     setTimeout(() => setCopiedKey(null), 1800);
   };
 
-  const handleDispatch = () => {
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || isSendingMessage) return;
+    setIsSendingMessage(true);
+    try {
+      const newMsg = await postInquiryMessage(ticket.id, {
+        body: messageText.trim(),
+        action: actionType,
+      });
+      setMessages((prev) => [...prev, newMsg]);
+      setMessageText('');
+
+      // Refresh inquiry state to sync SLA pauses and status
+      const freshTicket = await getInquiry(ticket.id);
+      if (onTicketUpdated) {
+        onTicketUpdated(freshTicket);
+      }
+      getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
+    } catch (err: any) {
+      alert(err.message || 'Failed to send message');
+    } finally {
+      setIsSendingMessage(false);
+    }
+  };
+
+  const handleSimulateCustomerReply = async () => {
+    if (!simulatedReplyText.trim() || isSendingCustomerReply) return;
+    setIsSendingCustomerReply(true);
+    try {
+      const newMsg = await postCustomerReply(ticket.id, {
+        body: simulatedReplyText.trim(),
+        customer_name: ticket.customer_name,
+        customer_email: ticket.customer_email,
+      });
+      setMessages((prev) => [...prev, newMsg]);
+      setSimulatedReplyText('');
+
+      // Refresh inquiry state (which unpauses SLA and extends deadline)
+      const freshTicket = await getInquiry(ticket.id);
+      if (onTicketUpdated) {
+        onTicketUpdated(freshTicket);
+      }
+      getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
+    } catch (err: any) {
+      alert(err.message || 'Failed to simulate customer reply');
+    } finally {
+      setIsSendingCustomerReply(false);
+    }
+  };
+
+  const handleDispatchResolution = () => {
     onResolveTicket(
       ticket.id,
-      responseText,
-      isEditingDraft ? 'Resolved with agent custom modifications' : 'Resolved verbatim with Bedrock AI draft'
+      messageText.trim() || ticket.suggested_response || 'Resolved by support operator',
+      'Resolved via Operations Console'
     );
   };
 
-  const isVerbatim =
-    responseText.trim() === (ticket.suggested_response || '').trim();
+  // Remaining SLA countdown formatting
+  const remainingSec = ticket.sla_remaining_seconds ?? 0;
+  const remHours = Math.floor(Math.abs(remainingSec) / 3600);
+  const remMinutes = Math.floor((Math.abs(remainingSec) % 3600) / 60);
+  const isOverdue = remainingSec < 0 && !isResolved;
 
   return (
     <div
@@ -98,8 +182,8 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
         backgroundColor: '#FFFFFF',
         border: '1px solid rgba(12, 13, 13, 0.12)',
         borderRadius: '24px',
-        width: 'min(1160px, 94vw)',
-        maxHeight: '90vh',
+        width: 'min(1180px, 94vw)',
+        maxHeight: '92vh',
         display: 'flex',
         flexDirection: 'column',
         boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.35)',
@@ -121,7 +205,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <span style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0C0D0D', fontFamily: 'var(--font-mono)' }}>
             #{ticket.id.substring(0, 8).toUpperCase()}
           </span>
@@ -151,15 +235,24 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
           </span>
           <span
             style={{
-              backgroundColor: ticket.status === InquiryStatusEnum.RESOLVED ? '#ECFDF5' : '#FEF3C7',
-              color: ticket.status === InquiryStatusEnum.RESOLVED ? '#047857' : '#B45309',
+              backgroundColor: isResolved
+                ? '#ECFDF5'
+                : isPendingCustomer
+                  ? '#FEF3C7'
+                  : '#EFF6FF',
+              color: isResolved
+                ? '#047857'
+                : isPendingCustomer
+                  ? '#B45309'
+                  : '#1D4ED8',
               fontSize: '0.74rem',
-              fontWeight: 700,
+              fontWeight: 800,
               padding: '3px 10px',
               borderRadius: '9999px',
+              border: isPendingCustomer ? '1px solid #F59E0B' : 'none',
             }}
           >
-            {ticket.status}
+            {isPendingCustomer ? '⏸ PENDING CUSTOMER (SLA PAUSED)' : ticket.status}
           </span>
           {ticket.priority === PriorityEnum.P1 && (
             <span
@@ -225,21 +318,21 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
         </div>
       )}
 
-      {/* Main Modal Grid Body: Spacious 2-Column Responsive Layout */}
+      {/* Main Modal Grid Body: 2-Column Layout */}
       <div
         style={{
           padding: '24px',
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.35fr) minmax(0, 1fr)',
+          gridTemplateColumns: 'minmax(0, 1.4fr) minmax(0, 1fr)',
           gap: '24px',
           overflowY: 'auto',
-          maxHeight: 'calc(90vh - 75px)',
+          maxHeight: 'calc(92vh - 75px)',
           boxSizing: 'border-box',
         }}
       >
-        {/* LEFT COLUMN: Customer Inquiry & Agent Response Workspace */}
+        {/* LEFT COLUMN: Ticket Summary, Conversation Timeline & Response Composer */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {/* Section 1: Customer Message Card */}
+          {/* Section 1: Customer Ticket Summary Card */}
           <div
             style={{
               backgroundColor: '#FAFAFA',
@@ -250,7 +343,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
               <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#666666', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Customer Inquiry
+                Customer Inquiry Overview
               </span>
               <span style={{ fontSize: '0.72rem', color: '#888888' }}>
                 {new Date(ticket.created_at).toLocaleString()}
@@ -263,27 +356,13 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
 
             <div
               style={{
-                fontSize: '0.86rem',
-                color: '#262626',
-                lineHeight: 1.65,
-                whiteSpace: 'pre-wrap',
-                backgroundColor: '#FFFFFF',
-                padding: '14px 16px',
-                borderRadius: '14px',
-                border: '1px solid rgba(12, 13, 13, 0.06)',
-              }}
-            >
-              {ticket.body}
-            </div>
-
-            <div
-              style={{
-                marginTop: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 fontSize: '0.76rem',
                 color: '#666666',
+                borderTop: '1px solid rgba(12, 13, 13, 0.06)',
+                paddingTop: '8px',
               }}
             >
               <span>Sender: <strong style={{ color: '#0C0D0D' }}>{ticket.customer_name}</strong> ({ticket.customer_email})</span>
@@ -307,7 +386,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {ticket.entities && Object.keys(ticket.entities).length > 0 ? (
                 Object.entries(ticket.entities).map(([key, val]) => {
-                  if (!val) return null;
+                  if (!val || typeof val === 'object') return null;
                   const displayVal = String(val);
                   const isCopied = copiedKey === key;
                   return (
@@ -348,27 +427,244 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Suggested Response Draft (Human-in-the-Loop) */}
+          {/* Section 3: Interactive Multi-Turn Conversation Thread */}
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              border: '1px solid rgba(12, 13, 13, 0.1)',
+              borderRadius: '18px',
+              padding: '18px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MessageSquare size={16} color="#0C0D0D" />
+                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0C0D0D', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Conversation Thread ({messages.length || 1})
+                </span>
+              </div>
+              <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                ITIL Multi-Turn Audit Trail
+              </span>
+            </div>
+
+            {/* Message Bubble List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '340px', overflowY: 'auto', paddingRight: '4px' }}>
+              {isLoadingMessages ? (
+                <div style={{ textAlign: 'center', padding: '16px', color: '#64748B', fontSize: '0.8rem' }}>
+                  Syncing conversation thread...
+                </div>
+              ) : messages.length === 0 ? (
+                // Fallback to opening body if messages list is empty
+                <div
+                  style={{
+                    backgroundColor: '#FAFAFA',
+                    border: '1px solid rgba(12, 13, 13, 0.08)',
+                    borderRadius: '12px',
+                    padding: '12px 16px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: '#1D4ED8' }}>
+                      Customer: {ticket.customer_name}
+                    </span>
+                    <span style={{ fontSize: '0.7rem', color: '#888888' }}>
+                      {new Date(ticket.created_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.84rem', color: '#1F2937', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                    {ticket.body}
+                  </div>
+                </div>
+              ) : (
+                messages.map((msg, idx) => {
+                  const isCustomer = msg.sender_type === 'CUSTOMER';
+                  const isInternal = msg.is_internal_note;
+
+                  return (
+                    <div
+                      key={msg.id || idx}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignSelf: isInternal ? 'stretch' : isCustomer ? 'flex-start' : 'flex-end',
+                        maxWidth: isInternal ? '100%' : '88%',
+                        width: isInternal ? '100%' : 'auto',
+                      }}
+                    >
+                      {/* Sender Meta Header */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          marginBottom: '4px',
+                          fontSize: '0.72rem',
+                          justifyContent: isInternal ? 'flex-start' : isCustomer ? 'flex-start' : 'flex-end',
+                        }}
+                      >
+                        {isInternal ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#B45309', fontWeight: 800 }}>
+                            <Lock size={11} /> Team Internal Note • {msg.sender_name}
+                          </span>
+                        ) : isCustomer ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#1D4ED8', fontWeight: 700 }}>
+                            <User size={11} /> Customer: {msg.sender_name}
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#047857', fontWeight: 700 }}>
+                            <Bot size={11} /> Support Operator: {msg.sender_name}
+                          </span>
+                        )}
+                        <span style={{ color: '#9CA3AF', fontSize: '0.68rem' }}>
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+
+                      {/* Message Bubble Body */}
+                      <div
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: '14px',
+                          fontSize: '0.84rem',
+                          lineHeight: 1.55,
+                          whiteSpace: 'pre-wrap',
+                          backgroundColor: isInternal
+                            ? '#FEF3C7'
+                            : isCustomer
+                              ? '#F8FAFC'
+                              : '#ECFDF5',
+                          border: isInternal
+                            ? '1px solid #FDE68A'
+                            : isCustomer
+                              ? '1px solid rgba(12, 13, 13, 0.08)'
+                              : '1px solid #A7F3D0',
+                          color: isInternal
+                            ? '#92400E'
+                            : '#0F172A',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.02)',
+                        }}
+                      >
+                        {msg.body}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* SLA Clock Paused Alert Box & Simulation Tool */}
+            {isPendingCustomer && (
+              <div
+                style={{
+                  backgroundColor: '#FEF3C7',
+                  border: '1.5px dashed #F59E0B',
+                  borderRadius: '14px',
+                  padding: '14px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#B45309', fontWeight: 800, fontSize: '0.82rem' }}>
+                    <Pause size={14} />
+                    <span>SLA CLOCK FROZEN (PENDING CUSTOMER)</span>
+                  </div>
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      backgroundColor: '#FFFFFF',
+                      padding: '2px 8px',
+                      borderRadius: '9999px',
+                      border: '1px solid #FCD34D',
+                      color: '#92400E',
+                      fontWeight: 700,
+                    }}
+                  >
+                    Paused {Math.max(1, Math.round(((ticket.total_paused_seconds || 0) + (ticket.sla_paused_at ? (Date.now() - new Date(ticket.sla_paused_at).getTime()) / 1000 : 0)) / 60))}m ago
+                  </span>
+                </div>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: '#92400E', lineHeight: 1.45 }}>
+                  The support agent requested additional information. In ITIL enterprise operations, the SLA countdown is halted so operators are not penalized while awaiting customer reply.
+                </p>
+
+                {/* Simulated Customer Reply Test Tool */}
+                <div
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderRadius: '10px',
+                    padding: '12px',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                  }}
+                >
+                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0C0D0D' }}>
+                    🧪 Interactive Simulation: Receive Customer Response
+                  </span>
+                  <input
+                    type="text"
+                    value={simulatedReplyText}
+                    onChange={(e) => setSimulatedReplyText(e.target.value)}
+                    placeholder="e.g. Here is our config file: CORS_ORIGINS = ['http://localhost:5173']"
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(12, 13, 13, 0.15)',
+                      fontSize: '0.82rem',
+                      outline: 'none',
+                    }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={handleSimulateCustomerReply}
+                      disabled={isSendingCustomerReply || !simulatedReplyText.trim()}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        borderRadius: '9999px',
+                        backgroundColor: '#D97706',
+                        color: '#FFFFFF',
+                        border: 'none',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Play size={12} />
+                      <span>{isSendingCustomerReply ? 'Resuming SLA...' : 'Simulate Customer Reply & Resume Clock'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Section 4: Response & Action Composer */}
           <div
             style={{
               backgroundColor: '#FFFFFF',
               border: '1.5px solid #0C0D0D',
               borderRadius: '18px',
               padding: '18px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
             }}
           >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: '10px',
-              }}
-            >
+            {/* Header & Copilot Suggestion Pill */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Bot size={16} color="#0C0D0D" />
-                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0C0D0D' }}>
-                  SUGGESTED RESPONSE DRAFT
+                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#0C0D0D', textTransform: 'uppercase' }}>
+                  Action & Response Composer
                 </span>
               </div>
               {ticket.suggested_strategy && (
@@ -383,40 +679,153 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     borderRadius: '9999px',
                   }}
                 >
-                  Strategy: {ticket.suggested_strategy}
+                  AI Strategy: {ticket.suggested_strategy}
                 </span>
               )}
             </div>
 
-            {/* Confidential Copilot Notes */}
-            {ticket.agent_copilot_notes && (
-              <div
-                style={{
-                  fontSize: '0.78rem',
-                  color: '#1a1a1a',
-                  backgroundColor: '#ECF4EE',
-                  padding: '10px 12px',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(12, 13, 13, 0.08)',
-                  marginBottom: '12px',
-                }}
-              >
-                <strong style={{ color: '#0C0D0D' }}>Agent Copilot Guidance:</strong> {ticket.agent_copilot_notes}
+            {/* Action Mode Selector Tabs */}
+            {!isResolved && !isClaimedByOther && (
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setActionType('REPLY')}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '9999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    border: actionType === 'REPLY' ? '1.5px solid #0C0D0D' : '1px solid rgba(12, 13, 13, 0.15)',
+                    backgroundColor: actionType === 'REPLY' ? '#0C0D0D' : '#FFFFFF',
+                    color: actionType === 'REPLY' ? '#FFFFFF' : '#0C0D0D',
+                  }}
+                >
+                  💬 Reply to Customer
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActionType('REQUEST_INFO')}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '9999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    border: actionType === 'REQUEST_INFO' ? '1.5px solid #F59E0B' : '1px solid rgba(245, 158, 11, 0.3)',
+                    backgroundColor: actionType === 'REQUEST_INFO' ? '#F59E0B' : '#FFFBEB',
+                    color: actionType === 'REQUEST_INFO' ? '#FFFFFF' : '#B45309',
+                  }}
+                  title="Ask customer for info and freeze SLA timer"
+                >
+                  ⏸ Ask Info & Pause SLA
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActionType('INTERNAL_NOTE')}
+                  style={{
+                    padding: '5px 12px',
+                    borderRadius: '9999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    border: actionType === 'INTERNAL_NOTE' ? '1.5px solid #6B7280' : '1px solid rgba(107, 114, 128, 0.2)',
+                    backgroundColor: actionType === 'INTERNAL_NOTE' ? '#374151' : '#F9FAFB',
+                    color: actionType === 'INTERNAL_NOTE' ? '#FFFFFF' : '#374151',
+                  }}
+                >
+                  🔒 Team Internal Note
+                </button>
+
+                {ticket.suggested_response && (
+                  <button
+                    type="button"
+                    onClick={() => setMessageText(ticket.suggested_response || '')}
+                    style={{
+                      marginLeft: 'auto',
+                      padding: '4px 10px',
+                      borderRadius: '9999px',
+                      fontSize: '0.72rem',
+                      fontWeight: 600,
+                      backgroundColor: '#ECF4EE',
+                      color: '#047857',
+                      border: '1px solid #A7F3D0',
+                      cursor: 'pointer',
+                    }}
+                    title="Insert Bedrock generative response draft"
+                  >
+                    Insert AI Copilot Draft
+                  </button>
+                )}
               </div>
             )}
 
-            {/* Response Text Editor or Preview */}
-            {isEditingDraft ? (
+            {/* Contextual Action Notification Banner */}
+            {!isResolved && !isClaimedByOther && (
+              <div
+                style={{
+                  fontSize: '0.76rem',
+                  padding: '8px 12px',
+                  borderRadius: '8px',
+                  backgroundColor: actionType === 'REQUEST_INFO'
+                    ? '#FFFBEB'
+                    : actionType === 'INTERNAL_NOTE'
+                      ? '#F3F4F6'
+                      : '#F0FDF4',
+                  color: actionType === 'REQUEST_INFO'
+                    ? '#92400E'
+                    : actionType === 'INTERNAL_NOTE'
+                      ? '#4B5563'
+                      : '#166534',
+                  border: actionType === 'REQUEST_INFO'
+                    ? '1px solid #FDE68A'
+                    : actionType === 'INTERNAL_NOTE'
+                      ? '1px solid #E5E7EB'
+                      : '1px solid #BBF7D0',
+                }}
+              >
+                {actionType === 'REQUEST_INFO' && (
+                  <span>
+                    <strong>⏸ SLA Freeze:</strong> Sending this message will transition the ticket to <strong>PENDING_CUSTOMER</strong> and pause the SLA countdown until customer replies.
+                  </span>
+                )}
+                {actionType === 'INTERNAL_NOTE' && (
+                  <span>
+                    <strong>🔒 Confidential Note:</strong> Visible only to internal support agents and recorded in the audit log. The customer will NOT see this note.
+                  </span>
+                )}
+                {actionType === 'REPLY' && (
+                  <span>
+                    <strong>💬 Customer Message:</strong> Sent directly to customer and logged in conversation thread. First reply registers First Response SLA.
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Textarea Composer */}
+            {!isResolved && !isClaimedByOther ? (
               <textarea
-                value={responseText}
-                onChange={(e) => setResponseText(e.target.value)}
-                rows={6}
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                rows={5}
+                placeholder={
+                  actionType === 'REQUEST_INFO'
+                    ? 'Ask the customer for necessary files, logs, or error codes to continue triage...'
+                    : actionType === 'INTERNAL_NOTE'
+                      ? 'Enter confidential team notes, investigation findings, or handover instructions...'
+                      : 'Type message to customer or review the AI copilot suggested draft...'
+                }
                 style={{
                   width: '100%',
                   padding: '12px',
                   borderRadius: '12px',
                   backgroundColor: '#FAFAFA',
-                  border: '1.5px solid #0C0D0D',
+                  border: '1.5px solid rgba(12, 13, 13, 0.15)',
                   color: '#0C0D0D',
                   fontSize: '0.86rem',
                   fontFamily: 'var(--font-sans)',
@@ -429,82 +838,32 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             ) : (
               <div
                 style={{
-                  backgroundColor: '#FAFAFA',
                   padding: '14px',
                   borderRadius: '12px',
-                  border: '1px solid rgba(12, 13, 13, 0.08)',
-                  fontSize: '0.86rem',
-                  color: '#0C0D0D',
-                  lineHeight: 1.6,
-                  whiteSpace: 'pre-wrap',
+                  backgroundColor: '#FAFAFA',
+                  fontSize: '0.84rem',
+                  color: '#4B5563',
                 }}
               >
-                {responseText || 'No response draft available.'}
+                {isResolved
+                  ? `Ticket resolved on ${new Date(ticket.resolved_at || ticket.updated_at).toLocaleString()}. Resolution text: "${ticket.resolution_text || 'Completed'}"`
+                  : 'Ticket is currently locked by another operator.'}
               </div>
             )}
 
-            {/* Real-time Collision / Lock Notification */}
-            {isClaimedByOther && (
-              <div
-                style={{
-                  marginTop: '14px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  backgroundColor: '#FEF3C7',
-                  border: '1px solid #F59E0B',
-                  color: '#92400E',
-                  padding: '10px 14px',
-                  borderRadius: '10px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                }}
-              >
-                <AlertCircle size={16} color="#D97706" />
-                <span>
-                  Active Lock: This ticket is currently claimed by operator{' '}
-                  {assignedAgent ? assignedAgent.name : ticket.assigned_agent_id}. Concurrent modifications are locked.
-                </span>
-              </div>
-            )}
-
-            {/* Action Buttons */}
+            {/* Bottom Actions Bar */}
             <div
               style={{
-                marginTop: '14px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 flexWrap: 'wrap',
                 gap: '8px',
+                borderTop: '1px solid rgba(12, 13, 13, 0.06)',
+                paddingTop: '10px',
               }}
             >
               <div>
-                {!isResolved && !isClaimedByOther && (
-                  <button
-                    onClick={() => setIsEditingDraft(!isEditingDraft)}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      padding: '6px 12px',
-                      borderRadius: '9999px',
-                      border: '1px solid rgba(12, 13, 13, 0.15)',
-                      backgroundColor: '#FFFFFF',
-                      color: '#0C0D0D',
-                      fontSize: '0.76rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Edit3 size={12} />
-                    <span>{isEditingDraft ? 'Cancel Edit' : 'Quick Edit'}</span>
-                  </button>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {/* Claim button if unassigned */}
                 {ticket.status === InquiryStatusEnum.UNASSIGNED && (
                   <button
                     onClick={() => onClaimTicket(ticket.id)}
@@ -518,7 +877,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                       backgroundColor: '#FFFFFF',
                       color: '#0C0D0D',
                       fontSize: '0.78rem',
-                      fontWeight: 600,
+                      fontWeight: 700,
                       cursor: 'pointer',
                     }}
                   >
@@ -526,47 +885,79 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     <span>Claim Ticket</span>
                   </button>
                 )}
+              </div>
 
-                {/* Approve & Dispatch Button */}
-                {!isResolved && !isClaimedByOther && (
+              {!isResolved && !isClaimedByOther && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {/* Primary Send Button */}
                   <button
-                    onClick={handleDispatch}
-                    disabled={isResolving || !responseText.trim()}
+                    onClick={handleSendMessage}
+                    disabled={isSendingMessage || !messageText.trim()}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       gap: '6px',
-                      padding: '9px 18px',
+                      padding: '8px 16px',
                       borderRadius: '9999px',
-                      backgroundColor: '#0C0D0D',
+                      backgroundColor: actionType === 'REQUEST_INFO' ? '#D97706' : '#0C0D0D',
                       color: '#FFFFFF',
                       border: 'none',
-                      fontSize: '0.82rem',
+                      fontSize: '0.8rem',
                       fontWeight: 700,
                       cursor: 'pointer',
-                      transition: 'opacity 0.15s ease',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.12)',
                     }}
-                    title="Freeze SLA and dispatch response to customer"
                   >
                     <Send size={13} />
                     <span>
-                      {isVerbatim ? '1-Click Approve & Dispatch' : 'Dispatch Custom Response'}
+                      {isSendingMessage
+                        ? 'Dispatching...'
+                        : actionType === 'REQUEST_INFO'
+                          ? 'Ask Info & Freeze SLA'
+                          : actionType === 'INTERNAL_NOTE'
+                            ? 'Post Internal Note'
+                            : 'Send Customer Reply'}
                     </span>
                   </button>
-                )}
 
-                {isResolved && (
-                  <span style={{ fontSize: '0.8rem', color: '#16a34a', fontWeight: 700 }}>
-                    ✓ Resolved & SLA Clock Frozen
-                  </span>
-                )}
-              </div>
+                  {/* Resolve and Close Ticket Button */}
+                  <button
+                    onClick={handleDispatchResolution}
+                    disabled={isResolving}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '8px 16px',
+                      borderRadius: '9999px',
+                      backgroundColor: '#059669',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      boxShadow: '0 2px 6px rgba(5, 150, 105, 0.25)',
+                    }}
+                    title="Mark ticket as resolved and permanently stop SLA clock"
+                  >
+                    <Check size={13} />
+                    <span>{isResolving ? 'Resolving...' : 'Resolve Ticket'}</span>
+                  </button>
+                </div>
+              )}
+
+              {isResolved && (
+                <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                  <Check size={14} /> Ticket Resolved & Closed
+                </span>
+              )}
             </div>
           </div>
         </div>
 
-        {/* RIGHT COLUMN: AI Triage Intelligence & Operations Center */}
+        {/* RIGHT COLUMN: Operations Center, Dual SLA Tracking & AI Telemetry */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           {/* Section: Operator Ownership & Lifecycle Card */}
           {(ticket.assigned_agent_id || ticket.claimed_at || ticket.status !== InquiryStatusEnum.UNASSIGNED) && (
@@ -592,12 +983,24 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     fontWeight: 700,
                     padding: '2px 8px',
                     borderRadius: '9999px',
-                    backgroundColor: ticket.status === InquiryStatusEnum.RESOLVED ? '#ECFDF5' : '#EFF6FF',
-                    color: ticket.status === InquiryStatusEnum.RESOLVED ? '#047857' : '#1D4ED8',
-                    border: ticket.status === InquiryStatusEnum.RESOLVED ? '1px solid #A7F3D0' : '1px solid #BFDBFE',
+                    backgroundColor: isResolved
+                      ? '#ECFDF5'
+                      : isPendingCustomer
+                        ? '#FEF3C7'
+                        : '#EFF6FF',
+                    color: isResolved
+                      ? '#047857'
+                      : isPendingCustomer
+                        ? '#B45309'
+                        : '#1D4ED8',
+                    border: isResolved ? '1px solid #A7F3D0' : isPendingCustomer ? '1px solid #FDE68A' : '1px solid #BFDBFE',
                   }}
                 >
-                  {ticket.status === InquiryStatusEnum.RESOLVED ? 'Resolved' : 'Active In Triage'}
+                  {isResolved
+                    ? 'Resolved'
+                    : isPendingCustomer
+                      ? 'Waiting Customer (Paused)'
+                      : 'Active In Triage'}
                 </span>
               </div>
 
@@ -674,7 +1077,94 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             </div>
           )}
 
-          {/* Section 4: AI Triage Intelligence Card */}
+          {/* Section: ITIL Dual SLA Tracking Card (First Response vs MTTR & Business Hours) */}
+          <div
+            style={{
+              backgroundColor: '#FFFFFF',
+              border: '1px solid rgba(12, 13, 13, 0.1)',
+              borderRadius: '18px',
+              padding: '16px 18px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                ITIL Dual SLA Tracking
+              </span>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  backgroundColor: ticket.priority === PriorityEnum.P1 || ticket.priority === PriorityEnum.P2
+                    ? 'rgba(239, 68, 68, 0.1)'
+                    : 'rgba(59, 130, 246, 0.1)',
+                  color: ticket.priority === PriorityEnum.P1 || ticket.priority === PriorityEnum.P2
+                    ? '#DC2626'
+                    : '#2563EB',
+                }}
+              >
+                {ticket.priority === PriorityEnum.P1 || ticket.priority === PriorityEnum.P2
+                  ? '24/7/365 Continuous Clock'
+                  : 'Business Hours (9:00 - 18:00)'}
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {/* First Response SLA */}
+              <div style={{ backgroundColor: '#FAFAFA', padding: '10px', borderRadius: '10px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 700, display: 'block', marginBottom: '2px' }}>
+                  FIRST RESPONSE (FRT)
+                </span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: ticket.first_responded_at ? '#059669' : '#0F172A' }}>
+                  {ticket.first_responded_at
+                    ? `✓ Responded (${new Date(ticket.first_responded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                    : ticket.first_response_deadline_at
+                      ? `Due: ${new Date(ticket.first_response_deadline_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                      : 'N/A'}
+                </span>
+              </div>
+
+              {/* Resolution SLA (MTTR) */}
+              <div style={{ backgroundColor: '#FAFAFA', padding: '10px', borderRadius: '10px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 700, display: 'block', marginBottom: '2px' }}>
+                  RESOLUTION SLA (MTTR)
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 800,
+                    color: isResolved
+                      ? '#059669'
+                      : isPendingCustomer
+                        ? '#D97706'
+                        : isOverdue
+                          ? '#DC2626'
+                          : '#0F172A',
+                  }}
+                >
+                  {isResolved
+                    ? '✓ SLA Met'
+                    : isPendingCustomer
+                      ? `⏸ Paused (${remHours}h ${remMinutes}m)`
+                      : isOverdue
+                        ? `⚠️ Overdue ${remHours}h ${remMinutes}m`
+                        : `${remHours}h ${remMinutes}m remaining`}
+                </span>
+              </div>
+            </div>
+
+            {(ticket.total_paused_seconds ?? 0) > 0 && (
+              <div style={{ fontSize: '0.72rem', color: '#92400E', backgroundColor: '#FEF3C7', padding: '6px 10px', borderRadius: '8px' }}>
+                Clock previously paused for {Math.round((ticket.total_paused_seconds ?? 0) / 60)} min. SLA deadline was extended by that exact duration.
+              </div>
+            )}
+          </div>
+
+          {/* Section: AI Triage Intelligence Card */}
           <div
             style={{
               backgroundColor: '#ECF4EE',
@@ -780,8 +1270,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             </div>
           </div>
 
-
-          {/* Section 5: Sentiment & Frustration Meter */}
+          {/* Section: Sentiment & Frustration Meter */}
           <div
             style={{
               backgroundColor: '#FAFAFA',
@@ -836,7 +1325,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             )}
           </div>
 
-          {/* Section 6: MLOps Override & Audit History */}
+          {/* Section: MLOps Override & Audit History */}
           <div
             style={{
               backgroundColor: '#FAFAFA',
@@ -871,8 +1360,8 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                 }}
                 title={
                   currentAgent.role === 'Operations_Manager'
-                    ? "Calibrate model classification with mandatory engineering justification"
-                    : "Restricted to Operations Managers (requires Operations_Manager role)"
+                    ? 'Calibrate model classification with mandatory engineering justification'
+                    : 'Restricted to Operations Managers'
                 }
               >
                 <RotateCcw size={12} />

@@ -55,8 +55,12 @@ class Inquiry(Base):
     suggested_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     agent_copilot_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Temporal SLAs
+    # Temporal SLAs (ITIL v4 Compliant: Resolution SLA and First Response SLA)
     sla_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    first_response_deadline_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    sla_paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    total_paused_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Human-in-the-Loop Ownership & Resolution
     assigned_agent_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)  # Cognito Sub
@@ -71,13 +75,20 @@ class Inquiry(Base):
 
     @property
     def sla_remaining_seconds(self) -> Optional[int]:
-        """Compute remaining seconds until SLA deadline with offset-safe datetime handling."""
+        """Compute remaining seconds until SLA deadline with offset-safe datetime handling.
+        Freezes countdown during PENDING_CUSTOMER state.
+        """
         if not self.sla_deadline_at:
             return None
-        now = datetime.now(timezone.utc)
         deadline = self.sla_deadline_at
         if deadline.tzinfo is None:
             deadline = deadline.replace(tzinfo=timezone.utc)
+        if self.status == "PENDING_CUSTOMER" and self.sla_paused_at:
+            paused_at = self.sla_paused_at
+            if paused_at.tzinfo is None:
+                paused_at = paused_at.replace(tzinfo=timezone.utc)
+            return max(0, int((deadline - paused_at).total_seconds()))
+        now = datetime.now(timezone.utc)
         return int((deadline - now).total_seconds())
 
     @property
@@ -119,6 +130,13 @@ class Inquiry(Base):
 
     # Relationships
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="inquiry", cascade="all, delete-orphan")
+    messages: Mapped[List["InquiryMessage"]] = relationship(
+        "InquiryMessage",
+        back_populates="inquiry",
+        cascade="all, delete-orphan",
+        order_by="InquiryMessage.created_at.asc()",
+        lazy="selectin",
+    )
 
     # High-Performance Partial Composite B-Tree Index for active queue lookups
     __table_args__ = (
@@ -126,7 +144,7 @@ class Inquiry(Base):
             "idx_active_triage_queue",
             priority.asc(),
             sla_deadline_at.asc(),
-            postgresql_where=(status.in_(["UNASSIGNED", "CLAIMED"])),
+            postgresql_where=(status.in_(["UNASSIGNED", "CLAIMED", "PENDING_CUSTOMER"])),
         ),
         Index(
             "idx_inquiries_entities_gin",
@@ -134,6 +152,30 @@ class Inquiry(Base):
             postgresql_using="gin",
         ),
     )
+
+
+class InquiryMessage(Base):
+    """Chronological conversation message thread between customer, support operators, and AI copilot."""
+
+    __tablename__ = "inquiry_messages"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    inquiry_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("inquiries.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sender_type: Mapped[str] = mapped_column(String(32), nullable=False)  # CUSTOMER, AGENT, SYSTEM, AI_COPILOT
+    sender_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    sender_email: Mapped[str] = mapped_column(String(255), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    is_internal_note: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    attachments: Mapped[List[Dict[str, Any]]] = mapped_column(
+        JSON().with_variant(JSONB, "postgresql"), nullable=False, default=list
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, index=True)
+
+    # Relationships
+    inquiry: Mapped["Inquiry"] = relationship("Inquiry", back_populates="messages")
+
 
 
 class AuditLog(Base):
