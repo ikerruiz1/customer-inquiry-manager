@@ -31,6 +31,7 @@ from app.schemas.inquiry import (
 )
 from app.services.bedrock_service import BedrockService, get_bedrock_service
 from app.services.sns_service import SNSService, get_sns_service
+from app.services.email_service import EmailService, get_email_service
 
 logger = logging.getLogger("app.api.v1.inquiries")
 router = APIRouter()
@@ -386,6 +387,21 @@ async def resolve_inquiry(
     )
     db.add(resolution_msg)
 
+    # Dispatch resolution email to customer
+    try:
+        email_svc = get_email_service()
+        await email_svc.send_customer_notification(
+            customer_email=inquiry.customer_email,
+            customer_name=inquiry.customer_name,
+            ticket_id=str(inquiry.id),
+            ticket_subject=inquiry.subject,
+            message_body=f"Your ticket has been marked as RESOLVED.\n\nResolution Summary:\n{payload.resolution_text}",
+            action_type="REPLY",
+            agent_name=agent_name,
+        )
+    except Exception as exc:
+        logger.warning(f"Failed to dispatch resolution email notification: {exc}")
+
     await db.flush()
 
     fetch_stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
@@ -525,6 +541,23 @@ async def post_inquiry_message(
     db.add(msg)
     await db.flush()
     await db.refresh(msg)
+
+    # Dispatch real outbound email notification if customer-facing (REPLY or REQUEST_INFO)
+    if not is_internal and payload.action in [MessageActionEnum.REPLY, MessageActionEnum.REQUEST_INFO]:
+        try:
+            email_svc = get_email_service()
+            await email_svc.send_customer_notification(
+                customer_email=inquiry.customer_email,
+                customer_name=inquiry.customer_name,
+                ticket_id=str(inquiry.id),
+                ticket_subject=inquiry.subject,
+                message_body=payload.body,
+                action_type=payload.action.value,
+                agent_name=agent_name,
+            )
+        except Exception as exc:
+            logger.warning(f"Failed to dispatch customer outbound email notification: {exc}")
+
     return msg
 
 
@@ -586,6 +619,43 @@ async def post_customer_reply(
     await db.flush()
     await db.refresh(msg)
     return msg
+
+
+@router.get("/{inquiry_id}/copilot-draft")
+async def get_copilot_draft(
+    inquiry_id: UUID,
+    action_type: MessageActionEnum = Query(MessageActionEnum.REPLY),
+    db: AsyncSession = Depends(get_db),
+    bedrock: BedrockService = Depends(get_bedrock_service),
+    current_user: dict = Depends(require_tier1_agent),
+):
+    """Generate tailored AI Copilot draft dynamically based on selected action mode (REPLY, REQUEST_INFO, INTERNAL_NOTE)."""
+    stmt = select(Inquiry).options(selectinload(Inquiry.messages)).where(Inquiry.id == inquiry_id)
+    res = await db.execute(stmt)
+    inquiry = res.scalar_one_or_none()
+    if not inquiry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+
+    conv_history = [
+        {
+            "sender_type": m.sender_type,
+            "sender_name": m.sender_name,
+            "body": m.body,
+            "is_internal_note": m.is_internal_note,
+        }
+        for m in (inquiry.messages or [])
+    ]
+
+    draft = await bedrock.generate_action_draft(
+        customer_name=inquiry.customer_name,
+        subject=inquiry.subject,
+        body=inquiry.body,
+        department=inquiry.department,
+        action_type=action_type.value,
+        entities=inquiry.entities,
+        conversation_history=conv_history,
+    )
+    return {"action_type": action_type.value, "draft": draft}
 
 
 @router.get("/{inquiry_id}/audit-logs", response_model=List[AuditLogResponse])

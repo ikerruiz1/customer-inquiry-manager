@@ -356,4 +356,125 @@ async def test_internal_note_and_resolution_while_paused(client: AsyncClient):
     assert thread[-1]["body"] == resolve_payload["resolution_text"]
 
 
+@pytest.mark.asyncio
+async def test_copilot_draft_three_modes(client: AsyncClient):
+    """Verify AI Copilot draft generator creates distinct tailored drafts for REPLY, REQUEST_INFO, and INTERNAL_NOTE."""
+    # 1. Create a ticket
+    create_res = await client.post("/api/v1/inquiries/", json={
+        "channel": "WEB_FORM",
+        "customer_email": "demo.user@domain.com",
+        "customer_name": "Demo User",
+        "subject": "Critical API 500 error on checkout",
+        "body": "Whenever users click pay, server returns HTTP 500 error code ERR_PAY_99. Transactions blocked.",
+    })
+    assert create_res.status_code == 201
+    inquiry_id = create_res.json()["id"]
+
+    # 2. Test REPLY draft
+    reply_draft_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/copilot-draft?action_type=REPLY")
+    assert reply_draft_res.status_code == 200
+    reply_data = reply_draft_res.json()
+    assert reply_data["action_type"] == "REPLY"
+    assert "Demo User" in reply_data["draft"]
+    assert "Thank you for contacting" in reply_data["draft"]
+
+    # 3. Test REQUEST_INFO draft (Assert zero customer-facing SLA pause mentions)
+    info_draft_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/copilot-draft?action_type=REQUEST_INFO")
+    assert info_draft_res.status_code == 200
+    info_data = info_draft_res.json()
+    assert info_data["action_type"] == "REQUEST_INFO"
+    assert "SLA COUNTDOWN PAUSED" not in info_data["draft"]
+    assert "temporarily frozen" not in info_data["draft"]
+    assert "Support Team" in info_data["draft"]
+    assert "share the following details" in info_data["draft"]
+
+    # 4. Test INTERNAL_NOTE draft
+    note_draft_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/copilot-draft?action_type=INTERNAL_NOTE")
+    assert note_draft_res.status_code == 200
+    note_data = note_draft_res.json()
+    assert note_data["action_type"] == "INTERNAL_NOTE"
+    assert "CONFIDENTIAL COPILOT DIAGNOSIS" in note_data["draft"]
+    assert "Do NOT disclose internal" in note_data["draft"]
+
+
+@pytest.mark.asyncio
+async def test_inbound_email_thread_reply_auto_matching(client: AsyncClient):
+    """Verify inbound email webhook automatically routes replies with [Ticket #...] to existing ticket and unfreezes SLA."""
+    # 1. Create a ticket
+    create_res = await client.post("/api/v1/inquiries/", json={
+        "channel": "EMAIL",
+        "customer_email": "external.person@gmail.com",
+        "customer_name": "External Person",
+        "subject": "Need invoice clarification",
+        "body": "I was charged twice for invoice INV-1002.",
+    })
+    assert create_res.status_code == 201
+    inquiry = create_res.json()
+    inquiry_id = inquiry["id"]
+    short_id = str(inquiry_id)[:8].upper()
+
+    # 2. Agent claims and pauses SLA
+    await client.patch(f"/api/v1/inquiries/{inquiry_id}/claim")
+    pause_msg = await client.post(f"/api/v1/inquiries/{inquiry_id}/messages", json={
+        "body": "Could you provide a screenshot of the credit card charge?",
+        "action": "REQUEST_INFO",
+    })
+    assert pause_msg.status_code == 201
+
+    # Verify ticket is PENDING_CUSTOMER
+    check_res = await client.get(f"/api/v1/inquiries/{inquiry_id}")
+    assert check_res.json()["status"] == "PENDING_CUSTOMER"
+
+    # 3. External person replies from their email client to the company support email
+    email_webhook_payload = {
+        "from": "external.person@gmail.com",
+        "name": "External Person",
+        "subject": f"Re: [Ticket #{short_id}] Need invoice clarification",
+        "text": "Here is the screenshot: https://cdn.attachments.com/proof.png showing the double charge.",
+    }
+    inbound_res = await client.post("/api/v1/webhooks/email", json=email_webhook_payload)
+    assert inbound_res.status_code == 201
+    resumed_inquiry = inbound_res.json()
+
+    # The webhook should NOT create a new inquiry; it should resume the existing one!
+    assert resumed_inquiry["id"] == inquiry_id
+    assert resumed_inquiry["status"] == "CLAIMED"
+    assert resumed_inquiry["sla_paused_at"] is None
+
+    # Check conversation thread has the customer's email reply appended
+    thread_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/messages")
+    thread = thread_res.json()
+    assert any("showing the double charge" in m["body"] and m["sender_type"] == "CUSTOMER" for m in thread)
+
+
+@pytest.mark.asyncio
+async def test_copilot_draft_adapts_to_conversation_state(client: AsyncClient):
+    """Verify AI Copilot draft adapts when an agent has already responded, generating follow-ups without SLA jargon."""
+    create_res = await client.post("/api/v1/inquiries/", json={
+        "channel": "EMAIL",
+        "customer_email": "client@enterprise.com",
+        "customer_name": "Enterprise Client",
+        "subject": "CORS configuration issue",
+        "body": "We are getting CORS error 403 on API gateway.",
+    })
+    inquiry_id = create_res.json()["id"]
+
+    # Agent dispatches REQUEST_INFO
+    await client.post(f"/api/v1/inquiries/{inquiry_id}/messages", json={
+        "body": "Could you please send us your CORS origin whitelist configuration?",
+        "action": "REQUEST_INFO",
+    })
+
+    # Request copilot draft for REPLY now that an agent message was already dispatched
+    follow_up_res = await client.get(f"/api/v1/inquiries/{inquiry_id}/copilot-draft?action_type=REPLY")
+    assert follow_up_res.status_code == 200
+    draft_text = follow_up_res.json()["draft"]
+    # Should be a follow-up draft, not repeating initial greeting, with zero SLA countdown mentions
+    assert "follow up" in draft_text.lower()
+    assert "SLA COUNTDOWN PAUSED" not in draft_text
+    assert "Enterprise Client" in draft_text
+
+
+
+
 

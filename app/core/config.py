@@ -73,11 +73,36 @@ class Settings(BaseSettings):
     # Grounding Document Path
     GROUNDING_CONTEXT_PATH: str = "company_profile.json"
 
-    # Inbound Support Email (Dynamically loaded from company_profile.json)
+    # Inbound Support Email & Company Metadata (Dynamically loaded from company_profile.json)
     SUPPORT_EMAIL: str = Field(
         default="support@company.internal",
         description="Authoritative customer support inbound email address parsed from company profile",
     )
+    COMPANY_NAME: str = Field(
+        default="ExampleCorp Technologies",
+        description="Authoritative company name parsed from company profile",
+    )
+    COMPANY_DOMAIN: str = Field(
+        default="company.internal",
+        description="Authoritative company domain parsed from company profile",
+    )
+
+    # Optional Outbound SMTP Settings (Can be set via env vars or company_profile.json)
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+
+    # Optional Inbound IMAP Poller Settings (Can be set via env vars or company_profile.json)
+    IMAP_HOST: Optional[str] = None
+    IMAP_PORT: int = 993
+    IMAP_USER: Optional[str] = None
+    IMAP_PASSWORD: Optional[str] = None
+    IMAP_USE_SSL: bool = True
+    INBOUND_EMAIL_POLL_ENABLED: bool = False
+    INBOUND_EMAIL_POLL_INTERVAL_SECONDS: int = 5
 
     # Inbound Customer Verification & Identity Policy (Parsed from company_profile.json)
     CUSTOMER_ACCESS_POLICY: Dict[str, Any] = Field(
@@ -117,10 +142,44 @@ class Settings(BaseSettings):
             try:
                 with open(self.GROUNDING_CONTEXT_PATH, "r", encoding="utf-8") as f:
                     profile_data = json.load(f)
+                    if "company_name" in profile_data:
+                        self.COMPANY_NAME = profile_data["company_name"]
+                    if "domain" in profile_data:
+                        self.COMPANY_DOMAIN = profile_data["domain"]
                     if "support_email" in profile_data:
                         self.SUPPORT_EMAIL = profile_data["support_email"]
                     if "customer_access_policy" in profile_data:
                         self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
+                    
+                    # Optional SMTP config from company profile if not already set by env vars
+                    smtp_conf = profile_data.get("outbound_email_delivery", {})
+                    if not self.SMTP_HOST and smtp_conf.get("smtp_host"):
+                        self.SMTP_HOST = smtp_conf["smtp_host"]
+                    if smtp_conf.get("smtp_port"):
+                        self.SMTP_PORT = int(smtp_conf["smtp_port"])
+                    if not self.SMTP_USER and smtp_conf.get("smtp_user"):
+                        self.SMTP_USER = smtp_conf["smtp_user"]
+                    if not self.SMTP_PASSWORD and smtp_conf.get("smtp_password"):
+                        self.SMTP_PASSWORD = smtp_conf["smtp_password"]
+                    if "use_tls" in smtp_conf:
+                        self.SMTP_USE_TLS = bool(smtp_conf["use_tls"])
+
+                    # Optional IMAP config from company profile if not already set by env vars
+                    imap_conf = profile_data.get("inbound_email_account", {})
+                    if not self.IMAP_HOST and imap_conf.get("imap_host"):
+                        self.IMAP_HOST = imap_conf["imap_host"]
+                    if imap_conf.get("imap_port"):
+                        self.IMAP_PORT = int(imap_conf["imap_port"])
+                    if not self.IMAP_USER and imap_conf.get("imap_user"):
+                        self.IMAP_USER = imap_conf["imap_user"]
+                    if not self.IMAP_PASSWORD and imap_conf.get("imap_password"):
+                        self.IMAP_PASSWORD = imap_conf["imap_password"]
+                    if "use_ssl" in imap_conf:
+                        self.IMAP_USE_SSL = bool(imap_conf["use_ssl"])
+                    if "poll_enabled" in imap_conf:
+                        self.INBOUND_EMAIL_POLL_ENABLED = bool(imap_conf["poll_enabled"])
+                    elif self.IMAP_HOST and self.IMAP_USER and self.IMAP_PASSWORD:
+                        self.INBOUND_EMAIL_POLL_ENABLED = True
             except Exception:
                 pass
 

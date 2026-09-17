@@ -49,14 +49,16 @@ customer-inquiry-manager/
 │   │   ├── metrics.py                # Operational metrics & operator directory schemas
 │   │   └── __init__.py               # Clean schema re-exports
 │   ├── services/                     # AWS Service Adapters
-│   │   ├── bedrock_service.py        # Amazon Bedrock Converse API client & Guardrails
+│   │   ├── bedrock_service.py        # Amazon Bedrock Converse API client, Guardrails & 3-mode Copilot drafts
 │   │   ├── cognito_service.py        # Amazon Cognito TOTP authentication
+│   │   ├── email_service.py          # Outbound email dispatch (Amazon SES, SMTP, local outbox)
+│   │   ├── inbound_email_poller.py   # Inbound IMAP poller for automated ticket ingestion and correlation
 │   │   ├── s3_service.py             # S3 presigned URL generation
 │   │   ├── sns_service.py            # Outbound SNS customer receipts & Ops alerts
 │   │   └── __init__.py               # Clean service re-exports
 │   ├── health.py                     # Container /health/live and /health/ready probes
 │   ├── main.py                       # FastAPI entrypoint, lifespan context & CORS
-│   └── tests/                        # Automated Pytest Suite (34 Tests, 100% Pass Rate)
+│   └── tests/                        # Automated Pytest Suite (37 Tests, 100% Pass Rate)
 │       ├── conftest.py               # In-memory SQLite async engine & service mocks
 │       ├── test_auth.py              # Cognito login & TOTP verification tests
 │       ├── test_bedrock_schema.py    # Extraction bounds & Pydantic validation tests
@@ -130,8 +132,12 @@ The presentation tier is engineered as an enterprise-grade, high-density operati
    - **Resolution Plane (Left):**
      - **Multi-Turn Conversation Timeline:** Chronological message feed displaying original customer inquiry, operator replies, and private co-pilot notes with distinct visual demarcations.
      - **SLA Clock Freeze Banner:** When ticket is in `PENDING_CUSTOMER`, displays an active amber alert banner showing the exact timestamp when the clock paused and instructions for resumption.
-     - **Interactive Customer Reply Simulator:** Embedded testing widget enabling operators and QA engineers to simulate customer inbound responses with 1-click, triggering SLA clock resumption, deadline extension, and status updates directly in the UI.
-     - **Action Dispatcher:** 3-mode action selector (`REPLY`, `REQUEST_INFO`, `INTERNAL_NOTE`) with 1-click execution.
+     - **Interactive Customer Reply Simulator & External Email Ingestion:** Dual customer response mechanisms: (1) Embedded testing widget enabling operators and QA engineers to simulate customer inbound responses with 1-click, triggering SLA clock resumption, deadline extension, and status updates directly in the UI; (2) Authentic external email replies where customers reply from their personal email client and inbound email webhooks automatically correlate the ticket via regex (`[Ticket #<ID>]`), append the message to the thread, unfreeze the SLA clock, and extend the deadline.
+     - **Action-Aware AI Copilot Drafts & Dispatcher:** 3-mode action selector (`REPLY`, `REQUEST_INFO`, `INTERNAL_NOTE`) with dynamically generated AI Copilot drafts tailored to each mode:
+       - `REPLY`: Professional customer-facing resolution grounded in `company_profile.json`.
+       - `REQUEST_INFO`: Polite information request requesting specific missing customer artifacts (logs, error codes, invoice IDs) and explicitly notifying the customer that the SLA clock is frozen pending their reply.
+       - `INTERNAL_NOTE`: Private engineering triage notes and technical diagnosis for internal handover.
+     - **Outbound Email Dispatch:** Every `REPLY` and `REQUEST_INFO` automatically triggers `EmailService` (Amazon SES or SMTP), delivering a branded email notification directly to the customer's personal email inbox with the standardized subject `[Ticket #<ID>] <Subject>`.
    - **Intelligence & Governance Plane (Right):** Amazon Bedrock Claude Haiku 4.5 XAI rationale, inference latency, confidence scores, sentiment/churn hostility meters, supervisor MLOps classification overrides with mandatory justification (>= 10 chars), and immutable audit trail history (`AuditLog`).
 
 5. **Hardware-Accelerated Ambient Theme Engine (`AmbientBackground.tsx` & `ThemeSelector.tsx`):**
@@ -573,7 +579,7 @@ chmod +x scripts/*.sh
 ## 9. Security & Policy-as-Code Compliance
 
 The CI/CD pipeline enforces automated security gates in AWS CodeBuild before any container image is pushed to ECR:
-- **Pytest:** 100% unit and integration test pass rate (34 automated tests) across database claiming, conversation threads, SLA pause/resume, and auth flows.
+- **Pytest:** 100% unit and integration test pass rate (37 automated tests) across database claiming, conversation threads, SLA pause/resume, and auth flows.
 - **Semgrep SAST:** Scans Python code for OWASP Top 10 vulnerabilities.
 - **Conftest (OPA):** Enforces Open Policy Agent guardrails prohibiting NAT Gateways and unencrypted storage.
 - **KICS (Checkmarx):** Scans Terraform HCL files for security misconfigurations.

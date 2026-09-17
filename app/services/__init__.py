@@ -4,6 +4,9 @@ from app.services.s3_service import S3Service, get_s3_service
 from app.services.sns_service import SNSService, get_sns_service
 from app.services.cognito_service import CognitoService, get_cognito_service
 
+from app.services.email_service import EmailService, get_email_service
+from app.services.inbound_email_poller import InboundEmailPoller, get_inbound_email_poller
+
 __all__ = [
     "BedrockService",
     "get_bedrock_service",
@@ -13,4 +16,8 @@ __all__ = [
     "get_sns_service",
     "CognitoService",
     "get_cognito_service",
+    "EmailService",
+    "get_email_service",
+    "InboundEmailPoller",
+    "get_inbound_email_poller",
 ]
