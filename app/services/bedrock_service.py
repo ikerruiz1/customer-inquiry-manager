@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
@@ -274,6 +274,186 @@ Schema:
             cost_eur=cost_eur,
         )
 
+    async def generate_action_draft(
+        self,
+        customer_name: str,
+        subject: str,
+        body: str,
+        department: str,
+        action_type: str = "REPLY",
+        entities: Optional[Dict[str, Any]] = None,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> str:
+        """Generate tailored AI draft based on active action mode (REPLY, REQUEST_INFO, or INTERNAL_NOTE).
+        
+        Strict Operational Rule: SLA clock pausing is 100% internal and must NEVER be communicated
+        to external customers in drafts or emails.
+        """
+        company_name = settings.COMPANY_NAME
+        company_domain = settings.COMPANY_DOMAIN
+        entities_dict = entities or {}
+        history = conversation_history or []
+
+        # Detect the sender of the last message in the thread
+        last_sender = None
+        last_message_body = None
+        if history:
+            last_msg = history[-1]
+            last_sender = last_msg.get("sender_type")
+            last_message_body = last_msg.get("body")
+
+        # Try live Bedrock Converse API if client credentials are available
+        try:
+            if hasattr(self, "client") and self.client is not None:
+                system_instruction = (
+                    f"You are the senior AI Support Co-Pilot at {company_name} ({company_domain}).\n"
+                    f"Action Mode: {action_type}.\n"
+                    f"Department: {department}.\n"
+                    f"Customer Name: {customer_name}.\n"
+                    f"CRITICAL RULE: SLA clock management and countdown timers are strictly internal operational concerns. "
+                    f"NEVER mention SLA pausing, frozen timers, or penalty mitigation to the customer.\n"
+                    f"Instructions per mode:\n"
+                    f"- If REPLY: Write an empathetic, definitive resolution grounded in company service policy.\n"
+                    f"- If REQUEST_INFO: Courteously ask the customer for specific diagnostic details (e.g. error logs, invoice IDs, screenshots) needed to resolve their issue. Do NOT include administrative boilerplate.\n"
+                    f"- If INTERNAL_NOTE: Write a confidential engineering diagnosis and handover note detailing technical root causes.\n"
+                    f"Sign off customer communications with:\n"
+                    f"Best regards,\n{company_name} Support Team\n{company_domain}"
+                )
+
+                history_context = ""
+                if history:
+                    history_context = "\n\nChronological Conversation History:\n" + "\n".join(
+                        f"[{m.get('sender_type', 'UNKNOWN')}]: {m.get('body', '')}" for m in history[-5:]
+                    )
+
+                user_prompt = (
+                    f"Subject: {subject}\n"
+                    f"Inquiry Description: {body}\n"
+                    f"Identified Entities: {entities_dict}\n"
+                    f"{history_context}\n\n"
+                    f"Please generate the exact text for {action_type}:"
+                )
+
+                converse_params = {
+                    "modelId": self.model_id,
+                    "messages": [{"role": "user", "content": [{"text": user_prompt}]}],
+                    "system": [{"text": system_instruction}],
+                    "inferenceConfig": {"temperature": 0.2, "maxTokens": 600},
+                }
+                resp = self.client.converse(**converse_params)
+                blocks = resp.get("output", {}).get("message", {}).get("content", [])
+                if blocks and blocks[0].get("text"):
+                    return blocks[0]["text"].strip()
+        except Exception as exc:
+            logger.debug(f"Bedrock Converse action draft unavailable ({exc}), utilizing semantic generator.")
+
+        # Fallback Dynamic Context-Grounded Semantic Generator (Zero-SLA boilerplate)
+        order_id = entities_dict.get("order_id") or entities_dict.get("invoice_id")
+        error_code = entities_dict.get("error_code")
+
+        # 1. Action: REQUEST_INFO (Polite clarification request - Zero robotic SLA text)
+        if action_type == "REQUEST_INFO":
+            needed_items = []
+            if error_code:
+                needed_items.append(f"The full stack trace or screenshot displaying error code '{error_code}'")
+            elif department == "BILLING":
+                needed_items.append("The last 4 digits of the payment method and the specific invoice or billing cycle date")
+            elif department == "TECH_SUPPORT":
+                needed_items.append("Your application environment, configuration file, or relevant server error logs")
+            elif department == "ACCOUNTS":
+                needed_items.append("The primary administrator email address and a screenshot of the login prompt")
+            else:
+                needed_items.append("A full screenshot or the exact error message displayed on your dashboard")
+
+            if order_id:
+                needed_items.append(f"Confirmation of your registered account email linked to invoice/order #{order_id}")
+            else:
+                needed_items.append("Your account identifier, workspace slug, or relevant transaction ID")
+
+            needed_items.append("The approximate timestamp (with timezone) when the behavior was first observed")
+
+            items_formatted = "\n".join(f"  {idx+1}. {item}" for idx, item in enumerate(needed_items))
+
+            return (
+                f"Hello {customer_name},\n\n"
+                f"Thank you for contacting {company_name} Support regarding \"{subject}\".\n\n"
+                f"To help our engineering and support specialists investigate this thoroughly and provide "
+                f"a swift resolution, could you please share the following details?\n\n"
+                f"{items_formatted}\n\n"
+                f"Once you reply with this information, we will immediately resume our investigation.\n\n"
+                f"Best regards,\n"
+                f"{company_name} Support Team\n"
+                f"{company_domain}"
+            )
+
+        # 2. Action: INTERNAL_NOTE (Confidential operator triage & diagnosis summary)
+        elif action_type == "INTERNAL_NOTE":
+            last_event_summary = f"Last message from {last_sender}" if last_sender else "Initial customer intake"
+            return (
+                f"[CONFIDENTIAL COPILOT DIAGNOSIS & TEAM HANDOVER]\n"
+                f"• Assigned Department: {department}\n"
+                f"• Inbound Subject: {subject}\n"
+                f"• Customer Entity: {customer_name}\n"
+                f"• Thread Status: {last_event_summary}\n"
+                f"• Identified Entities: {entities_dict if entities_dict else 'None'}\n"
+                f"• Operational Directives:\n"
+                f"  1. Review application logs and database traces for correlating exceptions.\n"
+                f"  2. If financial dispute, confirm payment gateway transaction status before issuing credit.\n"
+                f"  3. Do NOT disclose internal AWS PrivateLink IP addresses or cluster topology to customer.\n"
+                f"• Security Status: Sender evaluated under access policy {settings.CUSTOMER_ACCESS_POLICY.get('verification_mode', 'STANDARD')}."
+            )
+
+        # 3. Action: REPLY (Customer-Facing Resolution or Follow-Up)
+        else:
+            # If agent already responded and customer has not replied yet, generate a polite follow-up draft
+            if last_sender in ("AGENT", "AI_COPILOT"):
+                return (
+                    f"Hello {customer_name},\n\n"
+                    f"I wanted to follow up on our previous communication regarding \"{subject}\" to see if you have "
+                    f"had an opportunity to review our request or if you need any additional assistance.\n\n"
+                    f"Please let us know whenever you are ready, and our team will be glad to assist.\n\n"
+                    f"Warm regards,\n"
+                    f"{company_name} Support Team\n"
+                    f"{company_domain}"
+                )
+
+            # Standard Resolution Draft based on department
+            if department == "BILLING":
+                resolution_core = (
+                    "Our billing operations team has reviewed your transaction records. We have initiated "
+                    "a verification with our payment gateway and any duplicate authorization hold will be released."
+                )
+            elif department == "TECH_SUPPORT":
+                resolution_core = (
+                    "Our engineering team has analyzed our cluster telemetry traces. The performance anomaly "
+                    "impacting your workload has been mitigated and all services are operating within normal SLA thresholds."
+                )
+            elif department == "SECURITY":
+                resolution_core = (
+                    "Our security operations team has audited your authentication logs. Your credentials have been secured "
+                    "and any unauthorized session tokens have been invalidated."
+                )
+            elif department == "ACCOUNTS":
+                resolution_core = (
+                    "We have verified your account profile. You can now access your administrative portal "
+                    "and re-synchronize your multi-factor authentication tokens."
+                )
+            else:
+                resolution_core = (
+                    "We have thoroughly reviewed your request in accordance with our service guidelines. "
+                    "Your inquiry is now addressed and full operational access has been confirmed."
+                )
+
+            return (
+                f"Hello {customer_name},\n\n"
+                f"Thank you for contacting {company_name} Support regarding \"{subject}\".\n\n"
+                f"{resolution_core}\n\n"
+                f"Please let us know if you have any questions or require additional assistance. "
+                f"We are here to support your mission-critical operations.\n\n"
+                f"Best regards,\n"
+                f"{company_name} Support Team\n"
+                f"{company_domain}"
+            )
 
 
 # Singleton instance provider

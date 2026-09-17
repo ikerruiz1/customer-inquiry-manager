@@ -433,4 +433,23 @@ export async function postCustomerReply(
   return await res.json();
 }
 
+/**
+ * Retrieve tailored AI Copilot draft dynamically based on selected action mode (REPLY, REQUEST_INFO, INTERNAL_NOTE)
+ */
+export async function getCopilotDraft(
+  inquiryId: string,
+  actionType: MessageActionEnum | string = 'REPLY'
+): Promise<string> {
+  const res = await fetch(`/api/v1/inquiries/${inquiryId}/copilot-draft?action_type=${actionType}`, {
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP error ${res.status}: Failed to generate copilot draft`);
+  }
+  const data = await res.json();
+  return data.draft || '';
+}
+
+
 

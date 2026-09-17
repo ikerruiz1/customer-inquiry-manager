@@ -31,9 +31,15 @@ async def lifespan(app: FastAPI):
     if settings.ENVIRONMENT == "dev":
         await init_db_and_seed()
 
+    # Start inbound email poller background worker if enabled
+    from app.services.inbound_email_poller import get_inbound_email_poller
+    email_poller = get_inbound_email_poller()
+    email_poller.start()
+
     yield
 
     logger.info("Executing graceful application shutdown and disposing database connections...")
+    await email_poller.stop()
     await engine.dispose()
     logger.info("Shutdown complete.")
 

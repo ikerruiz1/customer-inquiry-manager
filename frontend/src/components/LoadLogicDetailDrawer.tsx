@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Pause,
   Play,
+  Sparkles,
 } from 'lucide-react';
 import {
   getAuditLogs,
@@ -24,6 +25,7 @@ import {
   postInquiryMessage,
   postCustomerReply,
   getInquiry,
+  getCopilotDraft,
 } from '../api/client';
 import type {
   AgentProfile,
@@ -50,7 +52,7 @@ interface LoadLogicDetailDrawerProps {
 }
 
 export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
-  ticket,
+  ticket: initialTicket,
   onClose,
   currentAgent,
   onResolveTicket,
@@ -60,43 +62,98 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
   operators,
   onTicketUpdated,
 }) => {
-  if (!ticket) return null;
+  if (!initialTicket) return null;
 
-  const [messages, setMessages] = useState<InquiryMessage[]>(ticket.messages || []);
+  const [ticket, setTicket] = useState<Inquiry>(initialTicket);
+  const [messages, setMessages] = useState<InquiryMessage[]>(initialTicket.messages || []);
   const [isLoadingMessages, setIsLoadingMessages] = useState<boolean>(false);
   const [actionType, setActionType] = useState<MessageActionEnum>('REPLY');
-  const [messageText, setMessageText] = useState<string>(ticket.suggested_response || '');
+  const [messageText, setMessageText] = useState<string>(initialTicket.suggested_response || '');
   const [isSendingMessage, setIsSendingMessage] = useState<boolean>(false);
-  const [simulatedReplyText, setSimulatedReplyText] = useState<string>('');
+  const defaultSimText = 'Here are the requested diagnostic details: verified server issue, attached logs.';
+  const [simulatedReplyText, setSimulatedReplyText] = useState<string>(defaultSimText);
+  const [showSimulationWidget, setShowSimulationWidget] = useState<boolean>(true);
   const [isSendingCustomerReply, setIsSendingCustomerReply] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showAuditLogs, setShowAuditLogs] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState<boolean>(false);
+  const [dispatchToast, setDispatchToast] = useState<string | null>(null);
+
+  // Derive conversation state
+  const lastMessage = messages.length > 0 ? messages[messages.length - 1] : null;
+  const isAwaitingCustomer =
+    lastMessage?.sender_type === 'AGENT' ||
+    lastMessage?.sender_type === 'AI_COPILOT' ||
+    ticket.status === InquiryStatusEnum.PENDING_CUSTOMER;
 
   useEffect(() => {
-    setMessageText(ticket.suggested_response || '');
-    setSimulatedReplyText('');
-    setActionType('REPLY');
+    setTicket(initialTicket);
+    setMessageText(initialTicket.suggested_response || '');
+    setSimulatedReplyText(defaultSimText);
+
+    // Initial action selection based on status
+    if (initialTicket.status === InquiryStatusEnum.PENDING_CUSTOMER) {
+      setActionType(MessageActionEnum.INTERNAL_NOTE);
+    } else {
+      setActionType(MessageActionEnum.REPLY);
+    }
 
     // Fetch fresh chronological message thread
     setIsLoadingMessages(true);
-    getInquiryMessages(ticket.id)
+    getInquiryMessages(initialTicket.id)
       .then((msgs) => {
         if (msgs && msgs.length > 0) {
           setMessages(msgs);
-        } else if (ticket.messages && ticket.messages.length > 0) {
-          setMessages(ticket.messages);
+          const lastM = msgs[msgs.length - 1];
+          if (lastM && (lastM.sender_type === 'AGENT' || lastM.sender_type === 'AI_COPILOT')) {
+            setActionType(MessageActionEnum.INTERNAL_NOTE);
+          }
+        } else if (initialTicket.messages && initialTicket.messages.length > 0) {
+          setMessages(initialTicket.messages);
         }
       })
       .catch((err) => {
         console.warn('Failed to fetch messages:', err);
-        if (ticket.messages) setMessages(ticket.messages);
+        if (initialTicket.messages) setMessages(initialTicket.messages);
       })
       .finally(() => setIsLoadingMessages(false));
 
     // Fetch audit history
-    getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
-  }, [ticket.id, ticket.suggested_response]);
+    getAuditLogs(initialTicket.id).then((logs) => setAuditLogs(logs));
+  }, [initialTicket.id]);
+
+  // Real-time synchronization while drawer is open (picks up external emails & replies)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const [freshTicket, freshMsgs] = await Promise.all([
+          getInquiry(ticket.id),
+          getInquiryMessages(ticket.id),
+        ]);
+        if (freshMsgs && freshMsgs.length !== messages.length) {
+          setMessages(freshMsgs);
+          setTicket(freshTicket);
+          if (onTicketUpdated) onTicketUpdated(freshTicket);
+
+          // If latest message is from customer, auto-load reply draft
+          const lastM = freshMsgs[freshMsgs.length - 1];
+          if (lastM && lastM.sender_type === 'CUSTOMER') {
+            setActionType(MessageActionEnum.REPLY);
+            getCopilotDraft(ticket.id, MessageActionEnum.REPLY).then((d) => {
+              if (d) setMessageText(d);
+            });
+          }
+        } else if (freshTicket.status !== ticket.status || freshTicket.sla_remaining_seconds !== ticket.sla_remaining_seconds) {
+          setTicket(freshTicket);
+        }
+      } catch {
+        // Silently ignore background polling errors
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [ticket.id, messages.length, ticket.status]);
 
   const assignedAgent = operators?.find(
     (a) => a.id === ticket.assigned_agent_id || a.email === ticket.assigned_agent_id
@@ -113,10 +170,36 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
     setTimeout(() => setCopiedKey(null), 1800);
   };
 
+  const handleSelectAction = async (newType: MessageActionEnum) => {
+    setActionType(newType);
+    setIsGeneratingDraft(true);
+    try {
+      const draft = await getCopilotDraft(ticket.id, newType);
+      if (draft) {
+        setMessageText(draft);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch copilot draft for action:', err);
+    } finally {
+      setIsGeneratingDraft(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!messageText.trim() || isSendingMessage) return;
     setIsSendingMessage(true);
     try {
+      const isInfoRequest = actionType === 'REQUEST_INFO';
+      
+      // Optimistically update local state if pausing SLA
+      if (isInfoRequest) {
+        setTicket((prev) => ({
+          ...prev,
+          status: InquiryStatusEnum.PENDING_CUSTOMER,
+          sla_paused_at: new Date().toISOString(),
+        }));
+      }
+
       const newMsg = await postInquiryMessage(ticket.id, {
         body: messageText.trim(),
         action: actionType,
@@ -124,8 +207,14 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
       setMessages((prev) => [...prev, newMsg]);
       setMessageText('');
 
+      if (actionType === 'REPLY' || actionType === 'REQUEST_INFO') {
+        setDispatchToast(`📧 Outbound email dispatched to ${ticket.customer_email}`);
+        setTimeout(() => setDispatchToast(null), 4500);
+      }
+
       // Refresh inquiry state to sync SLA pauses and status
       const freshTicket = await getInquiry(ticket.id);
+      setTicket(freshTicket);
       if (onTicketUpdated) {
         onTicketUpdated(freshTicket);
       }
@@ -138,23 +227,41 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
   };
 
   const handleSimulateCustomerReply = async () => {
-    if (!simulatedReplyText.trim() || isSendingCustomerReply) return;
+    if (isSendingCustomerReply) return;
     setIsSendingCustomerReply(true);
+    const replyBody = simulatedReplyText.trim() || defaultSimText;
     try {
+      // Optimistically resume ticket locally
+      setTicket((prev) => ({
+        ...prev,
+        status: prev.assigned_agent_id ? InquiryStatusEnum.CLAIMED : InquiryStatusEnum.UNASSIGNED,
+        sla_paused_at: undefined,
+      }));
+
       const newMsg = await postCustomerReply(ticket.id, {
-        body: simulatedReplyText.trim(),
+        body: replyBody,
         customer_name: ticket.customer_name,
         customer_email: ticket.customer_email,
       });
       setMessages((prev) => [...prev, newMsg]);
-      setSimulatedReplyText('');
+      setSimulatedReplyText(defaultSimText);
+
+      setDispatchToast(`📥 Customer response received! SLA countdown resumed.`);
+      setTimeout(() => setDispatchToast(null), 4500);
 
       // Refresh inquiry state (which unpauses SLA and extends deadline)
       const freshTicket = await getInquiry(ticket.id);
+      setTicket(freshTicket);
       if (onTicketUpdated) {
         onTicketUpdated(freshTicket);
       }
       getAuditLogs(ticket.id).then((logs) => setAuditLogs(logs));
+
+      // Auto-load resolution reply draft now that customer answered
+      setActionType(MessageActionEnum.REPLY);
+      getCopilotDraft(ticket.id, MessageActionEnum.REPLY).then((d) => {
+        if (d) setMessageText(d);
+      });
     } catch (err: any) {
       alert(err.message || 'Failed to simulate customer reply');
     } finally {
@@ -604,44 +711,66 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     gap: '8px',
                   }}
                 >
-                  <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0C0D0D' }}>
-                    🧪 Interactive Simulation: Receive Customer Response
-                  </span>
-                  <input
-                    type="text"
-                    value={simulatedReplyText}
-                    onChange={(e) => setSimulatedReplyText(e.target.value)}
-                    placeholder="e.g. Here is our config file: CORS_ORIGINS = ['http://localhost:5173']"
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '8px',
-                      border: '1px solid rgba(12, 13, 13, 0.15)',
-                      fontSize: '0.82rem',
-                      outline: 'none',
-                    }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: '0.74rem', fontWeight: 800, color: '#0C0D0D' }}>
+                      🧪 Interactive Simulation: Receive Customer Response
+                    </span>
                     <button
-                      onClick={handleSimulateCustomerReply}
-                      disabled={isSendingCustomerReply || !simulatedReplyText.trim()}
+                      type="button"
+                      onClick={() => setShowSimulationWidget(!showSimulationWidget)}
                       style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        borderRadius: '9999px',
-                        backgroundColor: '#D97706',
-                        color: '#FFFFFF',
                         border: 'none',
-                        fontSize: '0.76rem',
-                        fontWeight: 700,
+                        background: 'transparent',
+                        color: '#92400E',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
                         cursor: 'pointer',
+                        textDecoration: 'underline',
                       }}
                     >
-                      <Play size={12} />
-                      <span>{isSendingCustomerReply ? 'Resuming SLA...' : 'Simulate Customer Reply & Resume Clock'}</span>
+                      {showSimulationWidget ? 'Hide Tool' : 'Show Tool'}
                     </button>
                   </div>
+
+                  {showSimulationWidget && (
+                    <>
+                      <input
+                        type="text"
+                        value={simulatedReplyText}
+                        onChange={(e) => setSimulatedReplyText(e.target.value)}
+                        placeholder="e.g. Here is our error screenshot and system logs"
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          border: '1px solid rgba(12, 13, 13, 0.15)',
+                          fontSize: '0.82rem',
+                          outline: 'none',
+                        }}
+                      />
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={handleSimulateCustomerReply}
+                          disabled={isSendingCustomerReply}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            padding: '6px 14px',
+                            borderRadius: '9999px',
+                            backgroundColor: '#D97706',
+                            color: '#FFFFFF',
+                            border: 'none',
+                            fontSize: '0.76rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Play size={12} />
+                          <span>{isSendingCustomerReply ? 'Resuming SLA...' : 'Simulate Customer Reply & Resume Clock'}</span>
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -684,84 +813,179 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               )}
             </div>
 
-            {/* Action Mode Selector Tabs */}
+            {/* Outbound Dispatch Confirmation Toast */}
+            {dispatchToast && (
+              <div
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: '#ECFDF5',
+                  border: '1px solid #A7F3D0',
+                  color: '#065F46',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  animation: 'fadeInMenu 0.15s ease-out',
+                }}
+              >
+                <Check size={14} color="#059669" />
+                <span>{dispatchToast}</span>
+              </div>
+            )}
+
+            {/* Awaiting Customer State Alert Banner */}
+            {!isResolved && !isClaimedByOther && isAwaitingCustomer && (
+              <div
+                style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  backgroundColor: '#FEF3C7',
+                  border: '1px solid #FCD34D',
+                  color: '#92400E',
+                  fontSize: '0.78rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontWeight: 600,
+                }}
+              >
+                <Pause size={14} color="#D97706" />
+                <span>
+                  <strong>Awaiting customer reply:</strong> We contacted {ticket.customer_email}. We are waiting for the customer to reply before drafting a final resolution. You can document internal team notes or dispatch a follow-up.
+                </span>
+              </div>
+            )}
+
+            {/* Action Mode Selector Tabs (Adaptive according to conversation state) */}
             {!isResolved && !isClaimedByOther && (
-              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  onClick={() => setActionType('REPLY')}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '9999px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    border: actionType === 'REPLY' ? '1.5px solid #0C0D0D' : '1px solid rgba(12, 13, 13, 0.15)',
-                    backgroundColor: actionType === 'REPLY' ? '#0C0D0D' : '#FFFFFF',
-                    color: actionType === 'REPLY' ? '#FFFFFF' : '#0C0D0D',
-                  }}
-                >
-                  💬 Reply to Customer
-                </button>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {isAwaitingCustomer ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAction(MessageActionEnum.INTERNAL_NOTE)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        border: actionType === 'INTERNAL_NOTE' ? '1.5px solid #6B7280' : '1px solid rgba(107, 114, 128, 0.2)',
+                        backgroundColor: actionType === 'INTERNAL_NOTE' ? '#374151' : '#F9FAFB',
+                        color: actionType === 'INTERNAL_NOTE' ? '#FFFFFF' : '#374151',
+                      }}
+                    >
+                      🔒 Team Internal Note
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActionType('REQUEST_INFO')}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '9999px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    border: actionType === 'REQUEST_INFO' ? '1.5px solid #F59E0B' : '1px solid rgba(245, 158, 11, 0.3)',
-                    backgroundColor: actionType === 'REQUEST_INFO' ? '#F59E0B' : '#FFFBEB',
-                    color: actionType === 'REQUEST_INFO' ? '#FFFFFF' : '#B45309',
-                  }}
-                  title="Ask customer for info and freeze SLA timer"
-                >
-                  ⏸ Ask Info & Pause SLA
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAction(MessageActionEnum.REPLY)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        border: actionType === 'REPLY' ? '1.5px solid #0C0D0D' : '1px solid rgba(12, 13, 13, 0.15)',
+                        backgroundColor: actionType === 'REPLY' ? '#0C0D0D' : '#FFFFFF',
+                        color: actionType === 'REPLY' ? '#FFFFFF' : '#0C0D0D',
+                      }}
+                    >
+                      💬 Send Follow-Up to Customer
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAction(MessageActionEnum.REPLY)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        border: actionType === 'REPLY' ? '1.5px solid #0C0D0D' : '1px solid rgba(12, 13, 13, 0.15)',
+                        backgroundColor: actionType === 'REPLY' ? '#0C0D0D' : '#FFFFFF',
+                        color: actionType === 'REPLY' ? '#FFFFFF' : '#0C0D0D',
+                      }}
+                    >
+                      💬 Reply to Customer
+                    </button>
 
-                <button
-                  type="button"
-                  onClick={() => setActionType('INTERNAL_NOTE')}
-                  style={{
-                    padding: '5px 12px',
-                    borderRadius: '9999px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    border: actionType === 'INTERNAL_NOTE' ? '1.5px solid #6B7280' : '1px solid rgba(107, 114, 128, 0.2)',
-                    backgroundColor: actionType === 'INTERNAL_NOTE' ? '#374151' : '#F9FAFB',
-                    color: actionType === 'INTERNAL_NOTE' ? '#FFFFFF' : '#374151',
-                  }}
-                >
-                  🔒 Team Internal Note
-                </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAction(MessageActionEnum.REQUEST_INFO)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        border: actionType === 'REQUEST_INFO' ? '1.5px solid #F59E0B' : '1px solid rgba(245, 158, 11, 0.3)',
+                        backgroundColor: actionType === 'REQUEST_INFO' ? '#F59E0B' : '#FFFBEB',
+                        color: actionType === 'REQUEST_INFO' ? '#FFFFFF' : '#B45309',
+                      }}
+                      title="Ask customer for info and freeze SLA timer"
+                    >
+                      ⏸ Ask Info & Pause SLA
+                    </button>
 
-                {ticket.suggested_response && (
-                  <button
-                    type="button"
-                    onClick={() => setMessageText(ticket.suggested_response || '')}
-                    style={{
-                      marginLeft: 'auto',
-                      padding: '4px 10px',
-                      borderRadius: '9999px',
-                      fontSize: '0.72rem',
-                      fontWeight: 600,
-                      backgroundColor: '#ECF4EE',
-                      color: '#047857',
-                      border: '1px solid #A7F3D0',
-                      cursor: 'pointer',
-                    }}
-                    title="Insert Bedrock generative response draft"
-                  >
-                    Insert AI Copilot Draft
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAction(MessageActionEnum.INTERNAL_NOTE)}
+                      style={{
+                        padding: '5px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        border: actionType === 'INTERNAL_NOTE' ? '1.5px solid #6B7280' : '1px solid rgba(107, 114, 128, 0.2)',
+                        backgroundColor: actionType === 'INTERNAL_NOTE' ? '#374151' : '#F9FAFB',
+                        color: actionType === 'INTERNAL_NOTE' ? '#FFFFFF' : '#374151',
+                      }}
+                    >
+                      🔒 Team Internal Note
+                    </button>
+                  </>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectAction(actionType)}
+                  disabled={isGeneratingDraft}
+                  style={{
+                    marginLeft: 'auto',
+                    padding: '4px 12px',
+                    borderRadius: '9999px',
+                    fontSize: '0.73rem',
+                    fontWeight: 700,
+                    backgroundColor: '#ECFDF5',
+                    color: '#047857',
+                    border: '1px solid #A7F3D0',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  title="Generate dynamic Bedrock draft tailored specifically to this action mode"
+                >
+                  <Sparkles size={12} />
+                  <span>
+                    {isGeneratingDraft
+                      ? 'Generating Draft...'
+                      : `✨ AI Draft: ${actionType === 'REQUEST_INFO' ? 'Info Request' : actionType === 'INTERNAL_NOTE' ? 'Internal Note' : isAwaitingCustomer ? 'Follow-Up' : 'Reply'}`}
+                  </span>
+                </button>
               </div>
             )}
 

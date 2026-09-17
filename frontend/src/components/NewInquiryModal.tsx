@@ -47,7 +47,7 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
     onClose();
   };
 
-  const loadPreset = (presetType: 'billing' | 'p1' | 'review') => {
+  const loadPreset = (presetType: 'billing' | 'p1' | 'review' | 'custom') => {
     if (presetType === 'billing') {
       setChannel(ChannelEnum.BILLING);
       setName('Sarah Jenkins');
@@ -60,12 +60,18 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
       setEmail('arivera@fintech-bank.es');
       setSubject('EMERGENCY: Production database connection pool exhaustion in eu-west-1');
       setBody('Critical outage on API gateway. Microservices are throwing 504 Gateway Timeouts. Our SLA clock is ticking and customer checkouts are failing.');
-    } else {
+    } else if (presetType === 'review') {
       setChannel(ChannelEnum.TRUSTPILOT);
       setName('David Miller');
       setEmail('dmiller99@gmail.com');
       setSubject('1-Star Review: Frustrated with unresolved ticket for 3 weeks');
       setBody('Horrible support experience. Nobody answers my inquiries regarding order #88412. I am canceling my account and requesting a full chargeback.');
+    } else {
+      setChannel(ChannelEnum.EMAIL);
+      setName('');
+      setEmail('');
+      setSubject('Urgent assistance requested for our account setup');
+      setBody('Hello, our engineering team needs help resolving an issue with our subscription configuration.');
     }
   };
 
@@ -187,6 +193,46 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
           >
             Trustpilot 1-Star (Churn)
           </button>
+          <button
+            type="button"
+            onClick={() => loadPreset('custom')}
+            style={{
+              padding: '3px 10px',
+              borderRadius: '9999px',
+              border: '1px solid #10B981',
+              backgroundColor: '#ECFDF5',
+              color: '#047857',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+            title="Pre-fill empty fields to test with your own personal email address"
+          >
+            ✍ Custom (Your Email)
+          </button>
+        </div>
+
+        {/* Company Inbound Destination Banner */}
+        <div
+          style={{
+            margin: '8px 24px 0',
+            padding: '7px 12px',
+            borderRadius: '8px',
+            backgroundColor: '#F8FAFC',
+            border: '1px solid rgba(12, 13, 13, 0.08)',
+            fontSize: '0.72rem',
+            color: '#475569',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <span>
+            📬 Inbound Support Inbox: <strong style={{ color: '#0F172A' }}>support@example-corp.tech</strong>
+          </span>
+          <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
+            Any external sender establishes connection
+          </span>
         </div>
 
         {/* Modal Form */}

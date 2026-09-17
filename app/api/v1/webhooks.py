@@ -39,6 +39,41 @@ async def inbound_email_webhook(
     subject = payload.get("subject") or "Support Request via Email"
     body = payload.get("text") or payload.get("html") or payload.get("body") or ""
 
+    # 1. Thread Detection: Check if this inbound email is a customer reply to an existing ticket
+    import re
+    from sqlalchemy import select, cast, String
+    from sqlalchemy.orm import selectinload
+    from app.models.inquiry import Inquiry
+    from app.schemas.inquiry import CustomerReplyCreate
+    from app.api.v1.inquiries import post_customer_reply
+
+    ticket_match = re.search(r"(?:\[Ticket #|Ticket #)([A-Fa-f0-9\-]{8,36})\]?", subject)
+    if ticket_match:
+        short_id = ticket_match.group(1).lower()
+        stmt = (
+            select(Inquiry)
+            .options(selectinload(Inquiry.messages))
+            .where(cast(Inquiry.id, String).ilike(f"{short_id}%"))
+        )
+        res = await db.execute(stmt)
+        existing_inquiry = res.scalar_one_or_none()
+        if existing_inquiry:
+            logger.info(f"Inbound email matched existing ticket {existing_inquiry.id}. Routing as customer reply.")
+            reply_create = CustomerReplyCreate(
+                body=body or "Customer replied via email.",
+                customer_name=payload.get("name") or sender_email.split("@")[0],
+                customer_email=sender_email,
+            )
+            await post_customer_reply(inquiry_id=existing_inquiry.id, payload=reply_create, db=db)
+            fetch_stmt = (
+                select(Inquiry)
+                .options(selectinload(Inquiry.messages))
+                .where(Inquiry.id == existing_inquiry.id)
+            )
+            updated_res = await db.execute(fetch_stmt)
+            return updated_res.scalar_one()
+
+    # 2. Ingest as brand-new omnichannel inquiry
     inquiry_in = InquiryCreate(
         channel=ChannelEnum.EMAIL,
         customer_email=sender_email if "@" in sender_email else "user@customer.com",
