@@ -1,9 +1,9 @@
 """Pydantic v2 validation schemas for Customer Inquiries, Webhooks, and HITL Lifecycle."""
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional, Dict, Any, List
 from uuid import UUID
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
+from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_serializer
 from app.schemas.bedrock import DepartmentEnum, ResponseStrategyEnum
 
 
@@ -174,6 +174,24 @@ class InquiryResponse(BaseModel):
 
     created_at: datetime
     updated_at: datetime
+
+    @field_serializer(
+        "sla_deadline_at",
+        "first_response_deadline_at",
+        "first_responded_at",
+        "sla_paused_at",
+        "claimed_at",
+        "resolved_at",
+        "created_at",
+        "updated_at",
+        check_fields=False,
+    )
+    def serialize_datetime_utc(self, dt: Optional[datetime]) -> Optional[str]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
     model_config = ConfigDict(from_attributes=True)
 

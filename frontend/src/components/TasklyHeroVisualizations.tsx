@@ -122,7 +122,7 @@ interface TasklyKpiCardProps {
   dashboardMetrics?: DashboardMetricsResponse | null;
 }
 
-export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHandle, dashboardMetrics }) => {
+export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHandle, dashboardMetrics: _dashboardMetrics }) => {
   const now = Date.now();
   const totalInquiries = inquiries.length || 1;
   const overdueCount = inquiries.filter(
@@ -131,9 +131,9 @@ export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHan
   const inBoundsCount = inquiries.filter(
     (t) => t.status === 'RESOLVED' || new Date(t.sla_deadline_at).getTime() >= now
   ).length;
-  const complianceRate = dashboardMetrics?.kpis
-    ? Math.round(dashboardMetrics.kpis.sla_compliance_rate)
-    : Math.round((inBoundsCount / totalInquiries) * 100);
+  const complianceRate = totalInquiries > 0
+    ? Math.round((inBoundsCount / totalInquiries) * 100)
+    : 100;
 
   return (
     <div
