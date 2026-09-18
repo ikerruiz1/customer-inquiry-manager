@@ -10,6 +10,7 @@ An enterprise-grade, cloud-native customer inquiry ingestion, AI triage, and Hum
 - **Amazon Bedrock AI Triage (Single-Pass Inference):** Utilizes the **Converse API** with `eu.anthropic.claude-haiku-4-5-20251001-v1:0` to execute single-pass department classification across 6 authoritative business domains, urgency/impact rating, quantified sentiment extraction, churn risk detection, and company policy-grounded draft response generation.
 - **Multi-Turn Conversation Threads & Bi-Directional Ingestion:** Complete customer inquiry lifecycle tracking with chronological message feeds (`InquiryMessage`), supporting external customer replies, operator responses, private co-pilot notes, and automated thread appending.
 - **SLA Clock Freezing Engine (`PENDING_CUSTOMER`):** Automated SLA timer freezing when an operator requests additional customer information (`REQUEST_INFO`). Dynamically resumes the countdown and extends the resolution deadline (`sla_deadline_at`) upon customer reply ingestion.
+- **Automated Background SLA Breach Watcher & Executive Escalation:** Asynchronous background daemon running in the FastAPI lifespan context. Scans active tickets every 30 seconds for SLA deadline breaches, automatically dispatching high-priority Ops Alerts to Amazon SNS, incident escalation emails to operations managers, immutable audit log entries (`SLA_BREACH_ESCALATED`), and conversation thread warnings. Features a queue-wide compliance watchdog (< 95.0%) with an anti-fatigue 15-minute cooldown.
 - **Zero-Internet Egress (PrivateLink Architecture):** Eliminates NAT Gateways, reducing cloud costs by ~$65/month per AZ. All ECS Fargate tasks communicate with AWS services exclusively via **8 Interface VPC Endpoints** (`ecr.api`, `ecr.dkr`, `logs`, `secretsmanager`, `bedrock-runtime`, `cognito-idp`, `sns`, `xray`) and an **Amazon S3 Gateway Endpoint**.
 - **3-Tier Network Isolation:** Dedicated public subnets for the Application Load Balancer, private subnets for ECS Fargate compute and VPC Endpoints, and isolated database subnets for Amazon RDS PostgreSQL 16 with local-only routing (`10.0.0.0/16 -> local`).
 - **Amazon Cognito Zero-Trust Authentication:** Enforces RFC 6238 Software Token Multi-Factor Authentication (TOTP) without SMS telecom dependencies. Features granular Role-Based Access Control (RBAC) separating `Tier1_Agents` and `Operations_Managers`.
@@ -54,17 +55,19 @@ customer-inquiry-manager/
 │   │   ├── email_service.py          # Outbound email dispatch (Amazon SES, SMTP, local outbox)
 │   │   ├── inbound_email_poller.py   # Inbound IMAP poller for automated ticket ingestion and correlation
 │   │   ├── s3_service.py             # S3 presigned URL generation
+│   │   ├── sla_breach_watcher.py     # Automated background SLA breach watcher & executive escalation daemon
 │   │   ├── sns_service.py            # Outbound SNS customer receipts & Ops alerts
 │   │   └── __init__.py               # Clean service re-exports
 │   ├── health.py                     # Container /health/live and /health/ready probes
 │   ├── main.py                       # FastAPI entrypoint, lifespan context & CORS
-│   └── tests/                        # Automated Pytest Suite (37 Tests, 100% Pass Rate)
+│   └── tests/                        # Automated Pytest Suite (40 Tests, 100% Pass Rate)
 │       ├── conftest.py               # In-memory SQLite async engine & service mocks
 │       ├── test_auth.py              # Cognito login & TOTP verification tests
 │       ├── test_bedrock_schema.py    # Extraction bounds & Pydantic validation tests
 │       ├── test_health.py            # Container health check probe tests
 │       ├── test_inquiries.py         # ITIL SLA calculation, claiming, conversation threads & SLA pause/resume
 │       ├── test_metrics.py           # Dashboard metrics & operator directory tests
+│       ├── test_sla_watcher.py       # Automated SLA breach watcher & executive escalation tests
 │       └── test_webhooks.py          # HMAC-SHA256 & omnichannel ingestion tests
 ├── frontend/                         # Operations Console (React 19, TypeScript, Vite)
 │   ├── src/                          # Application source code
@@ -579,7 +582,7 @@ chmod +x scripts/*.sh
 ## 9. Security & Policy-as-Code Compliance
 
 The CI/CD pipeline enforces automated security gates in AWS CodeBuild before any container image is pushed to ECR:
-- **Pytest:** 100% unit and integration test pass rate (37 automated tests) across database claiming, conversation threads, SLA pause/resume, and auth flows.
+- **Pytest:** 100% unit and integration test pass rate (40 automated tests) across database claiming, conversation threads, SLA pause/resume, SLA breach watcher daemon, and auth flows.
 - **Semgrep SAST:** Scans Python code for OWASP Top 10 vulnerabilities.
 - **Conftest (OPA):** Enforces Open Policy Agent guardrails prohibiting NAT Gateways and unencrypted storage.
 - **KICS (Checkmarx):** Scans Terraform HCL files for security misconfigurations.

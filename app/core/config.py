@@ -104,6 +104,13 @@ class Settings(BaseSettings):
     INBOUND_EMAIL_POLL_ENABLED: bool = False
     INBOUND_EMAIL_POLL_INTERVAL_SECONDS: int = 5
 
+    # Automated Background SLA Breach Watcher & Executive Escalation Settings
+    SLA_WATCHER_ENABLED: bool = True
+    SLA_WATCHER_INTERVAL_SECONDS: int = 30
+    SLA_TARGET_COMPLIANCE_THRESHOLD: float = 95.0
+    EXECUTIVE_ESCALATION_COOLDOWN_SECONDS: int = 900  # 15-minute anti-fatigue cooldown
+    OPERATIONS_MANAGER_EMAIL: str = "ops-manager@example-corp.tech"
+
     # Inbound Customer Verification & Identity Policy (Parsed from company_profile.json)
     CUSTOMER_ACCESS_POLICY: Dict[str, Any] = Field(
         default_factory=lambda: {
@@ -148,6 +155,8 @@ class Settings(BaseSettings):
                         self.COMPANY_DOMAIN = profile_data["domain"]
                     if "support_email" in profile_data:
                         self.SUPPORT_EMAIL = profile_data["support_email"]
+                    if "operations_manager_email" in profile_data:
+                        self.OPERATIONS_MANAGER_EMAIL = profile_data["operations_manager_email"]
                     if "customer_access_policy" in profile_data:
                         self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
                     

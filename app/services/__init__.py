@@ -6,6 +6,7 @@ from app.services.cognito_service import CognitoService, get_cognito_service
 
 from app.services.email_service import EmailService, get_email_service
 from app.services.inbound_email_poller import InboundEmailPoller, get_inbound_email_poller
+from app.services.sla_breach_watcher import SLABreachWatcherDaemon, get_sla_breach_watcher
 
 __all__ = [
     "BedrockService",
@@ -20,4 +21,6 @@ __all__ = [
     "get_email_service",
     "InboundEmailPoller",
     "get_inbound_email_poller",
+    "SLABreachWatcherDaemon",
+    "get_sla_breach_watcher",
 ]
