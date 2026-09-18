@@ -47,9 +47,17 @@ echo -e "${C_GREEN}✓ ECR repository purged.${C_RESET}\n"
 
 # 3. Execute Complete Terraform Destroy
 echo -e "${C_BOLD}Phase 3: Executing Terraform Destroy...${C_RESET}"
+EXTRA_VARS=""
+if [ -f "company_profile.json" ]; then
+    D_NAME=$(grep -o '"domain": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4)
+    S_MAIL=$(grep -o '"support_email": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4)
+    if [ -n "$D_NAME" ]; then EXTRA_VARS="$EXTRA_VARS -var=domain_name=$D_NAME"; fi
+    if [ -n "$S_MAIL" ]; then EXTRA_VARS="$EXTRA_VARS -var=support_email=$S_MAIL"; fi
+fi
+
 cd terraform/environments/dev
 
-terraform destroy -auto-approve
+terraform destroy -auto-approve $EXTRA_VARS
 
 cd ../../../
 

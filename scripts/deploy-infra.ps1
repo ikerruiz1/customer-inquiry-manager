@@ -46,6 +46,19 @@ $profileJson = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
 $domainName = $profileJson.domain
 $supportEmail = $profileJson.support_email
 Write-Host "  OK: Configured Domain: $domainName ($supportEmail)" -ForegroundColor Green
+
+# Automatically write synchronized terraform.tfvars from company_profile.json
+$tfvarsContent = @"
+aws_region         = "$awsRegion"
+project_name       = "customer-inquiry-manager"
+environment        = "dev"
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["${awsRegion}a", "${awsRegion}b"]
+domain_name        = "$domainName"
+support_email      = "$supportEmail"
+"@
+Set-Content "terraform/environments/dev/terraform.tfvars" $tfvarsContent -Encoding UTF8
+Write-Host "  OK: Synchronized terraform.tfvars with company_profile.json" -ForegroundColor Green
 Write-Host ""
 
 # 3. Terraform Initialization & Application
@@ -56,7 +69,7 @@ Push-Location "terraform/environments/dev"
 try {
     terraform init
     terraform validate
-    terraform apply -auto-approve
+    terraform apply -auto-approve -var="domain_name=$domainName" -var="support_email=$supportEmail"
 
     $albDns = (terraform output -raw alb_dns_name).Trim()
     $ecrRepo = (terraform output -raw ecr_repository_url).Trim()

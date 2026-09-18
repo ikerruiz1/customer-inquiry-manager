@@ -61,9 +61,19 @@ Write-Host ""
 
 # 3. Execute Complete Terraform Destroy
 Write-Host "Phase 3: Executing Terraform Destroy in terraform/environments/dev..." -ForegroundColor Yellow
+$extraVars = @()
+if (Test-Path "company_profile.json") {
+    $profileJson = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
+    if ($profileJson.domain) { $extraVars += "-var=domain_name=$($profileJson.domain)" }
+    if ($profileJson.support_email) { $extraVars += "-var=support_email=$($profileJson.support_email)" }
+}
 Push-Location "terraform/environments/dev"
 try {
-    terraform destroy -auto-approve
+    if ($extraVars.Count -gt 0) {
+        terraform destroy -auto-approve $extraVars
+    } else {
+        terraform destroy -auto-approve
+    }
 }
 finally {
     Pop-Location

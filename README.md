@@ -444,7 +444,7 @@ cd customer-inquiry-manager
 
 ### Step 2: 1-Click Automated Developer Environment Bootstrap (Recommended)
 
-To guarantee zero workstation drift across any environment, the repository includes an automated onboarding bootstrap script. It validates your local toolchain, initializes the isolated `.venv`, installs 32 locked backend dependencies, verifies all 34 Pytest tests (Quality Gate in ~1.0s), and installs the frontend dependencies:
+To guarantee zero workstation drift across any environment, the repository includes an automated onboarding bootstrap script. It validates your local toolchain, initializes the isolated `.venv`, installs locked backend dependencies, verifies all 42 Pytest tests (Quality Gate in ~1.5s), and installs the frontend dependencies:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -502,7 +502,7 @@ Once both services are running, access the following endpoints:
 
 In the top navigation header of the frontend console, use the **Operator Switcher** to toggle between personas enforcing Cognito RFC 6238 TOTP MFA policies:
 - **`Carlos M.` (`Tier1_Agents`):** Standard customer support engineer authorized to claim inquiries, dispatch customer messages, request information (pausing SLA), and resolve tickets.
-- **`Ethan Miller` (`Operations_Managers`):** Support supervisor authorized to execute MLOps category overrides with mandatory engineering justification and inspect full audit ledgers.
+- **`Alex Rivera` (`Operations_Managers`):** Support supervisor authorized to execute MLOps category overrides with mandatory engineering justification and inspect full audit ledgers.
 
 ---
 
@@ -522,28 +522,95 @@ python scripts/seed_inquiries.py --scenario billing_dispute # Triggers Stripe Ch
 
 ---
 
-## 7. Production Inbound Email Ingestion (Custom Domain & Amazon SES)
+## 7. Omnichannel Integrations, Notifications & Alert Destinations
 
-Customer Inquiry Manager features an authentic, enterprise-grade inbound email pipeline powered by **Amazon SES (Simple Email Service)** and modular Terraform infrastructure. No third-party middleware (e.g. Zapier, Pipedream) is used.
+Customer Inquiry Manager features an authentic, enterprise-grade omnichannel ingestion and alert routing architecture powered by **Amazon SES**, **Amazon SNS**, and modular Terraform infrastructure.
 
-### Unified Infrastructure & Domain Deployment
-To deploy the entire production stack (VPC, ECS, RDS, SES, and ECR containers) with your custom domain:
+### 7.1 Omnichannel Ingestion Pipeline (4 Core Sources)
 
-```bash
-# Linux / macOS
-chmod +x scripts/*.sh
-./scripts/deploy-infra.sh
+The platform ingests customer communications across 4 distinct enterprise channels, executing single-pass Bedrock triage and deterministic ITIL priority calculation:
 
-# Windows (PowerShell)
-.\scripts\deploy-infra.ps1
+| Inbound Source | Ingestion Protocol / Endpoint | Payload Characteristics | Security & Verification | Operational Behavior |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Email Inbound** | Amazon SES MX Inbound (`inbound-smtp.eu-west-1.amazonaws.com`) / Background IMAP Poller / `POST /api/v1/webhooks/email` | MIME parsed emails, sender address, subject, body text | SPF, DKIM, and DMARC verification at DNS boundary | Thread auto-matching via `[Ticket #<ID>]`; unfreezes SLA clock if ticket was in `PENDING_CUSTOMER`. |
+| **2. Customer Web Form** | Operations Console New Ticket modal / `POST /api/v1/webhooks/webform` | Customer name, email, subject, detailed description, attachments | CSRF protection, CORS origin validation | Instantly creates new ticket; evaluates Bedrock triage and ITIL priority. |
+| **3. Trustpilot Reviews** | Webhook: `POST /api/v1/webhooks/trustpilot` | Star rating (1-5), review title, review body, reviewer email | HMAC-SHA256 signature verification via `X-Trustpilot-Signature` | 1★/2★ reviews trigger negative sentiment scoring, high urgency, and automated churn risk escalation. |
+| **4. Google Reviews & Billing** | Webhooks: `POST /api/v1/webhooks/google-reviews` and `POST /api/v1/webhooks/billing` | Star rating, review comments, Stripe dispute events (`charge.dispute.created`) | Secret header verification (`X-Google-Webhook-Secret`) and Stripe webhook signing | Financial disputes route to `BILLING` with precedence rank 1 and financial entity extraction. |
+
+---
+
+### 7.2 Outbound Notifications & Operational Alert Destinations
+
+All outbound communications and system alerts are dynamically routed based on declarative parameters in `company_profile.json`:
+
+| Event / Notification Type | Trigger Condition | Destination / Recipient Channel | Origin / Sender Identity | Operational Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **Customer Reply / Request Info** | Operator dispatches `REPLY` or `REQUEST_INFO` | Customer personal email (`customer_email`) | `support_email` declared in `company_profile.json` | Delivers helpful resolution or requests diagnostic artifacts; embeds ticket ID for thread matching. |
+| **Proactive SLA Warning** | Impending deadline (`0 < remaining <= 600s`) | `operations_manager_email` declared in `company_profile.json` | System SLA Watcher (`support_email`) | **Incident Prevention:** Alerts supervisor 10 minutes prior to breach so tickets can be reassigned. |
+| **Reactive SLA Breach** | Overdue ticket (`now > sla_deadline_at`) | `operations_manager_email` + Amazon SNS Ops Topic | System SLA Watcher (`support_email`) | Immediate escalation to management when a contractual resolution window is violated. |
+| **Queue Compliance Drop** | Queue health falls below target (`< 95.0%`) | `operations_manager_email` (Executive Alert) | System SLA Watcher (`support_email`) | Alerts leadership to systemic queue degradation; protected by 15-minute anti-fatigue cooldown. |
+| **P1 Emergency Outage** | Ingestion of P1 ticket (`urgency >= 4, impact >= 3`) | Amazon SNS Ops Topic (`customer-inquiry-manager-ops-alerts-dev`) | Ingestion Engine | Immediate ChatOps / pager broadcast to on-call engineering team. |
+
+---
+
+### 7.3 Zero-Code Tenant Onboarding: The Cloner Experience
+
+Anyone cloning this repository can configure their enterprise tenant in **3 simple steps with zero code edits**:
+
+#### Step 1: Declare Business Metadata in `company_profile.json`
+Edit **ONLY** `company_profile.json` (or copy from `company_profile.example.json`):
+```json
+{
+  "company_name": "ExampleCorp Technologies",
+  "domain": "example-corp.tech",
+  "support_email": "support@example-corp.tech",
+  "operations_manager_email": "ops-manager@example-corp.tech",
+  "sla_proactive_warning_minutes": 10
+}
 ```
+* **`domain`:** Your apex domain registered in get.tech, Namecheap, or Route 53.
+* **`support_email`:** The public mailbox where customer inquiries arrive and from which outbound notifications originate.
+* **`operations_manager_email`:** The internal email address where all SLA warnings, breach escalations, and executive compliance alerts are delivered.
 
-> **How Domain Configuration Works for Cloners:**
-> - The deployment script reads `domain` and `support_email` directly from `company_profile.json` (or copies from `company_profile.example.json` if initializing for the first time).
-> - You can also customize `terraform/environments/dev/terraform.tfvars` (or copy from `terraform.tfvars.example`).
-> - The script automatically provisions SES, outputs the exact DNS records to enter in your registrar, and restarts the ECS tasks.
+#### Step 2: Run Local Development Bootstrap
+```powershell
+# Windows
+.\scripts\setup-dev.ps1
 
-### Registrar DNS Records Contract
+# Linux / macOS
+chmod +x scripts/*.sh && ./scripts/setup-dev.sh
+```
+The script initializes `.venv`, installs dependencies, passes 42 Pytest tests, compiles the frontend, and runs 100% locally with **0.00 € cloud costs**.
+
+#### Step 3: Run Automated AWS Cloud Deployment
+```powershell
+# Windows
+.\scripts\deploy-infra.ps1
+
+# Linux / macOS
+./scripts/deploy-infra.sh
+```
+The deployment script:
+1. Automatically reads `domain` and `support_email` from `company_profile.json`.
+2. Synchronizes `terraform/environments/dev/terraform.tfvars`.
+3. Provisions all 12 Terraform modules (VPC PrivateLink, ECS Fargate Spot, RDS PostgreSQL, Cognito, Route 53, SES).
+4. Prints the 4 DNS records (MX, SPF, TXT, 3x CNAME) to configure in your domain registrar.
+5. Builds the production Docker image, pushes it to Amazon ECR, and rolls out the ECS task definition.
+
+#### Step 4: Clean Teardown Guarantee (0.00 € Residual Cost)
+```powershell
+# Windows
+.\scripts\teardown-infra.ps1
+
+# Linux / macOS
+./scripts/teardown-infra.sh
+```
+Purges S3 buckets, empties ECR container images, and executes `terraform destroy`, guaranteeing **0.00 € residual billing**.
+
+---
+
+### 7.4 Registrar DNS Records Contract
+
 Configure the following records in your DNS manager (e.g. `manage.get.tech`, Namecheap, Route 53):
 
 | Record Type | Host / Name | Target / Points To | Priority / TTL | Purpose |
@@ -553,30 +620,16 @@ Configure the following records in your DNS manager (e.g. `manage.get.tech`, Nam
 | **TXT** (SES) | `_amazonses` | `<ses_domain_verification_token>` | TTL 300 | Proves domain ownership (from `terraform apply` output) |
 | **CNAME** (x3) | `<token>._domainkey` | `<token>.dkim.amazonses.com` | TTL 300 | Easy DKIM signing tokens (from `terraform apply` output) |
 
-### Automated Provisioning with Terraform
-The SES inbound rule set, encrypted S3 storage, and DKIM tokens are provisioned automatically as part of `./scripts/deploy-infra.sh` / `.\scripts\deploy-infra.ps1` (or standalone via `cd terraform/environments/dev && terraform apply`):
-1. Provisions the SES Domain Identity and DKIM tokens.
-2. Creates the encrypted S3 storage bucket (`customer-inquiry-manager-ses-inbound-dev`) with `force_destroy = true` (0.00 € residual cost).
-3. Creates and activates the inbound Receipt Rule Set for `support@<your-domain>`.
-4. Outputs the exact DNS verification tokens in the console.
-
-### End-to-End Live Verification
-Send an email from your personal email client (e.g. Gmail mobile app) to `support@<your-domain>`. The email arrives natively at Amazon SES, is stored encrypted in S3, and is ingested into the platform for Bedrock Claude Haiku 4.5 triage in real time.
-
 ---
 
-## 8. AWS Cloud Deployment & Teardown
+## 8. AWS Cloud Deployment & Teardown Commands Reference
 
-### 1-Click Infrastructure Deployment
-```bash
-chmod +x scripts/*.sh
-./scripts/deploy-infra.sh
-```
-
-### 1-Click Clean Teardown Guarantee (0.00 € Residual Cost)
-```bash
-./scripts/teardown-infra.sh
-```
+| Action | Windows PowerShell | Linux / macOS Bash |
+| :--- | :--- | :--- |
+| **Local Dev Setup** | `.\scripts\setup-dev.ps1` | `./scripts/setup-dev.sh` |
+| **Cloud Production Deploy** | `.\scripts\deploy-infra.ps1` | `./scripts/deploy-infra.sh` |
+| **Clean Teardown (0.00 €)** | `.\scripts\teardown-infra.ps1` | `./scripts/teardown-infra.sh` |
+| **Omnichannel Simulator** | `python scripts/seed_inquiries.py --scenario all` | `python3 scripts/seed_inquiries.py --scenario all` |
 
 ---
 

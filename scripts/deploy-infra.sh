@@ -40,7 +40,19 @@ fi
 
 DOMAIN_NAME=$(grep -o '"domain": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4)
 SUPPORT_EMAIL=$(grep -o '"support_email": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4)
-echo -e "${C_GREEN}✓ Configured Domain: ${C_CYAN}${DOMAIN_NAME}${C_RESET} (${SUPPORT_EMAIL})\n"
+echo -e "${C_GREEN}✓ Configured Domain: ${C_CYAN}${DOMAIN_NAME}${C_RESET} (${SUPPORT_EMAIL})"
+
+# Automatically write synchronized terraform.tfvars from company_profile.json
+cat <<EOF > terraform/environments/dev/terraform.tfvars
+aws_region         = "${AWS_REGION}"
+project_name       = "customer-inquiry-manager"
+environment        = "dev"
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["${AWS_REGION}a", "${AWS_REGION}b"]
+domain_name        = "${DOMAIN_NAME}"
+support_email      = "${SUPPORT_EMAIL}"
+EOF
+echo -e "${C_GREEN}✓ Synchronized terraform.tfvars with company_profile.json${C_RESET}\n"
 
 # 3. Terraform Initialization & Application
 echo -e "${C_BOLD}Phase 3: Applying Modular Terraform Infrastructure (VPC, ECS, RDS, SES)...${C_RESET}"
@@ -48,7 +60,7 @@ cd terraform/environments/dev
 
 terraform init
 terraform validate
-terraform apply -auto-approve
+terraform apply -auto-approve -var="domain_name=${DOMAIN_NAME}" -var="support_email=${SUPPORT_EMAIL}"
 
 ALB_DNS=$(terraform output -raw alb_dns_name)
 ECR_REPO=$(terraform output -raw ecr_repository_url)

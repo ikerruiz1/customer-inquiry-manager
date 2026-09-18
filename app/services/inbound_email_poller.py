@@ -41,22 +41,30 @@ def _extract_text_body(msg: email.message.Message) -> str:
     if msg.is_multipart():
         for part in msg.walk():
             content_type = part.get_content_type()
-            content_disposition = str(part.get("Content-Disposition", ""))
+            content_disposition = part.get("Content-Disposition", "")
             if content_type == "text/plain" and "attachment" not in content_disposition:
                 payload = part.get_payload(decode=True)
-                charset = part.get_content_charset() or "utf-8"
-                return payload.decode(charset, errors="replace").strip()
+                if isinstance(payload, bytes):
+                    charset = part.get_content_charset() or "utf-8"
+                    return payload.decode(charset, errors="replace").strip()
+                elif isinstance(payload, str):
+                    return payload.strip()
         # Fallback to text/html if no text/plain found
         for part in msg.walk():
             if part.get_content_type() == "text/html":
                 payload = part.get_payload(decode=True)
-                charset = part.get_content_charset() or "utf-8"
-                return payload.decode(charset, errors="replace").strip()
+                if isinstance(payload, bytes):
+                    charset = part.get_content_charset() or "utf-8"
+                    return payload.decode(charset, errors="replace").strip()
+                elif isinstance(payload, str):
+                    return payload.strip()
     else:
         payload = msg.get_payload(decode=True)
-        if payload:
+        if isinstance(payload, bytes):
             charset = msg.get_content_charset() or "utf-8"
             return payload.decode(charset, errors="replace").strip()
+        elif isinstance(payload, str):
+            return payload.strip()
     return ""
 
 
@@ -107,6 +115,10 @@ class InboundEmailPoller:
 
     def _check_and_process_emails(self):
         """Synchronous IMAP fetch and parse logic executed inside worker thread."""
+        if not self.host or not self.user or not self.password:
+            logger.debug("IMAP host, user, or password not configured. Skipping poll cycle.")
+            return
+
         mail = None
         try:
             if self.use_ssl:
@@ -129,6 +141,8 @@ class InboundEmailPoller:
                     continue
 
                 raw_email = data[0][1]
+                if not isinstance(raw_email, (bytes, bytearray)):
+                    continue
                 msg = email.message_from_bytes(raw_email)
 
                 raw_from = _decode_mime_header(msg.get("From"))
@@ -187,8 +201,10 @@ class InboundEmailPoller:
                 subject=subject,
                 body=body,
             )
+            from app.services.sns_service import get_sns_service
             bedrock = get_bedrock_service()
-            created = await process_and_persist_inquiry(new_inquiry, db, bedrock)
+            sns = get_sns_service()
+            created = await process_and_persist_inquiry(new_inquiry, db, bedrock, sns)
             logger.info(f"Created new Ticket #{created.id} from external inbound email with priority {created.priority}")
 
 

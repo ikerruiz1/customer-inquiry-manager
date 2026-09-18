@@ -68,6 +68,7 @@ async def test_sla_breach_watcher_escalates_overdue_p1_ticket(
     audit = audit_res.scalar_one_or_none()
     assert audit is not None
     assert audit.agent_id == "SYSTEM:SLA_WATCHER"
+    assert audit.reason is not None
     assert "25 minutes overdue" in audit.reason
 
     # Verify system message added to ticket conversation thread
@@ -249,6 +250,7 @@ async def test_sla_watcher_triggers_proactive_warning_within_threshold(
     audit = audit_res.scalar_one_or_none()
     assert audit is not None
     assert audit.agent_id == "SYSTEM:SLA_WATCHER"
+    assert audit.reason is not None
     assert "impending SLA deadline" in audit.reason
 
     # 4. Verify system message in ticket thread
