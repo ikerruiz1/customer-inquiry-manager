@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     EXECUTIVE_ESCALATION_COOLDOWN_SECONDS: int = 900  # 15-minute anti-fatigue cooldown
     OPERATIONS_MANAGER_EMAIL: str = "ops-manager@example-corp.tech"
     OPERATIONAL_AUTH_TOKEN: str = "cim-operational-secret-token"
+    SLACK_WEBHOOK_URL: Optional[str] = None
 
     # Inbound Customer Verification & Identity Policy (Parsed from company_profile.json)
     CUSTOMER_ACCESS_POLICY: Dict[str, Any] = Field(
@@ -161,6 +162,8 @@ class Settings(BaseSettings):
                         self.OPERATIONS_MANAGER_EMAIL = profile_data["operations_manager_email"]
                     if "sla_proactive_warning_minutes" in profile_data:
                         self.SLA_PROACTIVE_WARNING_MINUTES = int(profile_data["sla_proactive_warning_minutes"])
+                    if "slack_webhook_url" in profile_data and not self.SLACK_WEBHOOK_URL:
+                        self.SLACK_WEBHOOK_URL = profile_data["slack_webhook_url"] or None
                     if "customer_access_policy" in profile_data:
                         self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
                     

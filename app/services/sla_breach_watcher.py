@@ -38,6 +38,20 @@ class SLABreachWatcherDaemon:
         self._task: Optional[asyncio.Task] = None
         self._last_executive_escalation_at: Optional[datetime] = None
 
+    def _compute_warning_threshold_seconds(self, priority: str) -> float:
+        """Compute dynamic proactive SLA warning threshold based on ITIL priority duration (20-25% rule)."""
+        baseline_seconds = float(self.warning_minutes * 60)
+        # Priority total SLA duration: P1=1h, P2=4h, P3=12h, P4=24h
+        # Enterprise early warning targets 20% to 25% of resolution window:
+        priority_early_warning_map = {
+            "P1": 15.0 * 60.0,   # 15 min remaining (25% of 1h)
+            "P2": 48.0 * 60.0,   # 48 min remaining (20% of 4h)
+            "P3": 144.0 * 60.0,  # 2.4 hours remaining (20% of 12h)
+            "P4": 288.0 * 60.0,  # 4.8 hours remaining (20% of 24h)
+        }
+        proportional_seconds = priority_early_warning_map.get(priority, baseline_seconds)
+        return max(baseline_seconds, proportional_seconds)
+
     def start(self) -> None:
         """Start the background watcher loop if enabled."""
         if not settings.SLA_WATCHER_ENABLED:
@@ -107,7 +121,7 @@ class SLABreachWatcherDaemon:
             .where(Inquiry.status.in_(["UNASSIGNED", "CLAIMED", "PENDING_CUSTOMER"]))
         )
         res = await db.execute(stmt)
-        active_inquiries: List[Inquiry] = res.scalars().all()
+        active_inquiries: List[Inquiry] = list(res.scalars().all())
 
         if not active_inquiries:
             return results
@@ -133,9 +147,9 @@ class SLABreachWatcherDaemon:
             if deadline >= now:
                 in_bounds_count += 1
                 remaining_seconds = (deadline - now).total_seconds()
-                warning_threshold_seconds = self.warning_minutes * 60
+                warning_threshold_seconds = self._compute_warning_threshold_seconds(inquiry.priority)
 
-                # Proactive SLA Warning Check (T-10m or configured threshold)
+                # Proactive SLA Warning Check (Proportional 20-25% threshold or configured baseline)
                 if 0 < remaining_seconds <= warning_threshold_seconds:
                     entities = dict(inquiry.entities) if isinstance(inquiry.entities, dict) else {}
                     if not entities.get("sla_warning_alerted", False):

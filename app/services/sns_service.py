@@ -56,14 +56,9 @@ class SNSService:
         if priority not in ["P1", "P2"]:
             return False
 
-        if not self.alerts_topic_arn:
-            logger.info(
-                f"[Mock SNS ChatOps] Critical Alert: {priority} Incident {inquiry_dict.get('id')} - {inquiry_dict.get('subject')}"
-            )
-            return True
-
+        event_type = inquiry_dict.get("event_type", "incident.escalated")
         alert_payload = {
-            "event_type": "incident.escalated",
+            "event_type": event_type,
             "priority": priority,
             "inquiry_id": str(inquiry_dict.get("id")),
             "department": inquiry_dict.get("department"),
@@ -73,7 +68,19 @@ class SNSService:
             "impact": inquiry_dict.get("impact"),
             "churn_risk": inquiry_dict.get("churn_risk"),
             "sla_deadline_at": str(inquiry_dict.get("sla_deadline_at")),
+            "remaining_minutes": inquiry_dict.get("remaining_minutes"),
         }
+
+        # 1. Dispatch to Slack Webhook if configured (Local / Hybrid / Direct ChatOps)
+        if settings.SLACK_WEBHOOK_URL:
+            await self._dispatch_slack_webhook(alert_payload)
+
+        # 2. Publish to Amazon SNS Topic (AWS Cloud-Native Fan-Out)
+        if not self.alerts_topic_arn:
+            logger.info(
+                f"[Mock SNS ChatOps] Critical Alert: {priority} Incident {inquiry_dict.get('id')} - {inquiry_dict.get('subject')}"
+            )
+            return True
 
         try:
             self.client.publish(
@@ -88,6 +95,72 @@ class SNSService:
         except ClientError as exc:
             logger.warning(f"Failed to publish critical alert to SNS: {exc}")
             return False
+
+    async def _dispatch_slack_webhook(self, alert: Dict[str, Any]) -> None:
+        """Deliver formatted Slack Block Kit alert card directly to configured incoming webhook."""
+        if not settings.SLACK_WEBHOOK_URL:
+            return
+
+        try:
+            import httpx
+            p = alert.get("priority", "P2")
+            event_type = alert.get("event_type", "incident.escalated")
+            is_p1 = p == "P1"
+            inquiry_id = alert.get("inquiry_id", "")
+            short_id = inquiry_id[:8] if inquiry_id else "N/A"
+
+            if "warning" in event_type:
+                title = f"⚠️ Proactive SLA Warning: Ticket #{short_id}"
+                badge = f"⚠️ *[SLA IMPENDING DEADLINE - {alert.get('remaining_minutes', 10)}M REMAINING]*"
+            elif "breach" in event_type:
+                title = f"🚨 SLA Breach Escalation: Ticket #{short_id}"
+                badge = "🚨 *[CONTRACTUAL SLA BREACH ESCALATED]*"
+            else:
+                title = f"{'🚨' if is_p1 else '⚠️'} Incident Escalated: {p} Ticket #{short_id}"
+                badge = f"{'🚨 *[P1 CRITICAL OUTAGE]*' if is_p1 else '⚠️ *[P2 HIGH INCIDENT]*'}"
+
+            blocks = [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": title,
+                        "emoji": True,
+                    },
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {"type": "mrkdwn", "text": f"*Ticket ID:*\n`#{short_id}`"},
+                        {"type": "mrkdwn", "text": f"*Priority:*\n`{p}`"},
+                        {"type": "mrkdwn", "text": f"*Department:*\n{alert.get('department', 'GENERAL')}"},
+                        {"type": "mrkdwn", "text": f"*SLA Deadline:*\n{alert.get('sla_deadline_at', 'N/A')}"},
+                        {"type": "mrkdwn", "text": f"*Customer:*\n{alert.get('customer_email', 'N/A')}"},
+                        {"type": "mrkdwn", "text": f"*Churn Risk:*\n{'🔥 High Threat' if alert.get('churn_risk') else 'Normal'}"},
+                    ],
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Subject:* {alert.get('subject', '(No Subject)')}",
+                    },
+                },
+            ]
+
+            payload = {
+                "text": f"{badge} #{short_id}: {alert.get('subject', '')}",
+                "blocks": blocks,
+            }
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(settings.SLACK_WEBHOOK_URL, json=payload)
+                if resp.status_code == 200:
+                    logger.info(f"ChatOps Slack alert delivered successfully for Ticket #{short_id}")
+                else:
+                    logger.warning(f"Slack webhook response error {resp.status_code}: {resp.text}")
+        except Exception as exc:
+            logger.warning(f"Failed to dispatch Slack webhook notification: {exc}")
 
 
 _sns_service_instance: Optional[SNSService] = None
