@@ -139,6 +139,128 @@ class EmailService:
         self.outbox.append(delivery_result)
         return delivery_result
 
+    async def send_sla_breach_escalation(
+        self,
+        manager_email: str,
+        ticket_id: str,
+        priority: str,
+        customer_name: str,
+        ticket_subject: str,
+        overdue_minutes: int,
+        department: str,
+    ) -> Dict[str, Any]:
+        """Dispatch high-priority escalation email to operations leadership when an SLA deadline is breached."""
+        short_id = str(ticket_id)[:8].upper()
+        subject = f"[CRITICAL SLA BREACH] {priority} Ticket #{short_id} Overdue ({overdue_minutes}m)"
+        body = (
+            f"URGENT OPERATIONAL ESCALATION\n\n"
+            f"The following {priority} customer ticket has breached its contractual SLA resolution deadline:\n"
+            f"- Ticket ID: #{short_id} ({ticket_id})\n"
+            f"- Priority: {priority}\n"
+            f"- Department: {department}\n"
+            f"- Customer: {customer_name}\n"
+            f"- Subject: {ticket_subject}\n"
+            f"- Time Overdue: {overdue_minutes} minutes\n\n"
+            f"Immediate supervisor action is required to avoid financial breach penalties.\n"
+            f"Access the Operations Console to triage: http://localhost:5173\n\n"
+            f"{self.company_name} Incident Management Engine"
+        )
+        return await self._dispatch_generic_email(
+            recipient=manager_email,
+            subject=subject,
+            body=body,
+            category="SLA_BREACH_ESCALATION",
+        )
+
+    async def send_compliance_threshold_alert(
+        self,
+        manager_email: str,
+        current_compliance_rate: float,
+        target_threshold: float,
+        breached_count: int,
+        total_active: int,
+    ) -> Dict[str, Any]:
+        """Dispatch executive escalation alert when queue compliance drops below target threshold."""
+        subject = f"[EXECUTIVE ALERT] SLA Compliance Dropped to {current_compliance_rate}% (Target: ≥{target_threshold}%)"
+        body = (
+            f"EXECUTIVE QUEUE HEALTH ALERT\n\n"
+            f"Active operational queue compliance has fallen below the contractual ITIL threshold:\n"
+            f"- Current Compliance: {current_compliance_rate}%\n"
+            f"- Contractual Target: ≥ {target_threshold}%\n"
+            f"- Active Breached Tickets: {breached_count}\n"
+            f"- Total Active Inquiries: {total_active}\n\n"
+            f"Recommendation: Surge operator capacity and claim high-priority breached tickets immediately.\n"
+            f"Operations Console: http://localhost:5173\n\n"
+            f"{self.company_name} Automated Triage & Incident Monitoring"
+        )
+        return await self._dispatch_generic_email(
+            recipient=manager_email,
+            subject=subject,
+            body=body,
+            category="COMPLIANCE_THRESHOLD_ALERT",
+        )
+
+    async def _dispatch_generic_email(
+        self,
+        recipient: str,
+        subject: str,
+        body: str,
+        category: str,
+    ) -> Dict[str, Any]:
+        """Underlying helper to route outbound emails through SES, SMTP, or mock outbox."""
+        delivery_result = {
+            "recipient": recipient,
+            "sender": self.from_email,
+            "subject": subject,
+            "category": category,
+            "channel": "OUTBOUND_EMAIL",
+            "status": "SENT",
+            "provider": "MOCK",
+        }
+
+        ses_client = self._get_ses_client()
+        if ses_client and settings.ENVIRONMENT.lower() != "dev":
+            try:
+                ses_res = ses_client.send_email(
+                    Source=self.from_email,
+                    Destination={"ToAddresses": [recipient]},
+                    Message={
+                        "Subject": {"Data": subject, "Charset": "UTF-8"},
+                        "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                    },
+                )
+                delivery_result["provider"] = "AMAZON_SES"
+                delivery_result["message_id"] = ses_res.get("MessageId")
+                self.outbox.append(delivery_result)
+                return delivery_result
+            except Exception as exc:
+                logger.warning(f"SES delivery failed: {exc}. Attempting SMTP fallback.")
+
+        if self.smtp_host and self.smtp_user and self.smtp_password:
+            try:
+                msg = email.mime.multipart.MIMEMultipart("alternative")
+                msg["Subject"] = subject
+                msg["From"] = self.from_email
+                msg["To"] = recipient
+                msg.attach(email.mime.text.MIMEText(body, "plain", "utf-8"))
+
+                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
+                    if self.smtp_use_tls:
+                        server.starttls()
+                    server.login(self.smtp_user, self.smtp_password)
+                    server.sendmail(self.from_email, [recipient], msg.as_string())
+
+                delivery_result["provider"] = "SMTP"
+                self.outbox.append(delivery_result)
+                return delivery_result
+            except Exception as exc:
+                logger.warning(f"SMTP delivery failed: {exc}. Falling back to dev outbox.")
+
+        logger.info(f"[OUTBOUND NOTIFICATION] To: {recipient} | Subject: {subject}")
+        delivery_result["provider"] = "LOCAL_OUTBOX"
+        self.outbox.append(delivery_result)
+        return delivery_result
+
 
 _email_service_instance: Optional[EmailService] = None
 

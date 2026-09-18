@@ -36,9 +36,15 @@ async def lifespan(app: FastAPI):
     email_poller = get_inbound_email_poller()
     email_poller.start()
 
+    # Start automated background SLA breach watcher & executive escalation daemon
+    from app.services.sla_breach_watcher import get_sla_breach_watcher
+    sla_watcher = get_sla_breach_watcher()
+    sla_watcher.start()
+
     yield
 
     logger.info("Executing graceful application shutdown and disposing database connections...")
+    await sla_watcher.stop()
     await email_poller.stop()
     await engine.dispose()
     logger.info("Shutdown complete.")

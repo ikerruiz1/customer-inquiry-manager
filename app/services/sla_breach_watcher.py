@@ -1,0 +1,263 @@
+"""Automated Background SLA Breach Watcher & Executive Escalation Daemon.
+
+Runs continuously within the FastAPI lifespan context:
+1. Detects breached open inquiries (now > sla_deadline_at) in real time.
+2. Dispatches emergency Ops Alerts via Amazon SNS and escalation emails to operations managers.
+3. Records immutable audit trail entries (action="SLA_BREACH_ESCALATED") and internal system notes.
+4. Continuously audits queue-wide SLA compliance, triggering executive escalation alerts
+   when compliance drops below the contractual threshold (default: >=95.0%) with an anti-fatigue cooldown.
+"""
+import asyncio
+from datetime import datetime, timezone
+import logging
+from typing import Optional, Dict, Any, List
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.config import settings
+from app.core.database import AsyncSessionLocal
+from app.models.inquiry import Inquiry, InquiryMessage, AuditLog
+from app.services.email_service import get_email_service
+from app.services.sns_service import get_sns_service
+
+logger = logging.getLogger("app.services.sla_breach_watcher")
+
+
+class SLABreachWatcherDaemon:
+    """Asynchronous background worker monitoring ticket SLA deadlines and queue compliance."""
+
+    def __init__(self):
+        self.interval_seconds = settings.SLA_WATCHER_INTERVAL_SECONDS
+        self.target_threshold = settings.SLA_TARGET_COMPLIANCE_THRESHOLD
+        self.cooldown_seconds = settings.EXECUTIVE_ESCALATION_COOLDOWN_SECONDS
+        self.manager_email = settings.OPERATIONS_MANAGER_EMAIL
+        self.is_running = False
+        self._task: Optional[asyncio.Task] = None
+        self._last_executive_escalation_at: Optional[datetime] = None
+
+    def start(self) -> None:
+        """Start the background watcher loop if enabled."""
+        if not settings.SLA_WATCHER_ENABLED:
+            logger.info("SLABreachWatcherDaemon is disabled by configuration (SLA_WATCHER_ENABLED=False).")
+            return
+
+        if self.is_running:
+            logger.warning("SLABreachWatcherDaemon is already running.")
+            return
+
+        self.is_running = True
+        self._task = asyncio.create_task(self._watch_loop(), name="SLABreachWatcherDaemon")
+        logger.info(
+            f"SLABreachWatcherDaemon started successfully (Interval: {self.interval_seconds}s, "
+            f"Target Compliance: >={self.target_threshold}%, Manager: {self.manager_email})."
+        )
+
+    async def stop(self) -> None:
+        """Gracefully stop the background watcher loop."""
+        self.is_running = False
+        if self._task and not self._task.done():
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        logger.info("SLABreachWatcherDaemon stopped cleanly.")
+
+    async def _watch_loop(self) -> None:
+        """Continuous execution loop with error isolation."""
+        while self.is_running:
+            try:
+                await self.audit_breaches_and_compliance()
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error(f"Error during SLA breach watcher execution: {exc}", exc_info=True)
+
+            try:
+                await asyncio.sleep(self.interval_seconds)
+            except asyncio.CancelledError:
+                break
+
+    async def audit_breaches_and_compliance(self, db: Optional[AsyncSession] = None) -> Dict[str, Any]:
+        """Core audit cycle: checks individual ticket deadlines and queue-wide compliance."""
+        if db is not None:
+            return await self._execute_audit_cycle(db)
+
+        async with AsyncSessionLocal() as session:
+            return await self._execute_audit_cycle(session)
+
+    async def _execute_audit_cycle(self, db: AsyncSession) -> Dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        results = {
+            "evaluated_at": now.isoformat(),
+            "breaches_escalated": 0,
+            "executive_alert_triggered": False,
+            "compliance_rate": 100.0,
+        }
+
+        # 1. Fetch all active inquiries
+        stmt = (
+            select(Inquiry)
+            .options(selectinload(Inquiry.messages))
+            .where(Inquiry.status.in_(["UNASSIGNED", "CLAIMED", "PENDING_CUSTOMER"]))
+        )
+        res = await db.execute(stmt)
+        active_inquiries: List[Inquiry] = res.scalars().all()
+
+        if not active_inquiries:
+            return results
+
+        sns_service = get_sns_service()
+        email_service = get_email_service()
+
+        in_bounds_count = 0
+        breached_count = 0
+        overdue_inquiries: List[Inquiry] = []
+
+        # 2. Evaluate each ticket against its SLA deadline
+        for inquiry in active_inquiries:
+            # If the ticket is in PENDING_CUSTOMER, its SLA clock is frozen
+            if inquiry.status == "PENDING_CUSTOMER":
+                in_bounds_count += 1
+                continue
+
+            deadline = inquiry.sla_deadline_at
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=timezone.utc)
+
+            if deadline >= now:
+                in_bounds_count += 1
+            else:
+                breached_count += 1
+                overdue_inquiries.append(inquiry)
+
+        total_active = len(active_inquiries)
+        compliance_rate = round((in_bounds_count / total_active) * 100.0, 1) if total_active > 0 else 100.0
+        results["compliance_rate"] = compliance_rate
+
+        # 3. Process newly breached tickets (triggering escalation once per breach)
+        for inquiry in overdue_inquiries:
+            entities = dict(inquiry.entities) if isinstance(inquiry.entities, dict) else {}
+            if not entities.get("sla_breach_alerted", False):
+                entities["sla_breach_alerted"] = True
+                entities["sla_breached_at"] = now.isoformat()
+                inquiry.entities = entities
+
+                deadline = inquiry.sla_deadline_at
+                if deadline.tzinfo is None:
+                    deadline = deadline.replace(tzinfo=timezone.utc)
+                overdue_minutes = max(1, int((now - deadline).total_seconds() / 60))
+
+                # 3a. Publish Ops Alert via Amazon SNS
+                alert_dict = {
+                    "id": str(inquiry.id),
+                    "customer_email": inquiry.customer_email,
+                    "subject": inquiry.subject,
+                    "priority": inquiry.priority,
+                    "department": inquiry.department,
+                    "urgency": inquiry.urgency,
+                    "impact": inquiry.impact,
+                    "churn_risk": inquiry.churn_risk,
+                    "sla_deadline_at": inquiry.sla_deadline_at.isoformat(),
+                    "event_type": "sla.breached",
+                    "overdue_minutes": overdue_minutes,
+                }
+                await sns_service.publish_ops_alert(alert_dict)
+
+                # 3b. Dispatch High-Priority Email Escalation to Operations Manager
+                await email_service.send_sla_breach_escalation(
+                    manager_email=self.manager_email,
+                    ticket_id=str(inquiry.id),
+                    priority=inquiry.priority,
+                    customer_name=inquiry.customer_name,
+                    ticket_subject=inquiry.subject,
+                    overdue_minutes=overdue_minutes,
+                    department=inquiry.department,
+                )
+
+                # 3c. Append an immutable AuditLog entry
+                audit_log = AuditLog(
+                    inquiry_id=inquiry.id,
+                    agent_id="SYSTEM:SLA_WATCHER",
+                    action="SLA_BREACH_ESCALATED",
+                    previous_value={"sla_breach_alerted": False},
+                    new_value={
+                        "sla_breach_alerted": True,
+                        "overdue_minutes": overdue_minutes,
+                        "escalated_to": self.manager_email,
+                    },
+                    reason=(
+                        f"Automated daemon detected contractual SLA resolution breach "
+                        f"({overdue_minutes} minutes overdue). Dispatched Ops Alert and manager escalation."
+                    ),
+                )
+                db.add(audit_log)
+
+                # 3d. Append Internal System Message to Conversation Thread
+                short_id = str(inquiry.id)[:8].upper()
+                system_msg = InquiryMessage(
+                    inquiry_id=inquiry.id,
+                    sender_type="SYSTEM",
+                    sender_name="SLA Escalation Engine",
+                    sender_email="system@company.internal",
+                    body=(
+                        f"⚠️ [AUTOMATED SLA ESCALATION] Ticket #{short_id} has exceeded its resolution deadline "
+                        f"by {overdue_minutes} minutes. High-priority incident notification dispatched to "
+                        f"{self.manager_email} and ChatOps SNS topic."
+                    ),
+                    is_internal_note=True,
+                    attachments=[],
+                    created_at=now,
+                )
+                db.add(system_msg)
+
+                results["breaches_escalated"] += 1
+                logger.warning(
+                    f"Escalated SLA breach for inquiry #{short_id} (Priority: {inquiry.priority}, "
+                    f"Overdue: {overdue_minutes}m, Customer: {inquiry.customer_name})"
+                )
+
+        # 4. Check Queue-Wide Compliance Against Target Threshold
+        if compliance_rate < self.target_threshold and breached_count > 0:
+            should_alert = False
+            if self._last_executive_escalation_at is None:
+                should_alert = True
+            else:
+                elapsed = (now - self._last_executive_escalation_at).total_seconds()
+                if elapsed >= self.cooldown_seconds:
+                    should_alert = True
+
+            if should_alert:
+                self._last_executive_escalation_at = now
+                results["executive_alert_triggered"] = True
+
+                await email_service.send_compliance_threshold_alert(
+                    manager_email=self.manager_email,
+                    current_compliance_rate=compliance_rate,
+                    target_threshold=self.target_threshold,
+                    breached_count=breached_count,
+                    total_active=total_active,
+                )
+
+                logger.error(
+                    f"[EXECUTIVE ESCALATION] Active operational queue compliance dropped to {compliance_rate}% "
+                    f"(Contractual SLO: >={self.target_threshold}%). Breached tickets: {breached_count}/{total_active}. "
+                    f"Executive alert dispatched to {self.manager_email}."
+                )
+
+        # Commit all state updates, audit logs, and system notes
+        await db.commit()
+        return results
+
+
+_sla_watcher_instance: Optional[SLABreachWatcherDaemon] = None
+
+
+def get_sla_breach_watcher() -> SLABreachWatcherDaemon:
+    """Singleton provider for SLABreachWatcherDaemon."""
+    global _sla_watcher_instance
+    if _sla_watcher_instance is None:
+        _sla_watcher_instance = SLABreachWatcherDaemon()
+    return _sla_watcher_instance
