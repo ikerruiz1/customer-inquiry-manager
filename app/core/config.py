@@ -108,8 +108,10 @@ class Settings(BaseSettings):
     SLA_WATCHER_ENABLED: bool = True
     SLA_WATCHER_INTERVAL_SECONDS: int = 30
     SLA_TARGET_COMPLIANCE_THRESHOLD: float = 95.0
+    SLA_PROACTIVE_WARNING_MINUTES: int = 10
     EXECUTIVE_ESCALATION_COOLDOWN_SECONDS: int = 900  # 15-minute anti-fatigue cooldown
     OPERATIONS_MANAGER_EMAIL: str = "ops-manager@example-corp.tech"
+    OPERATIONAL_AUTH_TOKEN: str = "cim-operational-secret-token"
 
     # Inbound Customer Verification & Identity Policy (Parsed from company_profile.json)
     CUSTOMER_ACCESS_POLICY: Dict[str, Any] = Field(
@@ -157,6 +159,8 @@ class Settings(BaseSettings):
                         self.SUPPORT_EMAIL = profile_data["support_email"]
                     if "operations_manager_email" in profile_data:
                         self.OPERATIONS_MANAGER_EMAIL = profile_data["operations_manager_email"]
+                    if "sla_proactive_warning_minutes" in profile_data:
+                        self.SLA_PROACTIVE_WARNING_MINUTES = int(profile_data["sla_proactive_warning_minutes"])
                     if "customer_access_policy" in profile_data:
                         self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
                     

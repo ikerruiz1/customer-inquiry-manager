@@ -33,6 +33,7 @@ class SLABreachWatcherDaemon:
         self.target_threshold = settings.SLA_TARGET_COMPLIANCE_THRESHOLD
         self.cooldown_seconds = settings.EXECUTIVE_ESCALATION_COOLDOWN_SECONDS
         self.manager_email = settings.OPERATIONS_MANAGER_EMAIL
+        self.warning_minutes = settings.SLA_PROACTIVE_WARNING_MINUTES
         self.is_running = False
         self._task: Optional[asyncio.Task] = None
         self._last_executive_escalation_at: Optional[datetime] = None
@@ -51,7 +52,8 @@ class SLABreachWatcherDaemon:
         self._task = asyncio.create_task(self._watch_loop(), name="SLABreachWatcherDaemon")
         logger.info(
             f"SLABreachWatcherDaemon started successfully (Interval: {self.interval_seconds}s, "
-            f"Target Compliance: >={self.target_threshold}%, Manager: {self.manager_email})."
+            f"Target Compliance: >={self.target_threshold}%, Warning: {self.warning_minutes}m, "
+            f"Manager: {self.manager_email})."
         )
 
     async def stop(self) -> None:
@@ -93,6 +95,7 @@ class SLABreachWatcherDaemon:
         results = {
             "evaluated_at": now.isoformat(),
             "breaches_escalated": 0,
+            "proactive_warnings_issued": 0,
             "executive_alert_triggered": False,
             "compliance_rate": 100.0,
         }
@@ -129,6 +132,86 @@ class SLABreachWatcherDaemon:
 
             if deadline >= now:
                 in_bounds_count += 1
+                remaining_seconds = (deadline - now).total_seconds()
+                warning_threshold_seconds = self.warning_minutes * 60
+
+                # Proactive SLA Warning Check (T-10m or configured threshold)
+                if 0 < remaining_seconds <= warning_threshold_seconds:
+                    entities = dict(inquiry.entities) if isinstance(inquiry.entities, dict) else {}
+                    if not entities.get("sla_warning_alerted", False):
+                        entities["sla_warning_alerted"] = True
+                        entities["sla_warning_alerted_at"] = now.isoformat()
+                        inquiry.entities = entities
+
+                        remaining_minutes = max(1, int(remaining_seconds / 60))
+
+                        # 2a. Publish Proactive Alert via SNS
+                        warning_dict = {
+                            "id": str(inquiry.id),
+                            "customer_email": inquiry.customer_email,
+                            "subject": inquiry.subject,
+                            "priority": inquiry.priority,
+                            "department": inquiry.department,
+                            "urgency": inquiry.urgency,
+                            "impact": inquiry.impact,
+                            "churn_risk": inquiry.churn_risk,
+                            "sla_deadline_at": inquiry.sla_deadline_at.isoformat(),
+                            "event_type": "sla.warning",
+                            "remaining_minutes": remaining_minutes,
+                        }
+                        await sns_service.publish_ops_alert(warning_dict)
+
+                        # 2b. Dispatch Proactive Warning Email
+                        await email_service.send_proactive_sla_warning(
+                            manager_email=self.manager_email,
+                            ticket_id=str(inquiry.id),
+                            priority=inquiry.priority,
+                            customer_name=inquiry.customer_name,
+                            ticket_subject=inquiry.subject,
+                            remaining_minutes=remaining_minutes,
+                            department=inquiry.department,
+                        )
+
+                        # 2c. Log Audit Entry
+                        audit_log = AuditLog(
+                            inquiry_id=inquiry.id,
+                            agent_id="SYSTEM:SLA_WATCHER",
+                            action="SLA_WARNING_TRIGGERED",
+                            previous_value={"sla_warning_alerted": False},
+                            new_value={
+                                "sla_warning_alerted": True,
+                                "remaining_minutes": remaining_minutes,
+                                "escalated_to": self.manager_email,
+                            },
+                            reason=(
+                                f"Automated monitor identified impending SLA deadline ({remaining_minutes} minutes remaining). "
+                                f"Dispatched proactive Ops Alert and supervisor warning."
+                            ),
+                        )
+                        db.add(audit_log)
+
+                        # 2d. Add Internal Note to Conversation Feed
+                        short_id = str(inquiry.id)[:8].upper()
+                        warning_msg = InquiryMessage(
+                            inquiry_id=inquiry.id,
+                            sender_type="SYSTEM",
+                            sender_name="SLA Warning Engine",
+                            sender_email="system@company.internal",
+                            body=(
+                                f"⏳ [PROACTIVE SLA WARNING] Ticket #{short_id} is within {remaining_minutes} minutes "
+                                f"of breaching its contractual SLA deadline. Early warning notification dispatched to "
+                                f"{self.manager_email} and ChatOps channel."
+                            ),
+                            is_internal_note=True,
+                            attachments=[],
+                            created_at=now,
+                        )
+                        db.add(warning_msg)
+                        results["proactive_warnings_issued"] += 1
+                        logger.warning(
+                            f"Issued proactive SLA warning for inquiry #{short_id} (Priority: {inquiry.priority}, "
+                            f"Remaining: {remaining_minutes}m, Customer: {inquiry.customer_name})"
+                        )
             else:
                 breached_count += 1
                 overdue_inquiries.append(inquiry)

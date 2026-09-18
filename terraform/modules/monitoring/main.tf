@@ -108,3 +108,16 @@ resource "aws_cloudwatch_dashboard" "operations" {
     ]
   })
 }
+
+# ------------------------------------------------------------------------------
+# 4. EventBridge Scheduler for Decoupled SLA Audit & Compliance
+# ------------------------------------------------------------------------------
+resource "aws_cloudwatch_event_rule" "sla_audit_schedule" {
+  name                = "${var.project_name}-${var.environment}-sla-audit-schedule"
+  description         = "Triggers 1-minute cloud-native SLA breach audit and executive compliance evaluation"
+  schedule_expression = "rate(1 minute)"
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-sla-audit-schedule"
+  }
+}

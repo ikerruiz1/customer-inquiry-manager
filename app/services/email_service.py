@@ -139,6 +139,39 @@ class EmailService:
         self.outbox.append(delivery_result)
         return delivery_result
 
+    async def send_proactive_sla_warning(
+        self,
+        manager_email: str,
+        ticket_id: str,
+        priority: str,
+        customer_name: str,
+        ticket_subject: str,
+        remaining_minutes: int,
+        department: str,
+    ) -> Dict[str, Any]:
+        """Dispatch early warning escalation email before an SLA deadline breaches."""
+        short_id = str(ticket_id)[:8].upper()
+        subject = f"[EARLY WARNING] {priority} Ticket #{short_id} SLA Breach Imminent ({remaining_minutes}m Remaining)"
+        body = (
+            f"PROACTIVE SLA RISK ALERT\n\n"
+            f"The following {priority} customer ticket is within {remaining_minutes} minutes of breaching its contractual SLA deadline:\n"
+            f"- Ticket ID: #{short_id} ({ticket_id})\n"
+            f"- Priority: {priority}\n"
+            f"- Department: {department}\n"
+            f"- Customer: {customer_name}\n"
+            f"- Subject: {ticket_subject}\n"
+            f"- Time Remaining: {remaining_minutes} minutes\n\n"
+            f"Proactive assignment or agent intervention is required immediately to prevent breach penalties.\n"
+            f"Access the Operations Console: http://localhost:5173\n\n"
+            f"{self.company_name} Incident Prevention & Monitoring"
+        )
+        return await self._dispatch_generic_email(
+            recipient=manager_email,
+            subject=subject,
+            body=body,
+            category="PROACTIVE_SLA_WARNING",
+        )
+
     async def send_sla_breach_escalation(
         self,
         manager_email: str,
