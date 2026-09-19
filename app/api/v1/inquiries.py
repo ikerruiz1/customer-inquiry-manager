@@ -182,7 +182,7 @@ async def process_and_persist_inquiry(
         "sla_deadline_at": inquiry.sla_deadline_at.isoformat(),
     }
     await sns.publish_ticket_created(inquiry_dict)
-    if priority in ["P1", "P2"]:
+    if settings.SLACK_NOTIFICATION_POLICY == "ALL_INQUIRIES" or priority in ["P1", "P2"]:
         await sns.publish_ops_alert(inquiry_dict)
 
     # 5. Emit CloudWatch EMF Metric

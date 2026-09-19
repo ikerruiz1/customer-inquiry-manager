@@ -475,6 +475,63 @@ async def test_copilot_draft_adapts_to_conversation_state(client: AsyncClient):
     assert "Enterprise Client" in draft_text
 
 
+@pytest.mark.asyncio
+async def test_slack_notification_policy_dual_modes(client: AsyncClient, mock_bedrock, mock_sns, monkeypatch):
+    """Verify SLACK_NOTIFICATION_POLICY toggles between CRITICAL_AND_SLA_ONLY and ALL_INQUIRIES."""
+    from app.core.config import settings
+    from app.schemas.bedrock import BedrockTriageOutput, DepartmentEnum, SuggestedStrategyEnum
+
+    p3_triage = BedrockTriageOutput(
+        department=DepartmentEnum.GENERAL,
+        urgency_rating=2,
+        impact_rating=1,
+        priority="P3",
+        sentiment_score=0.1,
+        churn_risk=False,
+        key_entities={},
+        suggested_strategy=SuggestedStrategyEnum.DIRECT_RESOLUTION,
+        suggested_response="General response",
+        agent_copilot_notes="P3 ticket note",
+        reasoning_summary="Routine question.",
+    )
+
+    async def mock_triage(*args, **kwargs):
+        return p3_triage
+
+    monkeypatch.setattr(mock_bedrock, "triage_inquiry", mock_triage)
+
+    # 1. Test Enterprise Default: CRITICAL_AND_SLA_ONLY (P3 ticket does NOT dispatch ops alert upon creation)
+    monkeypatch.setattr(settings, "SLACK_NOTIFICATION_POLICY", "CRITICAL_AND_SLA_ONLY")
+    mock_sns.published_ops_alerts.clear()
+
+    res1 = await client.post("/api/v1/inquiries/", json={
+        "channel": "WEB_FORM",
+        "customer_email": "routine@client.com",
+        "customer_name": "Routine Client",
+        "subject": "General question",
+        "body": "How do I configure my settings?",
+    })
+    assert res1.status_code == 201
+    assert res1.json()["priority"] == "P3"
+    assert len(mock_sns.published_ops_alerts) == 0  # Gated by CRITICAL_AND_SLA_ONLY
+
+    # 2. Test Startup / Demo Mode: ALL_INQUIRIES (P3 ticket DOES dispatch ops alert upon creation)
+    monkeypatch.setattr(settings, "SLACK_NOTIFICATION_POLICY", "ALL_INQUIRIES")
+    mock_sns.published_ops_alerts.clear()
+
+    res2 = await client.post("/api/v1/inquiries/", json={
+        "channel": "WEB_FORM",
+        "customer_email": "routine2@client.com",
+        "customer_name": "Routine Client 2",
+        "subject": "Another general question",
+        "body": "Where is the API documentation?",
+    })
+    assert res2.status_code == 201
+    assert res2.json()["priority"] == "P3"
+    assert len(mock_sns.published_ops_alerts) == 1  # Allowed through by ALL_INQUIRIES
+
+
+
 
 
 

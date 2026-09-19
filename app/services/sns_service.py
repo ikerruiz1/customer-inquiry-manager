@@ -52,11 +52,16 @@ class SNSService:
 
     async def publish_ops_alert(self, inquiry_dict: Dict[str, Any]) -> bool:
         """Publish high-priority alert to SNS ChatOps topic for P1/P2 incidents."""
-        priority = inquiry_dict.get("priority")
-        if priority not in ["P1", "P2"]:
-            return False
-
         event_type = inquiry_dict.get("event_type", "incident.escalated")
+        priority = inquiry_dict.get("priority", "P3")
+
+        # Initial ingestion alerts:
+        # If SLACK_NOTIFICATION_POLICY is "ALL_INQUIRIES", allow all priorities (P1, P2, P3, P4).
+        # Otherwise (enterprise default "CRITICAL_AND_SLA_ONLY"), restrict initial ingestion to P1/P2.
+        # SLA warning and breach lifecycle events are alerted across all priorities when deadlines approach or breach.
+        if event_type == "incident.escalated":
+            if settings.SLACK_NOTIFICATION_POLICY != "ALL_INQUIRIES" and priority not in ["P1", "P2"]:
+                return False
         alert_payload = {
             "event_type": event_type,
             "priority": priority,
