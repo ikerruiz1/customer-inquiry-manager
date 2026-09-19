@@ -2,6 +2,7 @@
 import pytest
 from datetime import datetime, timezone
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.inquiries import calculate_sla
 
 
@@ -398,7 +399,7 @@ async def test_copilot_draft_three_modes(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_inbound_email_thread_reply_auto_matching(client: AsyncClient):
+async def test_inbound_email_thread_reply_auto_matching(client: AsyncClient, db_session: AsyncSession):
     """Verify inbound email webhook automatically routes replies with [Ticket #...] to existing ticket and unfreezes SLA."""
     # 1. Create a ticket
     create_res = await client.post("/api/v1/inquiries/", json={
@@ -433,10 +434,24 @@ async def test_inbound_email_thread_reply_auto_matching(client: AsyncClient):
         "text": "Here is the screenshot: https://cdn.attachments.com/proof.png showing the double charge.",
     }
     inbound_res = await client.post("/api/v1/webhooks/email", json=email_webhook_payload)
-    assert inbound_res.status_code == 201
-    resumed_inquiry = inbound_res.json()
+    assert inbound_res.status_code == 202
+    queued_data = inbound_res.json()
+    assert queued_data["status"] == "QUEUED"
 
-    # The webhook should NOT create a new inquiry; it should resume the existing one!
+    # Process queued message via consumer
+    from app.services.sqs_consumer import get_sqs_consumer
+    from app.services.sqs_service import get_sqs_service
+    from app.api.v1.inquiries import process_and_persist_inquiry
+    consumer = get_sqs_consumer()
+    sqs = get_sqs_service()
+    messages = await sqs.receive_inquiries(max_messages=5, wait_time_seconds=1)
+    for msg in messages:
+        await consumer._process_single_message(msg["body"], process_and_persist_inquiry, db=db_session)
+        await sqs.delete_inquiry(msg["receipt_handle"])
+
+    # Verify ticket was resumed and updated in database
+    resumed_res = await client.get(f"/api/v1/inquiries/{inquiry_id}")
+    resumed_inquiry = resumed_res.json()
     assert resumed_inquiry["id"] == inquiry_id
     assert resumed_inquiry["status"] == "CLAIMED"
     assert resumed_inquiry["sla_paused_at"] is None

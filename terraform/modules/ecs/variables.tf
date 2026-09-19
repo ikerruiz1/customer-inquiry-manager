@@ -77,3 +77,16 @@ variable "target_group_blue_arn_suffix" {
   description = "Blue Target Group ARN suffix for ALBRequestCountPerTarget scaling policy"
   default     = ""
 }
+
+variable "sqs_inquiries_queue_url" {
+  type        = string
+  description = "URL of primary SQS FIFO inquiries queue"
+  default     = ""
+}
+
+variable "sqs_inquiries_dlq_url" {
+  type        = string
+  description = "URL of SQS inquiries Dead-Letter Queue"
+  default     = ""
+}
+

@@ -1,4 +1,4 @@
-"""Functional tests for Omnichannel Inbound Webhooks: Email, Web Form, Trustpilot, Google Reviews, Billing."""
+"""Functional tests for Omnichannel Inbound Webhooks: Asynchronous SQS FIFO Ingestion Gateway."""
 import hashlib
 import hmac
 import json
@@ -30,7 +30,7 @@ def test_verify_hmac_sha256_cryptographic_validation():
 
 @pytest.mark.asyncio
 async def test_email_webhook_ingestion(client: AsyncClient):
-    """Verify inbound email parsing from AWS SES Inbound Rules."""
+    """Verify inbound email parsing from AWS SES Inbound Rules buffers into SQS with HTTP 202."""
     email_payload = {
         "from": "marcus.aurelius@rome.org",
         "name": "Marcus Aurelius",
@@ -38,17 +38,17 @@ async def test_email_webhook_ingestion(client: AsyncClient):
         "text": "We need to clarify enterprise SLA coverage for European datacenters.",
     }
     response = await client.post("/api/v1/webhooks/email", json=email_payload)
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
+    assert data["status"] == "QUEUED"
     assert data["channel"] == "EMAIL"
-    assert data["customer_email"] == "marcus.aurelius@rome.org"
-    assert data["customer_name"] == "Marcus Aurelius"
-    assert "Urgent inquiry" in data["subject"]
+    assert "tracking_id" in data
+    assert "buffered in Amazon SQS FIFO" in data["message"]
 
 
 @pytest.mark.asyncio
 async def test_webform_webhook_ingestion(client: AsyncClient):
-    """Verify customer web form intake endpoint."""
+    """Verify customer web form intake buffers into SQS with HTTP 202."""
     webform_payload = {
         "channel": "WEB_FORM",
         "customer_email": "webuser@saas.com",
@@ -57,15 +57,16 @@ async def test_webform_webhook_ingestion(client: AsyncClient):
         "body": "The QR code scan times out after 30 seconds on the settings page.",
     }
     response = await client.post("/api/v1/webhooks/webform", json=webform_payload)
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
+    assert data["status"] == "QUEUED"
     assert data["channel"] == "WEB_FORM"
-    assert data["customer_email"] == "webuser@saas.com"
+    assert "tracking_id" in data
 
 
 @pytest.mark.asyncio
 async def test_trustpilot_webhook_hmac_verification(client: AsyncClient, monkeypatch):
-    """Verify Trustpilot review webhook with HMAC-SHA256 signature verification."""
+    """Verify Trustpilot review webhook with HMAC-SHA256 signature verification and SQS buffering."""
     secret = "trustpilot-shared-secret-key"
     monkeypatch.setattr(settings, "TRUSTPILOT_WEBHOOK_SECRET", secret)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
@@ -79,14 +80,17 @@ async def test_trustpilot_webhook_hmac_verification(client: AsyncClient, monkeyp
     raw_bytes = json.dumps(review_body).encode("utf-8")
     valid_signature = hmac.new(secret.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest()
 
-    # 1. Successful request with valid cryptographic signature
+    # 1. Successful request with valid cryptographic signature returns HTTP 202 Accepted
     res_valid = await client.post(
         "/api/v1/webhooks/trustpilot",
         content=raw_bytes,
         headers={"Content-Type": "application/json", "X-Trustpilot-Signature": valid_signature},
     )
-    assert res_valid.status_code == 201
-    assert res_valid.json()["channel"] == "TRUSTPILOT"
+    assert res_valid.status_code == 202
+    data = res_valid.json()
+    assert data["status"] == "QUEUED"
+    assert data["channel"] == "TRUSTPILOT"
+    assert "tracking_id" in data
 
     # 2. Rejection with invalid cryptographic signature
     res_invalid = await client.post(
@@ -100,7 +104,7 @@ async def test_trustpilot_webhook_hmac_verification(client: AsyncClient, monkeyp
 
 @pytest.mark.asyncio
 async def test_google_reviews_webhook_secret_verification(client: AsyncClient, monkeypatch):
-    """Verify Google Reviews webhook with shared secret header authentication."""
+    """Verify Google Reviews webhook with shared secret header authentication and SQS buffering."""
     secret = "google-reviews-shared-token-xyz"
     monkeypatch.setattr(settings, "GOOGLE_REVIEWS_WEBHOOK_SECRET", secret)
     monkeypatch.setattr(settings, "ENVIRONMENT", "production")
@@ -111,14 +115,17 @@ async def test_google_reviews_webhook_secret_verification(client: AsyncClient, m
         "reviewer": {"displayName": "Anonymous Reviewer", "email": "reviewer@domain.com"},
     }
 
-    # 1. Successful request with valid secret header
+    # 1. Successful request with valid secret header returns HTTP 202 Accepted
     res_valid = await client.post(
         "/api/v1/webhooks/google-reviews",
         json=review_body,
         headers={"X-Google-Webhook-Secret": secret},
     )
-    assert res_valid.status_code == 201
-    assert res_valid.json()["channel"] == "GOOGLE_REVIEWS"
+    assert res_valid.status_code == 202
+    data = res_valid.json()
+    assert data["status"] == "QUEUED"
+    assert data["channel"] == "GOOGLE_REVIEWS"
+    assert "tracking_id" in data
 
     # 2. Rejection with invalid secret header
     res_invalid = await client.post(
@@ -132,7 +139,7 @@ async def test_google_reviews_webhook_secret_verification(client: AsyncClient, m
 
 @pytest.mark.asyncio
 async def test_stripe_billing_webhook_ingestion(client: AsyncClient):
-    """Verify high-priority financial dispute webhook from Stripe."""
+    """Verify high-priority financial dispute webhook from Stripe enqueues with HTTP 202 Accepted."""
     stripe_payload = {
         "type": "charge.dispute.created",
         "data": {
@@ -146,8 +153,8 @@ async def test_stripe_billing_webhook_ingestion(client: AsyncClient):
         },
     }
     response = await client.post("/api/v1/webhooks/billing", json=stripe_payload)
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
+    assert data["status"] == "QUEUED"
     assert data["channel"] == "BILLING"
-    assert "499.0 EUR" in data["subject"]
-    assert "dp_1N9xZ82eZvKYlo2C" in data["subject"]
+    assert "tracking_id" in data

@@ -121,3 +121,43 @@ resource "aws_cloudwatch_event_rule" "sla_audit_schedule" {
     Name = "${var.project_name}-${var.environment}-sla-audit-schedule"
   }
 }
+
+# ------------------------------------------------------------------------------
+# 5. Production SRE Ingress Alarms: SQS Dead-Letter Queue & Queue Latency
+# ------------------------------------------------------------------------------
+resource "aws_cloudwatch_metric_alarm" "sqs_dlq_messages" {
+  count               = var.inquiries_dlq_name != "" ? 1 : 0
+  alarm_name          = "${var.project_name}-${var.environment}-sqs-dlq-messages"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  metric_name         = "ApproximateNumberOfMessagesVisible"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Maximum"
+  threshold           = 1
+  alarm_description   = "Critical SRE Alert: Messages present in Dead-Letter Queue (DLQ). Triage failure after 3 attempts."
+  alarm_actions       = [aws_sns_topic.ops_alerts.arn]
+
+  dimensions = {
+    QueueName = var.inquiries_dlq_name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "sqs_queue_depth" {
+  count               = var.inquiries_queue_name != "" ? 1 : 0
+  alarm_name          = "${var.project_name}-${var.environment}-sqs-queue-latency"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  namespace           = "AWS/SQS"
+  period              = 60
+  statistic           = "Maximum"
+  threshold           = 300 # 5 minutes message latency alert
+  alarm_description   = "Warning: Oldest message in SQS queue exceeds 300 seconds. Worker consumer fleet falling behind."
+  alarm_actions       = [aws_sns_topic.ops_alerts.arn]
+
+  dimensions = {
+    QueueName = var.inquiries_queue_name
+  }
+}
+

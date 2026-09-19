@@ -83,7 +83,14 @@ module "alb" {
   alb_sg_id         = module.security_groups.alb_sg_id
 }
 
-# 8. ECS Fargate Spot Dual-Container Cluster & Tasks
+# 8. Amazon SQS FIFO Decoupled Ingestion Buffer & Dead-Letter Queue
+module "sqs" {
+  source       = "../../modules/sqs"
+  project_name = var.project_name
+  environment  = var.environment
+}
+
+# 9. ECS Fargate Spot Dual-Container Cluster & Tasks
 module "ecs" {
   source                       = "../../modules/ecs"
   project_name                 = var.project_name
@@ -100,16 +107,20 @@ module "ecs" {
   app_client_id                = module.cognito.client_id
   alb_arn_suffix               = module.alb.alb_arn_suffix
   target_group_blue_arn_suffix = module.alb.target_group_blue_arn_suffix
+  sqs_inquiries_queue_url      = module.sqs.queue_url
+  sqs_inquiries_dlq_url        = module.sqs.dlq_url
 }
 
-# 9. CloudWatch Metrics, Alarms, Dashboard & Outbound SNS Topics
+# 10. CloudWatch Metrics, Alarms, Dashboard & Outbound SNS Topics
 module "monitoring" {
-  source           = "../../modules/monitoring"
-  project_name     = var.project_name
-  environment      = var.environment
-  ecs_cluster_name = module.ecs.cluster_name
-  ecs_service_name = module.ecs.service_name
-  alb_arn_suffix   = module.alb.alb_arn
+  source               = "../../modules/monitoring"
+  project_name         = var.project_name
+  environment          = var.environment
+  ecs_cluster_name     = module.ecs.cluster_name
+  ecs_service_name     = module.ecs.service_name
+  alb_arn_suffix       = module.alb.alb_arn
+  inquiries_queue_name = module.sqs.queue_name
+  inquiries_dlq_name   = module.sqs.dlq_name
 }
 
 # 10. 100% AWS Developer Tools CI/CD Suite (CodePipeline, CodeBuild, CodeDeploy)

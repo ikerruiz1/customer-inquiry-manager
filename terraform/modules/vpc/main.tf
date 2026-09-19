@@ -188,6 +188,7 @@ locals {
     "cognito-idp",
     "sns",
     "xray",
+    "sqs",
   ]
 }
 
