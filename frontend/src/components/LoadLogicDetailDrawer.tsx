@@ -1365,19 +1365,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     fontSize: '0.7rem',
                     padding: '2px 8px',
                     borderRadius: '9999px',
-                    backgroundColor: '#FFFFFF',
-                    color: '#0C0D0D',
-                    fontWeight: 700,
-                    border: '1px solid rgba(12, 13, 13, 0.08)',
-                  }}
-                >
-                  AI Copilot
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.7rem',
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
                     backgroundColor: '#0C0D0D',
                     color: '#FFFFFF',
                     fontWeight: 700,
@@ -1441,37 +1428,39 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               &quot;{ticket.triage_rationale || ticket.agent_copilot_notes || 'Automated semantic triage and classification analysis.'}&quot;
             </div>
 
-            {/* Model & FinOps Telemetry Pill Row */}
-            <div
-              style={{
-                marginTop: '10px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: '6px',
-                fontSize: '0.68rem',
-                color: '#64748B',
-                padding: '6px 10px',
-                borderRadius: '8px',
-                backgroundColor: '#F8FAFC',
-                border: '1px solid rgba(12, 13, 13, 0.05)',
-              }}
-            >
-              <span>
-                Model: <strong style={{ color: '#0F172A' }}>Claude Haiku 4.5</strong>
-              </span>
-              {(ticket.cost_eur || ticket.entities?.cost_eur) && (
+            {/* Model & FinOps Telemetry Pill Row - Visible exclusively to Operations_Manager */}
+            {currentAgent.role === 'Operations_Manager' && (
+              <div
+                style={{
+                  marginTop: '10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  flexWrap: 'wrap',
+                  gap: '6px',
+                  fontSize: '0.68rem',
+                  color: '#64748B',
+                  padding: '6px 10px',
+                  borderRadius: '8px',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid rgba(12, 13, 13, 0.05)',
+                }}
+              >
                 <span>
-                  FinOps: <strong style={{ color: '#047857' }}>~{(ticket.cost_eur ?? ticket.entities?.cost_eur).toFixed(5)} €</strong>
+                  Model: <strong style={{ color: '#0F172A' }}>Claude Haiku 4.5</strong>
                 </span>
-              )}
-              {(ticket.entities?.input_tokens || ticket.entities?.output_tokens) && (
-                <span>
-                  Tokens: <strong style={{ color: '#475569' }}>{ticket.entities?.input_tokens || 0} in / {ticket.entities?.output_tokens || 0} out</strong>
-                </span>
-              )}
-            </div>
+                {(ticket.cost_eur || ticket.entities?.cost_eur) && (
+                  <span>
+                    FinOps: <strong style={{ color: '#047857' }}>~{(ticket.cost_eur ?? ticket.entities?.cost_eur).toFixed(5)} €</strong>
+                  </span>
+                )}
+                {(ticket.entities?.input_tokens || ticket.entities?.output_tokens) && (
+                  <span>
+                    Tokens: <strong style={{ color: '#475569' }}>{ticket.entities?.input_tokens || 0} in / {ticket.entities?.output_tokens || 0} out</strong>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Section: Sentiment & Frustration Meter */}
