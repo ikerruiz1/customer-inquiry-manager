@@ -65,3 +65,15 @@ variable "container_image" {
   description = "ECR image URI for application container"
   default     = ""
 }
+
+variable "alb_arn_suffix" {
+  type        = string
+  description = "ALB ARN suffix for ALBRequestCountPerTarget scaling policy"
+  default     = ""
+}
+
+variable "target_group_blue_arn_suffix" {
+  type        = string
+  description = "Blue Target Group ARN suffix for ALBRequestCountPerTarget scaling policy"
+  default     = ""
+}
