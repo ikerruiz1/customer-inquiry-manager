@@ -64,7 +64,15 @@ class BedrockService:
    - Password reset/MFA lockouts route to ACCOUNTS.
    - Pricing quotes, contracts, enterprise tier upgrades route to SALES.
    - Chaotic, vague, or incomplete text routes to GENERAL with strategy CLARIFICATION_REQUEST.
-3. OUTPUT FORMAT:
+3. NAMED ENTITY RECOGNITION (NER) DIRECTIVE:
+   Extract all identifiable business artifacts and technical entities into "key_entities" as clean key-value pairs (only include non-null strings):
+   - "order_id" / "dispute_id": external transaction reference, order ID, or dispute token (e.g. dp_88421, ORD-9821, ch_3M0...).
+   - "monetary_amount": currency amount mentioned (e.g. "450.00 EUR", "$1,450", "2,400 USD").
+   - "customer_deadline": any customer ultimatum or operational deadline (e.g. "Today 18:00 UTC", "within 24 hours").
+   - "product_affected": specific platform component, subsystem, or service (e.g. "Billing Gateway", "Managed Kubernetes", "API Gateway", "Webhooks").
+   - "error_code": HTTP status codes, error messages, or exception tokens (e.g. "504 Gateway Timeout", "ERR_POD_OOMKILLED", "0x8004100E").
+   - "invoice_id": invoice numbers (e.g. "INV-2026-993").
+4. OUTPUT FORMAT:
    You MUST respond with a single valid, raw JSON object matching the following schema. Do NOT include markdown code blocks, backticks, or any conversational text.
 
 Schema:
@@ -74,7 +82,7 @@ Schema:
   "impact_rating": <integer between 1 and 3>,
   "sentiment_score": <float between -1.0 and 1.0>,
   "churn_risk": <boolean true/false>,
-  "key_entities": {{"order_id": null, "invoice_id": null, "amount": null, "error_code": null, "account_tier": null}},
+  "key_entities": {{"order_id": "<ID or null>", "monetary_amount": "<amount or null>", "customer_deadline": "<deadline or null>", "product_affected": "<product or null>", "error_code": "<code or null>", "invoice_id": "<invoice or null>"}},
   "suggested_strategy": "DIRECT_RESOLUTION" | "CLARIFICATION_REQUEST" | "ESCALATION" | "EMPATHETIC_DEFUSING",
   "suggested_response": "<Factual, professional draft to the customer based on company policies>",
   "agent_copilot_notes": "<Brief internal engineering note explaining precedence and reasoning>",
@@ -250,6 +258,42 @@ Schema:
             )
             notes = "Classified as GENERAL: Non-specific or ambiguous inquiry requiring clarification protocol."
 
+        # Heuristic Named Entity Recognition (NER) extraction (preserving original casing)
+        raw_text = f"{subject} {body}"
+        extracted_entities: Dict[str, Any] = {}
+
+        # 1. Monetary Amount
+        amount_match = re.search(r'(?:[\$€£]\s*[\d,]+(?:\.\d+)?|[\d,]+(?:\.\d+)?\s*(?:EUR|USD|GBP|euros|dollars))', raw_text, re.IGNORECASE)
+        if amount_match:
+            extracted_entities["monetary_amount"] = amount_match.group(0).strip()
+
+        # 2. Order / Dispute / Transaction ID
+        order_match = re.search(r'(?:ref|order|dispute|id|ticket|invoice|cluster)[\s:#]+([a-zA-Z0-9_\-]+)', raw_text, re.IGNORECASE)
+        if order_match:
+            val = order_match.group(1).strip()
+            if val.lower() not in ["due", "to", "is", "a", "an", "the", "with"]:
+                extracted_entities["order_id"] = val
+
+        # 3. Customer Deadline
+        deadline_match = re.search(r'(?:by|before|within)\s+([0-9]{1,2}:[0-9]{2}(?:\s*UTC)?(?:\s*today)?|[0-9]+\s*(?:hours|days|business days))', raw_text, re.IGNORECASE)
+        if deadline_match:
+            extracted_entities["customer_deadline"] = deadline_match.group(0).strip()
+
+        # 4. Error Code
+        error_match = re.search(r'\b(500|502|503|504|400|401|403|404|ERR_[A-Z0-9_]+|0x[0-9a-fA-F]+)\b', raw_text, re.IGNORECASE)
+        if error_match:
+            extracted_entities["error_code"] = error_match.group(0).strip()
+
+        # 5. Product Affected
+        if any(w in combined_text for w in ["kubernetes", "k8s", "cluster", "pod"]):
+            extracted_entities["product_affected"] = "Managed Kubernetes"
+        elif any(w in combined_text for w in ["stripe", "billing", "payment", "card", "invoice"]):
+            extracted_entities["product_affected"] = "Billing Gateway"
+        elif any(w in combined_text for w in ["mfa", "totp", "password", "login"]):
+            extracted_entities["product_affected"] = "Identity & Access Management"
+        elif any(w in combined_text for w in ["api", "gateway", "webhook"]):
+            extracted_entities["product_affected"] = "API Gateway"
+
         # Compute realistic tokens and unit cost based on text volume
         input_tokens = max(120, len(combined_text.split()) * 2)
         output_tokens = max(50, len(response_draft.split()) * 2)
@@ -262,7 +306,7 @@ Schema:
             impact_rating=impact,
             sentiment_score=sentiment,
             churn_risk=churn,
-            key_entities={},
+            key_entities=extracted_entities,
             suggested_strategy=strategy,
             suggested_response=response_draft,
             agent_copilot_notes=notes,

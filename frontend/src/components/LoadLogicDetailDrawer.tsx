@@ -38,6 +38,19 @@ import {
   MessageActionEnum,
 } from '../types/inquiry';
 
+const INTERNAL_TELEMETRY_KEYS = new Set([
+  'confidence_score',
+  'bedrock_latency_ms',
+  'latency_ms',
+  'model_id',
+  'input_tokens',
+  'output_tokens',
+  'cost_eur',
+  'sender_verification',
+  'sla_warning_alerted',
+  'sla_breach_alerted',
+]);
+
 interface LoadLogicDetailDrawerProps {
   ticket: Inquiry | null;
   onClose: () => void;
@@ -486,9 +499,18 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {ticket.entities && Object.keys(ticket.entities).length > 0 ? (
-                Object.entries(ticket.entities).map(([key, val]) => {
-                  if (!val || typeof val === 'object') return null;
+              {(() => {
+                const businessEntities = Object.entries(ticket.entities || {}).filter(
+                  ([key, val]) => val && typeof val !== 'object' && !INTERNAL_TELEMETRY_KEYS.has(key)
+                );
+                if (businessEntities.length === 0) {
+                  return (
+                    <span style={{ fontSize: '0.78rem', color: '#777777' }}>
+                      No structured business entities detected in input text.
+                    </span>
+                  );
+                }
+                return businessEntities.map(([key, val]) => {
                   const displayVal = String(val);
                   const isCopied = copiedKey === key;
                   return (
@@ -510,7 +532,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                       title="Click to copy value"
                     >
                       <span style={{ color: '#666666', textTransform: 'uppercase', fontSize: '0.66rem', fontWeight: 700 }}>
-                        {key.replace('_', ' ')}:
+                        {key.replace(/_/g, ' ')}:
                       </span>
                       <strong style={{ color: '#0C0D0D' }}>{displayVal}</strong>
                       {isCopied ? (
@@ -520,12 +542,8 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                       )}
                     </div>
                   );
-                })
-              ) : (
-                <span style={{ fontSize: '0.78rem', color: '#777777' }}>
-                  No structured entities detected in input text.
-                </span>
-              )}
+                });
+              })()}
             </div>
           </div>
 
@@ -1421,6 +1439,38 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               }}
             >
               &quot;{ticket.triage_rationale || ticket.agent_copilot_notes || 'Automated semantic triage and classification analysis.'}&quot;
+            </div>
+
+            {/* Model & FinOps Telemetry Pill Row */}
+            <div
+              style={{
+                marginTop: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '6px',
+                fontSize: '0.68rem',
+                color: '#64748B',
+                padding: '6px 10px',
+                borderRadius: '8px',
+                backgroundColor: '#F8FAFC',
+                border: '1px solid rgba(12, 13, 13, 0.05)',
+              }}
+            >
+              <span>
+                Model: <strong style={{ color: '#0F172A' }}>Claude Haiku 4.5</strong>
+              </span>
+              {(ticket.cost_eur || ticket.entities?.cost_eur) && (
+                <span>
+                  FinOps: <strong style={{ color: '#047857' }}>~{(ticket.cost_eur ?? ticket.entities?.cost_eur).toFixed(5)} €</strong>
+                </span>
+              )}
+              {(ticket.entities?.input_tokens || ticket.entities?.output_tokens) && (
+                <span>
+                  Tokens: <strong style={{ color: '#475569' }}>{ticket.entities?.input_tokens || 0} in / {ticket.entities?.output_tokens || 0} out</strong>
+                </span>
+              )}
             </div>
           </div>
 
