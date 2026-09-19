@@ -5,6 +5,7 @@
   "operations_manager_email": "ops-manager@your-company-domain.tech",
   "sla_proactive_warning_minutes": 10,
   "slack_webhook_url": "",
+  "slack_notification_policy": "CRITICAL_AND_SLA_ONLY",
   "inbound_channels": {
     "email": "support@your-company-domain.tech",
     "webform_url": "https://portal.your-company-domain.tech/contact",

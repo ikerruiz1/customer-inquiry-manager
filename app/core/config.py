@@ -1,5 +1,5 @@
 """Application runtime settings and environment parsing using Pydantic Settings v2."""
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     OPERATIONS_MANAGER_EMAIL: str = "ops-manager@example-corp.tech"
     OPERATIONAL_AUTH_TOKEN: str = "cim-operational-secret-token"
     SLACK_WEBHOOK_URL: Optional[str] = None
+    SLACK_NOTIFICATION_POLICY: Literal["CRITICAL_AND_SLA_ONLY", "ALL_INQUIRIES"] = "CRITICAL_AND_SLA_ONLY"
 
     # Inbound Customer Verification & Identity Policy (Parsed from company_profile.json)
     CUSTOMER_ACCESS_POLICY: Dict[str, Any] = Field(
@@ -164,6 +165,10 @@ class Settings(BaseSettings):
                         self.SLA_PROACTIVE_WARNING_MINUTES = int(profile_data["sla_proactive_warning_minutes"])
                     if "slack_webhook_url" in profile_data and not self.SLACK_WEBHOOK_URL:
                         self.SLACK_WEBHOOK_URL = profile_data["slack_webhook_url"] or None
+                    if "slack_notification_policy" in profile_data:
+                        policy_val = str(profile_data["slack_notification_policy"]).strip()
+                        if policy_val in ("CRITICAL_AND_SLA_ONLY", "ALL_INQUIRIES"):
+                            self.SLACK_NOTIFICATION_POLICY = policy_val  # type: ignore[assignment]
                     if "customer_access_policy" in profile_data:
                         self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
                     

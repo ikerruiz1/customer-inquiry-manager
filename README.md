@@ -61,7 +61,7 @@ customer-inquiry-manager/
 │   │   └── __init__.py               # Clean service re-exports
 │   ├── health.py                     # Container /health/live and /health/ready probes
 │   ├── main.py                       # FastAPI entrypoint, lifespan context & CORS
-│   └── tests/                        # Automated Pytest Suite (42 Tests, 100% Pass Rate)
+│   └── tests/                        # Automated Pytest Suite (43 Tests, 100% Pass Rate)
 │       ├── conftest.py               # In-memory SQLite async engine & service mocks
 │       ├── test_auth.py              # Cognito login & TOTP verification tests
 │       ├── test_bedrock_schema.py    # Extraction bounds & Pydantic validation tests
@@ -423,14 +423,16 @@ When a support engineer needs diagnostic logs, error screenshots, or confirmatio
 
 ---
 
-## 5. Quickstart: Clone & Run (Zero-Touch Local Setup)
+## 5. End-to-End Cloner & Developer Execution Guide (Strict Chronological Order)
 
-Follow these step-by-step instructions to clone, verify, and run both the Backend API and the Frontend Operations Console locally on any machine (Windows, macOS, or Linux).
+Follow this complete step-by-step lifecycle to clone, configure, bootstrap, run, simulate, deploy to AWS, and tear down the platform. Every step is ordered by execution sequence with zero code changes required.
 
 ### Prerequisites
 - **Git:** 2.30+
 - **Python:** 3.12+
 - **Node.js:** 18.0+ (LTS recommended) and **npm**
+- **Terraform:** 1.5+ (Required only for AWS cloud deployment in Step 7)
+- **AWS CLI:** Configured with administrator credentials (Required only for Step 7)
 
 ---
 
@@ -442,34 +444,71 @@ cd customer-inquiry-manager
 
 ---
 
-### Step 2: 1-Click Automated Developer Environment Bootstrap (Recommended)
+### Step 2: Configure Business Tenant Profile (`company_profile.json`)
+Before launching services, configure your organization's business metadata. Copy the example configuration to initialize `company_profile.json`:
+- **Windows (PowerShell):**
+  ```powershell
+  Copy-Item company_profile.example.json company_profile.json
+  ```
+- **Linux / macOS (Bash):**
+  ```bash
+  cp company_profile.example.json company_profile.json
+  ```
 
-To guarantee zero workstation drift across any environment, the repository includes an automated onboarding bootstrap script. It validates your local toolchain, initializes the isolated `.venv`, installs locked backend dependencies, verifies all 42 Pytest tests (Quality Gate in ~1.5s), and installs the frontend dependencies:
+Edit `company_profile.json` with your enterprise parameters:
+```json
+{
+  "company_name": "ExampleCorp Technologies",
+  "domain": "your-company-domain.tech",
+  "support_email": "support@your-company-domain.tech",
+  "operations_manager_email": "ops-manager@your-company-domain.tech",
+  "sla_proactive_warning_minutes": 10,
+  "slack_webhook_url": "https://hooks.slack.com/services/...",
+  "slack_notification_policy": "CRITICAL_AND_SLA_ONLY"
+}
+```
+
+#### Declarative Parameter Specification:
+- **`company_name`:** Legal or operating name of the enterprise tenant.
+- **`domain`:** Apex domain registered in Namecheap, get.tech, or Route 53 (used for email routing and DNS records).
+- **`support_email`:** Public support inbox where inquiries arrive and outbound responses originate.
+- **`operations_manager_email`:** Internal destination where supervisor SLA warnings, breach escalations, and executive compliance alerts are delivered.
+- **`sla_proactive_warning_minutes`:** Baseline early-warning threshold in minutes (default: `10`; dynamically scaled proportionally for P2/P3/P4 tickets).
+- **`slack_webhook_url`:** *(Optional)* Incoming Slack webhook URL for real-time ChatOps Block Kit alert cards. Leave as `""` to disable Slack.
+- **`slack_notification_policy`:** Governs which ticket events trigger immediate Slack alerts:
+  - `"CRITICAL_AND_SLA_ONLY"` *(Enterprise Default)*: Only P1/P2 incidents trigger immediate alerts on arrival (avoiding alert fatigue). All priorities trigger on SLA Warning ($T - 20\%$) and SLA Breach.
+  - `"ALL_INQUIRIES"` *(Startup / Demo Mode)*: Every incoming ticket (P1, P2, P3, P4) immediately posts an alert card to Slack upon creation.
+
+> **Zero-Code Architecture:** Modifying `company_profile.json` automatically grounds Amazon Bedrock AI prompts in-context, configures notification dispatchers, and populates Terraform variables during cloud deployment without requiring changes to application source code.
+
+---
+
+### Step 3: 1-Click Automated Developer Environment Bootstrap (`setup-dev`)
+Run the local environment setup script. It validates toolchains, initializes an isolated `.venv`, installs locked backend dependencies, verifies all 43 Pytest unit tests, and compiles the React Vite frontend:
 
 - **Windows (PowerShell):**
   ```powershell
   .\scripts\setup-dev.ps1
   ```
-- **macOS / Linux (Bash):**
+- **Linux / macOS (Bash):**
   ```bash
   chmod +x scripts/*.sh
   ./scripts/setup-dev.sh
   ```
 
-> **Zero-Touch Tooling Integration:** The repository includes a standardized [`pyproject.toml`](pyproject.toml) (PEP 518 / PEP 621) declaring `[tool.pyright] venvPath = "."` and `venv = ".venv"`. Language servers (Pyright, Pyrefly, Pylance) and IDEs automatically bind to the project's virtual virtual environment upon bootstrap with zero manual configuration or editor overrides.
+> **Zero-Touch Tooling Integration:** The repository includes a standardized [`pyproject.toml`](pyproject.toml) declaring `[tool.pyright] venvPath = "."` and `venv = ".venv"`. Language servers (Pyright, Pyrefly, Pylance) and IDEs bind to the virtual environment automatically with zero manual configuration.
 
 ---
 
-### Step 3: Launch Local Services (Dual-Terminal Workflow)
-
-Once the bootstrap script outputs `ENVIRONMENT SETUP COMPLETE! (0 Errors)`, launch the backend and frontend in two dedicated terminal tabs:
+### Step 4: Launch Local Development Services (Dual-Terminal Workflow)
+Once the bootstrap script outputs `ENVIRONMENT SETUP COMPLETE! (0 Errors)`, launch the backend and frontend in two separate terminal windows:
 
 #### Terminal 1 — FastAPI Backend Service (Port 8000)
 - **Windows (PowerShell):**
   ```powershell
   .\.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
   ```
-- **macOS / Linux (Bash):**
+- **Linux / macOS (Bash):**
   ```bash
   ./.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
   ```
@@ -482,39 +521,32 @@ npm run dev
 
 ---
 
-### Step 4: Accessing the Application & Verified Endpoints
-
-Once both services are running, access the following endpoints:
+### Step 5: Verify Local Operations Console & RBAC Personas
+Open your browser to access the local endpoints:
 
 | Service / Interface | Local URL | Description |
 | :--- | :--- | :--- |
 | **Operations Console (Frontend)** | [http://localhost:5173/](http://localhost:5173/) | Real-time triage console with Taskly hero visualizations, ITIL queue table, theme selector, conversation thread timeline, and SLA paused state banners. |
 | **Interactive API Documentation (Swagger)** | [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) | OpenAPI interactive explorer for triage, claiming, overrides, messages, customer replies, and webhooks. |
 | **ReDoc Technical Specification** | [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc) | Clean formal API documentation schema. |
-| **Container Liveness Probe** | [http://127.0.0.1:8000/health/live](http://127.0.0.1:8000/health/live) | Kubernetes/ECS container orchestrator liveness probe. |
+| **Container Liveness Probe** | [http://127.0.0.1:8000/health/live](http://127.0.0.1:8000/health/live) | Container orchestrator liveness health probe. |
 | **Container Readiness Probe** | [http://127.0.0.1:8000/health/ready](http://127.0.0.1:8000/health/ready) | Verifies database connectivity and readiness for traffic ingress. |
 
-> **Resilient Dual-Mode Architecture:** If local AWS credentials or cloud RDS instances are not provisioned, the frontend client automatically detects backend connectivity and activates **resilient offline fallback**, populating the complete canonical enterprise dataset so all 20 business features (SLA tickers, sentiment analysis, NER entity copying, conversation threads, customer replies, MLOps overrides) can be evaluated instantly with zero cloud dependencies.
-
----
-
-### Step 5: Testing Personas & Role-Based Access Control (RBAC)
-
+#### Testing Personas & Role-Based Access Control (RBAC):
 In the top navigation header of the frontend console, use the **Operator Switcher** to toggle between personas enforcing Cognito RFC 6238 TOTP MFA policies:
-- **`Carlos M.` (`Tier1_Agents`):** Standard customer support engineer authorized to claim inquiries, dispatch customer messages, request information (pausing SLA), and resolve tickets.
+- **`Carlos M.` (`Tier1_Agents`):** Support specialist authorized to claim inquiries, dispatch customer messages, request information (pausing SLA), and resolve tickets.
 - **`Alex Rivera` (`Operations_Managers`):** Support supervisor authorized to execute MLOps category overrides with mandatory engineering justification and inspect full audit ledgers.
 
 ---
 
-## 6. Omnichannel Ingestion Simulator
-
-You can inject realistic customer communications across all 5 inbound channels using the included test harness:
+### Step 6: Inject Inbound Omnichannel Traffic (Test Simulator)
+Simulate realistic customer communications across all channels to verify live AI triage, priority queues, and ChatOps notifications:
 
 ```bash
-# Test all omnichannel scenarios (Email, Web Form, Trustpilot, Google Reviews, Billing)
+# Inject all omnichannel scenarios (Email, Web Form, Trustpilot, Google Reviews, Billing)
 python scripts/seed_inquiries.py --host http://127.0.0.1:8000 --scenario all
 
-# Test specific scenarios
+# Inject specific scenarios
 python scripts/seed_inquiries.py --scenario p1_outage       # Triggers P1 Critical SLA (1h MTTR, 15m FRT)
 python scripts/seed_inquiries.py --scenario churn_threat    # Triggers Churn Risk Escalation to P2 (4h MTTR, 1h FRT)
 python scripts/seed_inquiries.py --scenario billing_dispute # Triggers Stripe Chargeback Ingestion
@@ -522,11 +554,73 @@ python scripts/seed_inquiries.py --scenario billing_dispute # Triggers Stripe Ch
 
 ---
 
-## 7. Omnichannel Integrations, Notifications & Alert Destinations
+### Step 7: 1-Click AWS Cloud Production Deployment (`deploy-infra`)
+Deploy the full enterprise infrastructure to your AWS account. The automated script provisions all 12 Terraform modules over AWS PrivateLink, builds the container image, pushes it to Amazon ECR, and executes an Amazon ECS Fargate Spot deployment:
+
+- **Windows (PowerShell):**
+  ```powershell
+  .\scripts\deploy-infra.ps1
+  ```
+- **Linux / macOS (Bash):**
+  ```bash
+  ./scripts/deploy-infra.sh
+  ```
+
+#### What the Deployment Script Automates:
+1. Dynamically reads `domain` and `support_email` from `company_profile.json`.
+2. Synchronizes `terraform/environments/dev/terraform.tfvars`.
+3. Provisions 12 Terraform modules: VPC PrivateLink (8 Interface Endpoints + S3 Gateway), RDS PostgreSQL 16 (isolated subnets), ECS Fargate Spot with X-Ray sidecar, Application Load Balancer, Cognito User Pool with TOTP MFA, Route 53, and Amazon SES.
+4. Outputs the 4 mandatory registrar DNS records.
+5. Builds the production Docker image, pushes to Amazon ECR, and updates the ECS Fargate service.
+
+---
+
+### Step 8: Configure Registrar DNS Records (Custom Domains)
+Configure the following records in your domain registrar (e.g. get.tech, Namecheap, Route 53) to complete Amazon SES verification and email delivery:
+
+| Record Type | Host / Name | Target / Points To | Priority / TTL | Purpose |
+| :--- | :--- | :--- | :--- | :--- |
+| **MX** | `@` | `inbound-smtp.eu-west-1.amazonaws.com` | `10` (TTL 300) | Routes inbound SMTP emails directly to Amazon SES |
+| **TXT** (SPF) | `@` | `"v=spf1 include:amazonses.com ~all"` | TTL 300 | Authorizes Amazon SES mail servers to send on behalf of domain |
+| **TXT** (SES) | `_amazonses` | `<ses_domain_verification_token>` | TTL 300 | Proves domain ownership (from `terraform apply` output) |
+| **CNAME** (x3) | `<token>._domainkey` | `<token>.dkim.amazonses.com` | TTL 300 | Easy DKIM cryptographic signing keys (from `terraform apply` output) |
+
+---
+
+### Step 9: Clean Cloud Teardown Guarantee (0.00 € Residual Billing)
+When evaluation or demonstration is complete, destroy all provisioned AWS cloud infrastructure to prevent ongoing charges:
+
+- **Windows (PowerShell):**
+  ```powershell
+  .\scripts\teardown-infra.ps1
+  ```
+- **Linux / macOS (Bash):**
+  ```bash
+  ./scripts/teardown-infra.sh
+  ```
+
+The script automatically empties versioned S3 buckets (`force_destroy = true`), purges ECR container images, deletes the ECS cluster, tears down RDS PostgreSQL (`skip_final_snapshot = true`), and removes all VPC Endpoints, guaranteeing **0.00 € residual spend**.
+
+---
+
+### Quick CLI Command Summary
+
+| Operational Action | Windows PowerShell | Linux / macOS Bash |
+| :--- | :--- | :--- |
+| **1-Click Local Dev Setup** | `.\scripts\setup-dev.ps1` | `./scripts/setup-dev.sh` |
+| **Run Backend Service** | `.\.venv\Scripts\uvicorn app.main:app --reload` | `./.venv/bin/uvicorn app.main:app --reload` |
+| **Run Frontend Console** | `cd frontend && npm run dev` | `cd frontend && npm run dev` |
+| **Run Omnichannel Simulator** | `python scripts/seed_inquiries.py --scenario all` | `python3 scripts/seed_inquiries.py --scenario all` |
+| **1-Click AWS Production Deploy**| `.\scripts\deploy-infra.ps1` | `./scripts/deploy-infra.sh` |
+| **1-Click Clean Cloud Teardown** | `.\scripts\teardown-infra.ps1` | `./scripts/teardown-infra.sh` |
+
+---
+
+## 6. Omnichannel Integrations & Notification Alert Architecture
 
 Customer Inquiry Manager features an authentic, enterprise-grade omnichannel ingestion and alert routing architecture powered by **Amazon SES**, **Amazon SNS**, and modular Terraform infrastructure.
 
-### 7.1 Omnichannel Ingestion Pipeline (4 Core Sources)
+### 6.1 Inbound Omnichannel Ingestion Pipeline (4 Core Sources)
 
 The platform ingests customer communications across 4 distinct enterprise channels, executing single-pass Bedrock triage and deterministic ITIL priority calculation:
 
@@ -539,104 +633,26 @@ The platform ingests customer communications across 4 distinct enterprise channe
 
 ---
 
-### 7.2 Outbound Notifications & Operational Alert Destinations
+### 6.2 Outbound Notifications & Slack ChatOps Alert Routing
 
 All outbound communications and system alerts are dynamically routed based on declarative parameters in `company_profile.json`:
 
 | Event / Notification Type | Trigger Condition | Destination / Recipient Channel | Origin / Sender Identity | Operational Purpose |
 | :--- | :--- | :--- | :--- | :--- |
 | **Customer Reply / Request Info** | Operator dispatches `REPLY` or `REQUEST_INFO` | Customer personal email (`customer_email`) | `support_email` declared in `company_profile.json` | Delivers helpful resolution or requests diagnostic artifacts; embeds ticket ID for thread matching. |
-| **Proactive SLA Warning** | Impending deadline (`0 < remaining <= 600s`) | `operations_manager_email` declared in `company_profile.json` | System SLA Watcher (`support_email`) | **Incident Prevention:** Alerts supervisor 10 minutes prior to breach so tickets can be reassigned. |
-| **Reactive SLA Breach** | Overdue ticket (`now > sla_deadline_at`) | `operations_manager_email` + Amazon SNS Ops Topic | System SLA Watcher (`support_email`) | Immediate escalation to management when a contractual resolution window is violated. |
+| **Proactive SLA Warning** | Impending deadline (`remaining <= 20-25% of SLA`) | `operations_manager_email` + Slack Webhook | System SLA Watcher (`support_email`) | **Incident Prevention:** Alerts supervisor early (15m P1, 48m P2, 2.4h P3, 4.8h P4) to reassign tickets before penalties hit. |
+| **Reactive SLA Breach** | Overdue ticket (`now > sla_deadline_at`) | `operations_manager_email` + Amazon SNS + Slack Webhook | System SLA Watcher (`support_email`) | Immediate critical escalation to management and ChatOps when a contractual resolution window is violated. |
 | **Queue Compliance Drop** | Queue health falls below target (`< 95.0%`) | `operations_manager_email` (Executive Alert) | System SLA Watcher (`support_email`) | Alerts leadership to systemic queue degradation; protected by 15-minute anti-fatigue cooldown. |
-| **P1 Emergency Outage** | Ingestion of P1 ticket (`urgency >= 4, impact >= 3`) | Amazon SNS Ops Topic (`customer-inquiry-manager-ops-alerts-dev`) | Ingestion Engine | Immediate ChatOps / pager broadcast to on-call engineering team. |
+| **P1 Emergency Outage** | Ingestion of P1 ticket (`urgency >= 4, impact >= 3`) | Amazon SNS Ops Topic + Slack Webhook | Ingestion Engine | Immediate ChatOps / pager broadcast to on-call engineering team. |
+| **P2 High Incident** | Ingestion of P2 ticket (`urgency >= 3, impact >= 2`) | Amazon SNS Ops Topic + Slack Webhook | Ingestion Engine | Urgent operational notification for degraded business services or high churn risk accounts. |
+| **Routine Inquiries (P3/P4)** | Ingestion of routine P3/P4 inquiries | Operations Console Queue (or Slack if policy is `ALL_INQUIRIES`) | Ingestion Engine | Standard queue processing by scheduled agents; protected by automated SLA warning safety net. |
 
 ---
 
-### 7.3 Zero-Code Tenant Onboarding: The Cloner Experience
-
-Anyone cloning this repository can configure their enterprise tenant in **3 simple steps with zero code edits**:
-
-#### Step 1: Declare Business Metadata in `company_profile.json`
-Edit **ONLY** `company_profile.json` (or copy from `company_profile.example.json`):
-```json
-{
-  "company_name": "ExampleCorp Technologies",
-  "domain": "example-corp.tech",
-  "support_email": "support@example-corp.tech",
-  "operations_manager_email": "ops-manager@example-corp.tech",
-  "sla_proactive_warning_minutes": 10
-}
-```
-* **`domain`:** Your apex domain registered in get.tech, Namecheap, or Route 53.
-* **`support_email`:** The public mailbox where customer inquiries arrive and from which outbound notifications originate.
-* **`operations_manager_email`:** The internal email address where all SLA warnings, breach escalations, and executive compliance alerts are delivered.
-
-#### Step 2: Run Local Development Bootstrap
-```powershell
-# Windows
-.\scripts\setup-dev.ps1
-
-# Linux / macOS
-chmod +x scripts/*.sh && ./scripts/setup-dev.sh
-```
-The script initializes `.venv`, installs dependencies, passes 42 Pytest tests, compiles the frontend, and runs 100% locally with **0.00 € cloud costs**.
-
-#### Step 3: Run Automated AWS Cloud Deployment
-```powershell
-# Windows
-.\scripts\deploy-infra.ps1
-
-# Linux / macOS
-./scripts/deploy-infra.sh
-```
-The deployment script:
-1. Automatically reads `domain` and `support_email` from `company_profile.json`.
-2. Synchronizes `terraform/environments/dev/terraform.tfvars`.
-3. Provisions all 12 Terraform modules (VPC PrivateLink, ECS Fargate Spot, RDS PostgreSQL, Cognito, Route 53, SES).
-4. Prints the 4 DNS records (MX, SPF, TXT, 3x CNAME) to configure in your domain registrar.
-5. Builds the production Docker image, pushes it to Amazon ECR, and rolls out the ECS task definition.
-
-#### Step 4: Clean Teardown Guarantee (0.00 € Residual Cost)
-```powershell
-# Windows
-.\scripts\teardown-infra.ps1
-
-# Linux / macOS
-./scripts/teardown-infra.sh
-```
-Purges S3 buckets, empties ECR container images, and executes `terraform destroy`, guaranteeing **0.00 € residual billing**.
-
----
-
-### 7.4 Registrar DNS Records Contract
-
-Configure the following records in your DNS manager (e.g. `manage.get.tech`, Namecheap, Route 53):
-
-| Record Type | Host / Name | Target / Points To | Priority / TTL | Purpose |
-| :--- | :--- | :--- | :--- | :--- |
-| **MX** | `@` | `inbound-smtp.eu-west-1.amazonaws.com` | `10` (TTL 300) | Routes all inbound SMTP traffic directly to Amazon SES |
-| **TXT** (SPF) | `@` | `"v=spf1 include:amazonses.com ~all"` | TTL 300 | Authorizes Amazon SES mail servers |
-| **TXT** (SES) | `_amazonses` | `<ses_domain_verification_token>` | TTL 300 | Proves domain ownership (from `terraform apply` output) |
-| **CNAME** (x3) | `<token>._domainkey` | `<token>.dkim.amazonses.com` | TTL 300 | Easy DKIM signing tokens (from `terraform apply` output) |
-
----
-
-## 8. AWS Cloud Deployment & Teardown Commands Reference
-
-| Action | Windows PowerShell | Linux / macOS Bash |
-| :--- | :--- | :--- |
-| **Local Dev Setup** | `.\scripts\setup-dev.ps1` | `./scripts/setup-dev.sh` |
-| **Cloud Production Deploy** | `.\scripts\deploy-infra.ps1` | `./scripts/deploy-infra.sh` |
-| **Clean Teardown (0.00 €)** | `.\scripts\teardown-infra.ps1` | `./scripts/teardown-infra.sh` |
-| **Omnichannel Simulator** | `python scripts/seed_inquiries.py --scenario all` | `python3 scripts/seed_inquiries.py --scenario all` |
-
----
-
-## 9. Security & Policy-as-Code Compliance
+## 7. Security, Policy-as-Code & Quality Gates (CI/CD Pipeline)
 
 The CI/CD pipeline enforces automated security gates in AWS CodeBuild before any container image is pushed to ECR:
-- **Pytest:** 100% unit and integration test pass rate (42 automated tests) across database claiming, conversation threads, SLA pause/resume, proactive SLA warnings, SLA breach watcher daemon, operations scheduling endpoints, and auth flows.
+- **Pytest:** 100% unit and integration test pass rate (43 automated tests) across database claiming, conversation threads, SLA pause/resume, proactive SLA warnings, SLA breach watcher daemon, operations scheduling endpoints, notification policies, and auth flows.
 - **Semgrep SAST:** Scans Python code for OWASP Top 10 vulnerabilities.
 - **Conftest (OPA):** Enforces Open Policy Agent guardrails prohibiting NAT Gateways and unencrypted storage.
 - **KICS (Checkmarx):** Scans Terraform HCL files for security misconfigurations.
