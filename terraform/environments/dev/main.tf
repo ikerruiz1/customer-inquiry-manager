@@ -85,19 +85,21 @@ module "alb" {
 
 # 8. ECS Fargate Spot Dual-Container Cluster & Tasks
 module "ecs" {
-  source                  = "../../modules/ecs"
-  project_name            = var.project_name
-  environment             = var.environment
-  private_subnet_ids      = module.vpc.private_subnet_ids
-  ecs_tasks_sg_id         = module.security_groups.ecs_tasks_sg_id
-  target_group_blue_arn   = module.alb.target_group_blue_arn
-  execution_role_arn      = module.iam.execution_role_arn
-  task_role_arn           = module.iam.task_role_arn
-  db_secret_arn           = module.rds.secret_arn
-  db_address              = module.rds.address
-  attachments_bucket_name = module.s3.attachments_bucket_name
-  user_pool_id            = module.cognito.user_pool_id
-  app_client_id           = module.cognito.client_id
+  source                       = "../../modules/ecs"
+  project_name                 = var.project_name
+  environment                  = var.environment
+  private_subnet_ids           = module.vpc.private_subnet_ids
+  ecs_tasks_sg_id              = module.security_groups.ecs_tasks_sg_id
+  target_group_blue_arn        = module.alb.target_group_blue_arn
+  execution_role_arn           = module.iam.execution_role_arn
+  task_role_arn                = module.iam.task_role_arn
+  db_secret_arn                = module.rds.secret_arn
+  db_address                   = module.rds.address
+  attachments_bucket_name      = module.s3.attachments_bucket_name
+  user_pool_id                 = module.cognito.user_pool_id
+  app_client_id                = module.cognito.client_id
+  alb_arn_suffix               = module.alb.alb_arn_suffix
+  target_group_blue_arn_suffix = module.alb.target_group_blue_arn_suffix
 }
 
 # 9. CloudWatch Metrics, Alarms, Dashboard & Outbound SNS Topics

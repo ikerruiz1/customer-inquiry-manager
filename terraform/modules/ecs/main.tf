@@ -43,9 +43,15 @@ resource "aws_ecs_cluster_capacity_providers" "main" {
   capacity_providers = ["FARGATE_SPOT", "FARGATE"]
 
   default_capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
-    weight            = 100
+    capacity_provider = "FARGATE"
+    weight            = 1
     base              = 1
+  }
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 3
+    base              = 0
   }
 }
 
@@ -162,9 +168,15 @@ resource "aws_ecs_service" "main" {
   desired_count   = 2
 
   capacity_provider_strategy {
-    capacity_provider = "FARGATE_SPOT"
-    weight            = 100
+    capacity_provider = "FARGATE"
+    weight            = 1
     base              = 1
+  }
+
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE_SPOT"
+    weight            = 3
+    base              = 0
   }
 
   network_configuration {
@@ -192,5 +204,72 @@ resource "aws_ecs_service" "main" {
 
   tags = {
     Name = "${var.project_name}-${var.environment}-service"
+  }
+}
+
+# ------------------------------------------------------------------------------
+# ECS Application Auto Scaling: Multi-Metric Proactive + Defensive Policies
+# ------------------------------------------------------------------------------
+resource "aws_appautoscaling_target" "ecs" {
+  max_capacity       = 6
+  min_capacity       = 2
+  resource_id        = "service/${aws_ecs_cluster.main.name}/${aws_ecs_service.main.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+# 1. Leading Indicator: ALB Request Count Per Target (Proactive Traffic Ingress Scaling)
+resource "aws_appautoscaling_policy" "ecs_alb_requests" {
+  count              = var.alb_arn_suffix != "" && var.target_group_blue_arn_suffix != "" ? 1 : 0
+  name               = "${var.project_name}-${var.environment}-alb-requests-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ALBRequestCountPerTarget"
+      resource_label         = "${var.alb_arn_suffix}/${var.target_group_blue_arn_suffix}"
+    }
+    target_value       = 500.0 # Scales out when inquiries exceed 500 req/target/min
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 30 # Aggressive scale-out for inbound traffic bursts
+  }
+}
+
+# 2. Reactive Compute Safeguard: Average CPU Utilization
+resource "aws_appautoscaling_policy" "ecs_cpu" {
+  name               = "${var.project_name}-${var.environment}-cpu-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
+    target_value       = 70.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
+  }
+}
+
+# 3. OOM Safeguard: Average Memory Utilization (Protects against Python heap bloat)
+resource "aws_appautoscaling_policy" "ecs_memory" {
+  name               = "${var.project_name}-${var.environment}-memory-scaling"
+  policy_type        = "TargetTrackingScaling"
+  resource_id        = aws_appautoscaling_target.ecs.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs.service_namespace
+
+  target_tracking_scaling_policy_configuration {
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageMemoryUtilization"
+    }
+    target_value       = 80.0
+    scale_in_cooldown  = 300
+    scale_out_cooldown = 60
   }
 }
