@@ -192,20 +192,20 @@ class InboundEmailPoller:
                     await post_customer_reply(inquiry_id=inquiry.id, payload=reply_payload, db=db)
                     return
 
-            # No ticket reference matched: create new inquiry
-            from app.api.v1.inquiries import process_and_persist_inquiry
-            new_inquiry = InquiryCreate(
-                customer_name=customer_name or "External Customer",
-                customer_email=customer_email or "unknown@external.com",
-                channel=ChannelEnum.EMAIL,
-                subject=subject,
-                body=body,
+            # No ticket reference matched: enqueue to SQS FIFO buffer
+            from app.services.sqs_service import get_sqs_service
+            sqs = get_sqs_service()
+            tracking_id = await sqs.send_inquiry(
+                {
+                    "channel": ChannelEnum.EMAIL.value,
+                    "customer_name": customer_name or "External Customer",
+                    "customer_email": customer_email or "unknown@external.com",
+                    "subject": subject,
+                    "body": body,
+                },
+                group_id="email",
             )
-            from app.services.sns_service import get_sns_service
-            bedrock = get_bedrock_service()
-            sns = get_sns_service()
-            created = await process_and_persist_inquiry(new_inquiry, db, bedrock, sns)
-            logger.info(f"Created new Ticket #{created.id} from external inbound email with priority {created.priority}")
+            logger.info(f"Enqueued external inbound email into SQS FIFO buffer: tracking_id={tracking_id}")
 
 
 # Singleton instance

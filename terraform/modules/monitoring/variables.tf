@@ -24,3 +24,15 @@ variable "alb_arn_suffix" {
   type        = string
   description = "ALB ARN suffix for CloudWatch metric dimensions"
 }
+
+variable "inquiries_queue_name" {
+  type        = string
+  description = "Primary SQS FIFO queue name for CloudWatch monitoring"
+  default     = ""
+}
+
+variable "inquiries_dlq_name" {
+  type        = string
+  description = "SQS DLQ name for CloudWatch monitoring"
+  default     = ""
+}

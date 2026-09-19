@@ -41,9 +41,15 @@ async def lifespan(app: FastAPI):
     sla_watcher = get_sla_breach_watcher()
     sla_watcher.start()
 
+    # Start enterprise SQS FIFO consumer worker daemon
+    from app.services.sqs_consumer import get_sqs_consumer
+    sqs_consumer = get_sqs_consumer()
+    sqs_consumer.start()
+
     yield
 
     logger.info("Executing graceful application shutdown and disposing database connections...")
+    await sqs_consumer.stop()
     await sla_watcher.stop()
     await email_poller.stop()
     await engine.dispose()

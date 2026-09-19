@@ -111,7 +111,9 @@ resource "aws_ecs_task_definition" "main" {
         { name = "COGNITO_USER_POOL_ID", value = var.user_pool_id },
         { name = "COGNITO_APP_CLIENT_ID", value = var.app_client_id },
         { name = "BEDROCK_MODEL_ID", value = "eu.anthropic.claude-haiku-4-5-20251001-v1:0" },
-        { name = "AWS_XRAY_DAEMON_ADDRESS", value = "127.0.0.1:2000" }
+        { name = "AWS_XRAY_DAEMON_ADDRESS", value = "127.0.0.1:2000" },
+        { name = "SQS_INQUIRIES_QUEUE_URL", value = var.sqs_inquiries_queue_url },
+        { name = "SQS_INQUIRIES_DLQ_URL", value = var.sqs_inquiries_dlq_url }
       ]
 
       secrets = [

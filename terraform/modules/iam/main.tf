@@ -119,6 +119,18 @@ resource "aws_iam_policy" "task_app_permissions" {
           "xray:GetSamplingTargets",
         ]
         Resource = ["*"]
+      },
+      # Amazon SQS FIFO Ingestion Buffer & Dead-Letter Queue
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:SendMessage",
+          "sqs:ReceiveMessage",
+          "sqs:DeleteMessage",
+          "sqs:GetQueueAttributes",
+          "sqs:ChangeMessageVisibility",
+        ]
+        Resource = ["arn:aws:sqs:*:*:${var.project_name}-${var.environment}-*"]
       }
     ]
   })

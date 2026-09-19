@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     SNS_ALERTS_TOPIC_ARN: Optional[str] = None
     SNS_CUSTOMER_RECEIPTS_TOPIC_ARN: Optional[str] = None
 
+    # Amazon SQS FIFO Decoupled Ingestion Buffer & Dead-Letter Queue
+    SQS_INQUIRIES_QUEUE_URL: Optional[str] = None
+    SQS_INQUIRIES_DLQ_URL: Optional[str] = None
+    SQS_CONSUMER_ENABLED: bool = True
+    SQS_CONSUMER_BATCH_SIZE: int = 10
+    SQS_CONSUMER_POLL_INTERVAL_SECONDS: float = 1.0
+
     # Inbound Omnichannel Webhook Secrets
     TRUSTPILOT_WEBHOOK_SECRET: Optional[str] = "dev-trustpilot-webhook-secret"
     GOOGLE_REVIEWS_WEBHOOK_SECRET: Optional[str] = "dev-google-reviews-webhook-secret"

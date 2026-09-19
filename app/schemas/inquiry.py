@@ -88,6 +88,22 @@ class InquiryCreate(BaseModel):
     body: str = Field(..., min_length=1, description="Unstructured customer inquiry text")
 
 
+class InquiryQueuedResponse(BaseModel):
+    """Response returned when an inquiry is buffered asynchronously in Amazon SQS FIFO."""
+
+    status: str = Field(default="QUEUED", description="Queue status indicator")
+    channel: ChannelEnum = Field(..., description="Inbound communication channel")
+    tracking_id: str = Field(..., description="Unique client idempotency or SQS tracking identifier")
+    message: str = Field(
+        default="Inquiry successfully buffered in Amazon SQS FIFO for AI triage.",
+        description="User-facing status confirmation",
+    )
+    queued_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="UTC timestamp of queue ingestion",
+    )
+
+
 class InquiryClaim(BaseModel):
     """Atomic claim request by an authenticated support agent."""
     pass
