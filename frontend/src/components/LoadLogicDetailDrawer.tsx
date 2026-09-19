@@ -17,7 +17,6 @@ import {
   MessageSquare,
   Pause,
   Play,
-  Sparkles,
 } from 'lucide-react';
 import {
   getAuditLogs,
@@ -77,7 +76,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [showAuditLogs, setShowAuditLogs] = useState<boolean>(false);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState<boolean>(false);
   const [dispatchToast, setDispatchToast] = useState<string | null>(null);
 
   // Derive conversation state
@@ -172,7 +170,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
 
   const handleSelectAction = async (newType: MessageActionEnum) => {
     setActionType(newType);
-    setIsGeneratingDraft(true);
     try {
       const draft = await getCopilotDraft(ticket.id, newType);
       if (draft) {
@@ -180,8 +177,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
       }
     } catch (err) {
       console.warn('Failed to fetch copilot draft for action:', err);
-    } finally {
-      setIsGeneratingDraft(false);
     }
   };
 
@@ -553,9 +548,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                   Conversation Thread ({messages.length || 1})
                 </span>
               </div>
-              <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                ITIL Multi-Turn Audit Trail
-              </span>
             </div>
 
             {/* Message Bubble List */}
@@ -796,21 +788,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                   Action & Response Composer
                 </span>
               </div>
-              {ticket.suggested_strategy && (
-                <span
-                  style={{
-                    backgroundColor: '#ECF4EE',
-                    color: '#0C0D0D',
-                    border: '1px solid rgba(12, 13, 13, 0.08)',
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    padding: '2px 8px',
-                    borderRadius: '9999px',
-                  }}
-                >
-                  AI Strategy: {ticket.suggested_strategy}
-                </span>
-              )}
             </div>
 
             {/* Outbound Dispatch Confirmation Toast */}
@@ -957,35 +934,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
                     </button>
                   </>
                 )}
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectAction(actionType)}
-                  disabled={isGeneratingDraft}
-                  style={{
-                    marginLeft: 'auto',
-                    padding: '4px 12px',
-                    borderRadius: '9999px',
-                    fontSize: '0.73rem',
-                    fontWeight: 700,
-                    backgroundColor: '#ECFDF5',
-                    color: '#047857',
-                    border: '1px solid #A7F3D0',
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease',
-                  }}
-                  title="Generate dynamic Bedrock draft tailored specifically to this action mode"
-                >
-                  <Sparkles size={12} />
-                  <span>
-                    {isGeneratingDraft
-                      ? 'Generating Draft...'
-                      : `✨ AI Draft: ${actionType === 'REQUEST_INFO' ? 'Info Request' : actionType === 'INTERNAL_NOTE' ? 'Internal Note' : isAwaitingCustomer ? 'Follow-Up' : 'Reply'}`}
-                  </span>
-                </button>
               </div>
             )}
 
@@ -1316,24 +1264,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 ITIL Dual SLA Tracking
-              </span>
-              <span
-                style={{
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  padding: '2px 8px',
-                  borderRadius: '9999px',
-                  backgroundColor: ticket.priority === PriorityEnum.P1 || ticket.priority === PriorityEnum.P2
-                    ? 'rgba(239, 68, 68, 0.1)'
-                    : 'rgba(59, 130, 246, 0.1)',
-                  color: ticket.priority === PriorityEnum.P1 || ticket.priority === PriorityEnum.P2
-                    ? '#DC2626'
-                    : '#2563EB',
-                }}
-              >
-                {ticket.priority === PriorityEnum.P1 || ticket.priority === PriorityEnum.P2
-                  ? '24/7/365 Continuous Clock'
-                  : 'Business Hours (9:00 - 18:00)'}
               </span>
             </div>
 

@@ -242,7 +242,7 @@ export const TasklySlaCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHan
         <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
           <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Target Threshold</span>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#111827' }}>
-            ≥ 95.0% <span style={{ fontSize: '0.68rem', color: '#047857', fontWeight: 700 }}>ITIL Tier-1</span>
+            ≥ 95.0%
           </span>
         </div>
       </div>
@@ -418,7 +418,7 @@ export const TasklyMttrCard: React.FC<TasklyKpiCardProps> = ({ inquiries, dragHa
         <div style={{ backgroundColor: '#F8FAFC', padding: '6px 10px', borderRadius: '8px', border: '1px solid rgba(12, 13, 13, 0.05)' }}>
           <span style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Autonomous Routing</span>
           <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#047857' }}>
-            {zeroTouchPct}% <span style={{ fontSize: '0.68rem', color: '#047857', fontWeight: 700 }}>Zero-Touch</span>
+            {zeroTouchPct}%
           </span>
         </div>
       </div>
