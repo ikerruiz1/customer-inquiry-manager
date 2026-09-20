@@ -11,13 +11,36 @@ An enterprise-grade, cloud-native customer inquiry ingestion, AI triage, and Hum
 - **Multi-Turn Conversation Threads & Bi-Directional Ingestion:** Complete customer inquiry lifecycle tracking with chronological message feeds (`InquiryMessage`), supporting external customer replies, operator responses, private co-pilot notes, and automated thread appending.
 - **SLA Clock Freezing Engine (`PENDING_CUSTOMER`):** Automated SLA timer freezing when an operator requests additional customer information (`REQUEST_INFO`). Dynamically resumes the countdown and extends the resolution deadline (`sla_deadline_at`) upon customer reply ingestion.
 - **Cloud-Native SLA Lifecycle & Multi-Event Alerting:** Decoupled architecture leveraging AWS EventBridge Scheduler to trigger the idempotent `POST /api/v1/operations/audit-sla-lifecycle` endpoint every 1 minute in cloud production (and an asynchronous lifespan daemon for $0.00 spend in local dev). Features a comprehensive multi-event matrix: P1 emergency ChatOps broadcast, key account churn threat escalation, proactive T-10m early warnings to prevent contractual breach penalties, reactive SLA breach notifications, and executive queue health alerting (< 95.0%) with a 15-minute anti-fatigue cooldown.
-- **Zero-Internet Egress (PrivateLink Architecture):** Eliminates NAT Gateways, reducing cloud costs by ~$65/month per AZ. All ECS Fargate tasks communicate with AWS services exclusively via **8 Interface VPC Endpoints** (`ecr.api`, `ecr.dkr`, `logs`, `secretsmanager`, `bedrock-runtime`, `cognito-idp`, `sns`, `xray`) and an **Amazon S3 Gateway Endpoint**.
+- **Enterprise Asynchronous Buffering (Amazon SQS FIFO):** Omnichannel machine webhooks enqueue payloads in `< 15ms` (`HTTP 202 Accepted`) into `inquiries.fifo` with deterministic SHA-256 deduplication and dead-letter queue (`inquiries-dlq.fifo`), eliminating synchronous LLM blocking during traffic spikes and consuming via an asynchronous Leaky-Bucket rate governor.
+- **Zero-Internet Egress (PrivateLink Architecture):** Eliminates NAT Gateways, reducing cloud costs by ~$65/month per AZ. All ECS Fargate tasks communicate with AWS services exclusively via **9 Interface VPC Endpoints** (`ecr.api`, `ecr.dkr`, `logs`, `secretsmanager`, `bedrock-runtime`, `cognito-idp`, `sns`, `xray`, `sqs`) and an **Amazon S3 Gateway Endpoint**.
 - **3-Tier Network Isolation:** Dedicated public subnets for the Application Load Balancer, private subnets for ECS Fargate compute and VPC Endpoints, and isolated database subnets for Amazon RDS PostgreSQL 16 with local-only routing (`10.0.0.0/16 -> local`).
 - **Amazon Cognito Zero-Trust Authentication:** Enforces RFC 6238 Software Token Multi-Factor Authentication (TOTP) without SMS telecom dependencies. Features granular Role-Based Access Control (RBAC) separating `Tier1_Agents` and `Operations_Managers`.
 - **ECS Fargate Spot Dual-Container Topology:** High-availability container architecture utilizing Fargate Spot (`capacity_provider_strategy`) for ~70% compute cost reduction, coupled with an official `aws-xray-daemon` sidecar for distributed tracing.
 - **FinOps S3 Multi-Tier Lifecycle:** Automated transitions for customer attachments (`Standard` -> `Glacier Instant Retrieval` at Day 60) and ALB access logs (`Standard` -> `Glacier` at Day 30 -> Expiration at Day 90).
 - **Clean Teardown Guarantee (0.00 € Residual Cost):** Built with `force_destroy = true` across all S3 buckets and `skip_final_snapshot = true` / `deletion_protection = false` on RDS to guarantee clean destruction without orphaned resources.
 - **100% Native AWS Developer Tools CI/CD:** Unified under **AWS CodePipeline, AWS CodeBuild, and AWS CodeDeploy** with Canary traffic shifting (`Canary10Percent5Minutes`) for zero-downtime Blue/Green deployments.
+
+---
+
+### Master Architecture Execution Map (48 Chronological Flows across 10 Functional Blocks)
+
+The complete lifecycle of the platform is formally orchestrated into **48 chronological point-to-point flows** across 10 unified functional blocks. Each block is mapped to a single dedicated color in Excalidraw for instant cognitive scannability:
+
+| Block | Functional Domain | Unified Color | Excalidraw Hex | Flow Range | Key Architectural Milestones |
+| :--- | :--- | :--- | :---: | :---: | :--- |
+| **Block 1** | IaC, Policy-as-Code Governance & Remote State | **Brown / Copper** | #9A3412 | 1 – 5 | Conftest OPA Rego, KICS Checkmarx, Terraform CLI, S3 Remote State & KMS CMK Encryption |
+| **Block 2** | CI/CD & DevSecOps 100% AWS Native | **Orange** | #EA580C | 6 – 15 | CodePipeline, CodeBuild, Pytest (47 tests), Semgrep SAST, Trivy SCA, Syft SBOM, ECR, CodeDeploy Canary Blue/Green, ECS Fargate Spot |
+| **Block 3** | Fargate Bootstrapping, PrivateLink & DB | **Purple** | #7C3AED | 16 – 20 | ECR PrivateLink layer pull, Secrets Manager, S3 Gateway company profile, RDS PostgreSQL 16 connection pool, RDS KMS CMK volume encryption |
+| **Block 4** | Perimeter Ingress, DNS, WAF & Authentication | **Royal Blue** | #2563EB | 21 – 29 | Route 53 DNS Alias, ACM TLS 1.3, AWS WAF inspection, React Console ingress, Cognito TOTP MFA redirect, FastAPI PrivateLink JWKS verification, Omnichannel Webhooks |
+| **Block 5** | SQS FIFO Decoupling, Bedrock & Attachments | **Emerald Green** | #059669 | 30 – 34 | SQS FIFO Enqueue (<15ms, HTTP 202), SQS FIFO Dequeue / Leaky-Bucket Rate Governor, Bedrock Converse API (Claude Haiku 4.5 / Nova 2 Lite + Guardrails), S3 Attachments, S3 Attachments KMS CMK Encryption |
+| **Block 6** | Asynchronous Dispatch, ChatOps & Email | **Magenta / Pink** | #DB2777 | 35 – 37 | SNS PrivateLink Domain Event Publish, Amazon SES Customer SLA Receipt, Slack #ops-critical P1/P2 ChatOps Webhook |
+| **Block 7** | Human-in-the-Loop Operations & SLA Clock | **Teal / Turquoise** | #0D9488 | 38 – 39 | Support Agent HITL Review, 3-Mode Copilot Drafts (REPLY, REQUEST_INFO, INTERNAL_NOTE), ITIL SLA Clock Pause & Resume, RDS PostgreSQL Message & Audit Trail Persistence |
+| **Block 8** | Distributed Telemetry & Observability | **Salmon** | #FA8072 | 40 – 44 | FastAPI UDP to ws-xray-daemon Sidecar, Sidecar HTTPS to X-Ray PrivateLink, CloudWatch Logs & EMF Metrics, ALB Access Logs to S3, RDS Enhanced Monitoring & Performance Insights |
+| **Block 9** | Storage FinOps & S3/Glacier Lifecycle | **White** | #FFFFFF | 45 – 47 | S3 Attachments to Glacier Instant Retrieval (Day 60), S3 ALB Logs to Glacier Flexible Retrieval (Day 30), Automated Permanent Purge (Day 90 GDPR Data Minimization) |
+| **Block 10** | Resilience, Elastic Auto-Scaling & Load Testing | **Light Brown** | #D97706 | 48 | Distributed k6 Load Test (15–50 VUs) validating ECS Fargate Spot Target-Tracking Auto-Scaling and SQS FIFO Surge Absorption |
+
+> [!NOTE]
+> For the exhaustive, step-by-step technical breakdown of all 48 individual flows (including precise origin/destination technology pairs, network protocols, precedence triggers, and cryptographic operations), consult the authoritative blueprint in [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md#5-master-architecture-execution-map-48-chronological-flows-across-10-functional-blocks).
 
 ---
 
@@ -80,7 +103,7 @@ customer-inquiry-manager/
 │   ├── public/themes/                # GPU-accelerated wallpapers (Cobalt, Cloudscape, etc.)
 │   └── package.json                  # Frontend dependencies
 ├── docs/                             # Authoritative Documentation & Decision Memory
-│   ├── PROJECT_CONTEXT.md            # 3-Tier topology blueprint & 47 chronological flows
+│   ├── PROJECT_CONTEXT.md            # 3-Tier topology blueprint & 48 chronological flows across 10 blocks
 │   └── ARCHITECTURE_DECISIONS_AND_QA.md # Historical ledger of engineering debates & resolutions
 ├── company_profile.json              # Domain grounding document (ITIL matrix, business hours & refund policies)
 ├── Dockerfile                        # Production Python 3.12-slim runtime container (Non-root security)
@@ -569,7 +592,7 @@ Deploy the full enterprise infrastructure to your AWS account. The automated scr
 #### What the Deployment Script Automates:
 1. Dynamically reads `domain` and `support_email` from `company_profile.json`.
 2. Synchronizes `terraform/environments/dev/terraform.tfvars`.
-3. Provisions 12 Terraform modules: VPC PrivateLink (8 Interface Endpoints + S3 Gateway), RDS PostgreSQL 16 (isolated subnets), ECS Fargate Spot with X-Ray sidecar, Application Load Balancer, Cognito User Pool with TOTP MFA, Route 53, and Amazon SES.
+3. Provisions 12 Terraform modules: VPC PrivateLink (9 Interface Endpoints + S3 Gateway), RDS PostgreSQL 16 (isolated subnets), ECS Fargate Spot with X-Ray sidecar, Application Load Balancer, Cognito User Pool with TOTP MFA, Route 53, and Amazon SES.
 4. Outputs the 4 mandatory registrar DNS records.
 5. Builds the production Docker image, pushes to Amazon ECR, and updates the ECS Fargate service.
 
@@ -652,7 +675,7 @@ All outbound communications and system alerts are dynamically routed based on de
 ## 7. Security, Policy-as-Code & Quality Gates (CI/CD Pipeline)
 
 The CI/CD pipeline enforces automated security gates in AWS CodeBuild before any container image is pushed to ECR:
-- **Pytest:** 100% unit and integration test pass rate (43 automated tests) across database claiming, conversation threads, SLA pause/resume, proactive SLA warnings, SLA breach watcher daemon, operations scheduling endpoints, notification policies, and auth flows.
+- **Pytest:** 100% unit and integration test pass rate (47 automated tests) across database claiming, conversation threads, SLA pause/resume, proactive SLA warnings, SLA breach watcher daemon, operations scheduling endpoints, notification policies, and auth flows.
 - **Semgrep SAST:** Scans Python code for OWASP Top 10 vulnerabilities.
 - **Conftest (OPA):** Enforces Open Policy Agent guardrails prohibiting NAT Gateways and unencrypted storage.
 - **KICS (Checkmarx):** Scans Terraform HCL files for security misconfigurations.
