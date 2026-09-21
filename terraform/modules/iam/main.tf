@@ -99,7 +99,16 @@ resource "aws_iam_policy" "task_app_permissions" {
         Action = [
           "sns:Publish",
         ]
-        Resource = ["arn:aws:sns:*:*:*"]
+        Resource = ["arn:aws:sns:*:*:${var.project_name}-${var.environment}-*"]
+      },
+      # Amazon SES Outbound Email Dispatch
+      {
+        Effect = "Allow"
+        Action = [
+          "ses:SendEmail",
+          "ses:SendRawEmail",
+        ]
+        Resource = ["*"]
       },
       # CloudWatch Embedded Metric Format (EMF)
       {

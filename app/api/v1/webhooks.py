@@ -23,6 +23,26 @@ def verify_hmac_sha256(secret: str, body_bytes: bytes, signature_header: Optiona
     return hmac.compare_digest(computed_signature, signature_header)
 
 
+def verify_stripe_signature(body_bytes: bytes, sig_header: Optional[str], secret: Optional[str]) -> bool:
+    """Cryptographic verification of Stripe webhook signature header (t=timestamp,v1=signature)."""
+    if not secret:
+        return True  # Dev / local mode
+    if not sig_header:
+        return False
+    try:
+        elements = dict(item.split("=", 1) for item in sig_header.split(","))
+        timestamp = elements.get("t")
+        sig = elements.get("v1")
+        if not timestamp or not sig:
+            return verify_hmac_sha256(secret, body_bytes, sig_header)
+        signed_payload = f"{timestamp}.".encode("utf-8") + body_bytes
+        computed = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(computed, sig)
+    except Exception:
+        return False
+
+
+
 @router.post("/email", response_model=InquiryQueuedResponse, status_code=status.HTTP_202_ACCEPTED)
 async def inbound_email_webhook(
     payload: Dict[str, Any],
@@ -146,9 +166,21 @@ async def inbound_google_reviews_webhook(
 @router.post("/billing", response_model=InquiryQueuedResponse, status_code=status.HTTP_202_ACCEPTED)
 async def inbound_stripe_billing_webhook(
     request: Request,
+    stripe_signature: Optional[str] = Header(None, alias="Stripe-Signature"),
     sqs: SQSService = Depends(get_sqs_service),
 ):
     """High-priority financial dispute / chargeback webhook from Stripe or payment gateway."""
+    body_bytes = await request.body()
+
+    # Cryptographic signature validation in production/staging environments
+    if settings.STRIPE_WEBHOOK_SECRET and settings.ENVIRONMENT != "dev":
+        if not verify_stripe_signature(body_bytes, stripe_signature, settings.STRIPE_WEBHOOK_SECRET):
+            logger.warning("Unauthorized Stripe-Signature received on Stripe billing webhook endpoint.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing Stripe webhook signature",
+            )
+
     payload = await request.json()
     event_type = payload.get("type", "charge.dispute.created")
     data_obj = payload.get("data", {}).get("object", {})
