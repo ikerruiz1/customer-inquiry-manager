@@ -23,18 +23,33 @@ def verify_hmac_sha256(secret: str, body_bytes: bytes, signature_header: Optiona
     return hmac.compare_digest(computed_signature, signature_header)
 
 
-def verify_stripe_signature(body_bytes: bytes, sig_header: Optional[str], secret: Optional[str]) -> bool:
-    """Cryptographic verification of Stripe webhook signature header (t=timestamp,v1=signature)."""
+def verify_stripe_signature(
+    body_bytes: bytes,
+    sig_header: Optional[str],
+    secret: Optional[str],
+    tolerance_seconds: int = 300,
+) -> bool:
+    """Cryptographic verification of Stripe webhook signature header (t=timestamp,v1=signature) with replay prevention."""
     if not secret:
         return True  # Dev / local mode
     if not sig_header:
         return False
     try:
+        import time
+
         elements = dict(item.split("=", 1) for item in sig_header.split(","))
         timestamp = elements.get("t")
         sig = elements.get("v1")
         if not timestamp or not sig:
             return verify_hmac_sha256(secret, body_bytes, sig_header)
+
+        # Replay attack prevention: verify timestamp freshness (default 300 seconds)
+        if abs(time.time() - int(timestamp)) > tolerance_seconds:
+            logger.warning(
+                f"Stripe webhook timestamp {timestamp} exceeds tolerance window of {tolerance_seconds}s (replay attack detected)."
+            )
+            return False
+
         signed_payload = f"{timestamp}.".encode("utf-8") + body_bytes
         computed = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(computed, sig)

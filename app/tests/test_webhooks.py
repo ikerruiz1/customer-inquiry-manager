@@ -200,6 +200,19 @@ async def test_stripe_billing_webhook_signature_rejection_in_prod(client: AsyncC
             headers={"Content-Type": "application/json", "Stripe-Signature": valid_header},
         )
         assert res_valid.status_code == 202
+
+        # 4. Webhook replay attack: valid signature but expired timestamp (> 300s old)
+        stale_timestamp = str(int(time.time()) - 600)  # 10 minutes old
+        stale_payload = f"{stale_timestamp}.".encode("utf-8") + raw_body
+        stale_sig = hmac.new(secret.encode("utf-8"), stale_payload, hashlib.sha256).hexdigest()
+        stale_header = f"t={stale_timestamp},v1={stale_sig}"
+
+        res_replay = await client.post(
+            "/api/v1/webhooks/billing",
+            content=raw_body,
+            headers={"Content-Type": "application/json", "Stripe-Signature": stale_header},
+        )
+        assert res_replay.status_code == 401
     finally:
         settings.ENVIRONMENT = old_env
 

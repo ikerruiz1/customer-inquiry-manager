@@ -69,6 +69,11 @@ resource "aws_db_instance" "main" {
   auto_minor_version_upgrade = true
   copy_tags_to_snapshot      = true
 
+  # Automated Backups & Continuous Point-in-Time Recovery (PITR)
+  backup_retention_period = 7
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "Sun:04:30-Sun:05:30"
+
   # Clean Teardown Guarantees (0.00 € Residual Cost)
   skip_final_snapshot = true
   deletion_protection = false
