@@ -206,6 +206,11 @@ async def test_presigned_attachment_lifecycle(client: AsyncClient):
     assert "download_url" in download_data
     assert object_key in download_data["download_url"]
 
+    # 3. Unauthorized prefix / path traversal attempt must be rejected with HTTP 400
+    malicious_res = await client.get("/api/v1/attachments/presigned-download/unauthorized-bucket-prefix/secret.env")
+    assert malicious_res.status_code == 400
+    assert "path traversal or unauthorized object prefix" in malicious_res.json()["detail"].lower()
+
 
 @pytest.mark.asyncio
 async def test_reset_demo_inquiries_allowed_in_dev(client: AsyncClient):

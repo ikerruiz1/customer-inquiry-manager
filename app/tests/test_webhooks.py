@@ -158,3 +158,48 @@ async def test_stripe_billing_webhook_ingestion(client: AsyncClient):
     assert data["status"] == "QUEUED"
     assert data["channel"] == "BILLING"
     assert "tracking_id" in data
+
+
+@pytest.mark.asyncio
+async def test_stripe_billing_webhook_signature_rejection_in_prod(client: AsyncClient):
+    """Verify unsigned or invalid Stripe webhook signatures are rejected with HTTP 401 in non-dev."""
+    import hashlib
+    import hmac
+    import json
+    import time
+    from app.core.config import settings
+
+    old_env = settings.ENVIRONMENT
+    try:
+        settings.ENVIRONMENT = "prod"
+        payload = {"type": "charge.dispute.created", "data": {"object": {"id": "dp_test"}}}
+        raw_body = json.dumps(payload).encode("utf-8")
+
+        # 1. Missing signature header
+        res_missing = await client.post("/api/v1/webhooks/billing", content=raw_body, headers={"Content-Type": "application/json"})
+        assert res_missing.status_code == 401
+
+        # 2. Invalid signature header
+        res_invalid = await client.post(
+            "/api/v1/webhooks/billing",
+            content=raw_body,
+            headers={"Content-Type": "application/json", "Stripe-Signature": "t=12345,v1=invalid_signature"},
+        )
+        assert res_invalid.status_code == 401
+
+        # 3. Valid signature header
+        timestamp = str(int(time.time()))
+        signed_payload = f"{timestamp}.".encode("utf-8") + raw_body
+        secret = settings.STRIPE_WEBHOOK_SECRET or "dev-stripe-webhook-secret"
+        computed_sig = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+        valid_header = f"t={timestamp},v1={computed_sig}"
+
+        res_valid = await client.post(
+            "/api/v1/webhooks/billing",
+            content=raw_body,
+            headers={"Content-Type": "application/json", "Stripe-Signature": valid_header},
+        )
+        assert res_valid.status_code == 202
+    finally:
+        settings.ENVIRONMENT = old_env
+

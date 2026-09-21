@@ -1,7 +1,7 @@
 """Customer attachment presigned S3 upload and download endpoints."""
 import uuid
 from typing import Dict, Any
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from app.core.security import require_tier1_agent
@@ -40,5 +40,12 @@ async def get_presigned_download_url(
     current_user: dict = Depends(require_tier1_agent),
 ) -> Dict[str, str]:
     """Generate a presigned S3 GET URL allowing an authorized agent to view an attachment."""
+    # Path traversal and namespace boundary validation (CWE-22)
+    if ".." in object_key or not object_key.startswith("inquiry-attachments/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid attachment object key: path traversal or unauthorized object prefix detected",
+        )
     url = s3_service.generate_presigned_download_url(object_key)
     return {"download_url": url, "object_key": object_key}
+

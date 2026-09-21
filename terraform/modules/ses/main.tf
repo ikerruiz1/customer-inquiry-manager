@@ -44,8 +44,8 @@ resource "aws_s3_bucket_public_access_block" "ses_inbound" {
 # S3 Bucket Policy: Authorize Amazon SES service principal to deliver inbound MIME payloads
 data "aws_iam_policy_document" "ses_s3_policy" {
   statement {
-    sid     = "AllowSESPuts"
-    effect  = "Allow"
+    sid    = "AllowSESPuts"
+    effect = "Allow"
     principals {
       type        = "Service"
       identifiers = ["ses.amazonaws.com"]

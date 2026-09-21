@@ -176,7 +176,7 @@ resource "aws_vpc_endpoint" "s3" {
 }
 
 # ------------------------------------------------------------------------------
-# AWS PrivateLink: 8 Interface VPC Endpoints (Zero-Internet Egress)
+# AWS PrivateLink: 9 Interface VPC Endpoints (Zero-Internet Egress)
 # ------------------------------------------------------------------------------
 locals {
   interface_services = [
