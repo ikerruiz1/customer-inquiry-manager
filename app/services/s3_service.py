@@ -15,7 +15,13 @@ class S3Service:
     def __init__(self):
         self.bucket = settings.S3_ATTACHMENTS_BUCKET
         self.region = settings.AWS_REGION
-        config = Config(region_name=self.region, signature_version="s3v4")
+        config = Config(
+            region_name=self.region,
+            signature_version="s3v4",
+            connect_timeout=5,
+            read_timeout=15,
+            retries={"max_attempts": 3, "mode": "adaptive"},
+        )
         self.client = boto3.client("s3", config=config)
 
     def generate_presigned_upload_url(
