@@ -90,7 +90,7 @@ class EmailService:
 
         # 1. Try Amazon SES (if in cloud or AWS credentials present)
         ses_client = self._get_ses_client()
-        if ses_client and settings.ENVIRONMENT.lower() != "dev":
+        if ses_client:
             try:
                 ses_res = ses_client.send_email(
                     Source=self.from_email,
@@ -252,7 +252,7 @@ class EmailService:
         }
 
         ses_client = self._get_ses_client()
-        if ses_client and settings.ENVIRONMENT.lower() != "dev":
+        if ses_client:
             try:
                 ses_res = ses_client.send_email(
                     Source=self.from_email,

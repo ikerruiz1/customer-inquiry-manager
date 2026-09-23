@@ -124,22 +124,28 @@ if [ "$DNS_ONLY" = true ]; then
     cd ../../../
 
     echo -e "\n${C_BOLD}${C_GREEN}==============================================================================${C_RESET}"
-    echo -e "${C_BOLD}${C_GREEN}  ROUTE 53 PUBLIC HOSTED ZONE DEPLOYED SUCCESSFULLY!${C_RESET}"
+    echo -e "${C_BOLD}${C_GREEN}  ROUTE 53 PUBLIC HOSTED ZONE PROVISIONED SUCCESSFULLY!${C_RESET}"
     echo -e "${C_BOLD}${C_GREEN}==============================================================================${C_RESET}"
     echo -e "  Domain:        ${C_CYAN}${ACTIVE_DOMAIN}${C_RESET}"
     echo -e "  Target Region: ${C_CYAN}${AWS_REGION}${C_RESET}\n"
-    echo -e "${C_BOLD}${C_YELLOW}  ACTION REQUIRED IN YOUR REGISTRAR (get.tech, Namecheap, GoDaddy, etc.):${C_RESET}"
-    echo -e "${C_BOLD}${C_YELLOW}  Go to your domain dashboard -> DNS -> Nameservers -> Edit Nameservers${C_RESET}"
-    echo -e "${C_BOLD}${C_YELLOW}  Replace existing nameservers with these 4 authoritative AWS Route 53 servers:${C_RESET}\n"
-    
+    echo -e "${C_BOLD}${C_YELLOW}  AUTHORITATIVE AWS ROUTE 53 NAME SERVERS:${C_RESET}"
     python -c "
 import json
 ns = json.loads('''$RAW_NS''')
 for i, s in enumerate(ns, 1):
-    print(f'    {i}. {s}')
+    print(f'    Nameserver {i} : {s}')
 "
-    echo -e "\n${C_GREEN}  Once updated, AWS Route 53 manages all MX, SPF, DKIM, and ALB records automatically.${C_RESET}"
-    echo -e "  When ready, run ./scripts/deploy-infra.sh to deploy the full application stack.\n"
+    echo -e "\n${C_BOLD}${C_YELLOW}  ACTION REQUIRED: DELEGATE IN YOUR REGISTRAR (get.tech, Namecheap, GoDaddy):${C_RESET}"
+    echo -e "  1. Sign in to your registrar dashboard (e.g. https://manage.get.tech)"
+    echo -e "  2. Go to: Domain Management -> ${ACTIVE_DOMAIN} -> Nameservers (or DNS Management)"
+    echo -e "  3. Select: 'Custom Nameservers' (replacing default/shared DNS)"
+    echo -e "  4. Paste the 4 AWS servers into Nameserver 1 through Nameserver 4"
+    echo -e "  5. Click 'Save Changes' (Do NOT purchase Titan Email; AWS SES handles mail natively)\n"
+    echo -e "${C_BOLD}${C_YELLOW}  VERIFICATION COMMAND (Run in terminal to verify global delegation):${C_RESET}"
+    echo -e "    ${C_CYAN}nslookup -type=NS ${ACTIVE_DOMAIN} 8.8.8.8${C_RESET}\n"
+    echo -e "${C_BOLD}${C_GREEN}  NEXT COMMAND (Once verified, run this to deploy the full application):${C_RESET}"
+    echo -e "    ${C_GREEN}./scripts/deploy-infra.sh${C_RESET}"
+    echo -e "${C_BOLD}${C_GREEN}==============================================================================${C_RESET}\n"
     exit 0
 fi
 

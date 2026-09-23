@@ -113,23 +113,30 @@ if ($DnsOnly) {
 
     Write-Host ""
     Write-Host "==============================================================================" -ForegroundColor Green
-    Write-Host "  ROUTE 53 PUBLIC HOSTED ZONE DEPLOYED SUCCESSFULLY!" -ForegroundColor Green
+    Write-Host "  ROUTE 53 PUBLIC HOSTED ZONE PROVISIONED SUCCESSFULLY!" -ForegroundColor Green
     Write-Host "==============================================================================" -ForegroundColor Green
-    Write-Host "  Domain: $activeDomain" -ForegroundColor White
+    Write-Host "  Domain:        $activeDomain" -ForegroundColor White
     Write-Host "  Target Region: $targetRegion" -ForegroundColor White
     Write-Host ""
-    Write-Host "  ACTION REQUIRED IN YOUR REGISTRAR (get.tech, Namecheap, GoDaddy, etc.):" -ForegroundColor Yellow
-    Write-Host "  Go to your domain dashboard -> DNS -> Nameservers -> Edit Nameservers" -ForegroundColor Yellow
-    Write-Host "  Replace existing nameservers with these 4 authoritative AWS Route 53 servers:" -ForegroundColor Yellow
-    Write-Host ""
+    Write-Host "  AUTHORITATIVE AWS ROUTE 53 NAME SERVERS:" -ForegroundColor Yellow
     $i = 1
     foreach ($ns in $rawNs) {
-        Write-Host "    $i. $ns" -ForegroundColor Cyan
+        Write-Host "    Nameserver $i : $ns" -ForegroundColor Cyan
         $i++
     }
     Write-Host ""
-    Write-Host "  Once updated, AWS Route 53 manages all MX, SPF, DKIM, and ALB records automatically." -ForegroundColor Green
-    Write-Host "  When ready, run .\scripts\deploy-infra.ps1 to deploy the full application stack." -ForegroundColor White
+    Write-Host "  ACTION REQUIRED: DELEGATE IN YOUR REGISTRAR (get.tech, Namecheap, GoDaddy):" -ForegroundColor Yellow
+    Write-Host "  1. Sign in to your registrar dashboard (e.g. https://manage.get.tech)" -ForegroundColor White
+    Write-Host "  2. Go to: Domain Management -> $activeDomain -> Nameservers (or DNS Management)" -ForegroundColor White
+    Write-Host "  3. Select: 'Custom Nameservers' (replacing default/shared DNS)" -ForegroundColor White
+    Write-Host "  4. Paste the 4 AWS servers into Nameserver 1 through Nameserver 4" -ForegroundColor White
+    Write-Host "  5. Click 'Save Changes' (Do NOT purchase Titan Email; AWS SES handles mail natively)" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  VERIFICATION COMMAND (Run in terminal to verify global delegation):" -ForegroundColor Yellow
+    Write-Host "    Resolve-DnsName -Name '$activeDomain' -Type NS | Select-Object -ExpandProperty NameHost" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  NEXT COMMAND (Once verified, run this to deploy the full application):" -ForegroundColor Green
+    Write-Host "    .\scripts\deploy-infra.ps1" -ForegroundColor Green
     Write-Host "==============================================================================" -ForegroundColor Green
     exit 0
 }
