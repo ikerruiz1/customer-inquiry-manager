@@ -45,6 +45,11 @@ else {
     Write-Host "  OK: .venv already exists. Reusing existing environment." -ForegroundColor Green
 }
 
+if (-not (Test-Path "company_profile.json") -and (Test-Path "company_profile.example.json")) {
+    Copy-Item "company_profile.example.json" "company_profile.json"
+    Write-Host "  OK: Initialized company_profile.json from company_profile.example.json" -ForegroundColor Green
+}
+
 # 3. Backend Dependency Installation
 Write-Host ""
 Write-Host "[3/5] Installing Backend Dependencies into .venv..." -ForegroundColor Yellow

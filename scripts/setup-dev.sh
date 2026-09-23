@@ -36,6 +36,11 @@ else
     echo -e "  ${C_GREEN}✓ .venv already exists. Reusing existing environment.${C_RESET}"
 fi
 
+if [ ! -f "company_profile.json" ] && [ -f "company_profile.example.json" ]; then
+    cp company_profile.example.json company_profile.json
+    echo -e "  ${C_GREEN}✓ Initialized company_profile.json from company_profile.example.json${C_RESET}"
+fi
+
 # 3. Backend Dependency Installation
 echo -e "\n${C_BOLD}${C_YELLOW}[3/5] Installing Backend Dependencies into .venv...${C_RESET}"
 ./.venv/bin/pip install -q --upgrade pip
