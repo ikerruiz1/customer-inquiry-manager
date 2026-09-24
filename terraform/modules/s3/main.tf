@@ -11,7 +11,7 @@ resource "random_id" "bucket_suffix" {
 # ------------------------------------------------------------------------------
 resource "aws_s3_bucket" "attachments" {
   bucket        = "${var.project_name}-${var.environment}-attachments-${random_id.bucket_suffix.hex}"
-  force_destroy = true # Clean Teardown Guarantee (0.00 € residual cost)
+  force_destroy = true # 1-Click Clean Teardown
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-attachments"

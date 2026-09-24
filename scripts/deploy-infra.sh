@@ -39,8 +39,15 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+COMPANY_NAME="Customer Inquiry Manager"
+if [ -f "company_profile.json" ]; then
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+elif [ -f "company_profile.example.json" ]; then
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.example.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+fi
+
 echo -e "\n${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
-echo -e "${C_BOLD}${C_CYAN}  ExampleCorp CIM: 1-Click Infrastructure & Container Bootstrap${C_RESET}"
+echo -e "${C_BOLD}${C_CYAN}  ${COMPANY_NAME}: 1-Click Infrastructure & Container Bootstrap${C_RESET}"
 echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}\n"
 
 # 1. Prerequisite Checks
@@ -62,7 +69,7 @@ if [ ! -f "company_profile.json" ] && [ -f "company_profile.example.json" ]; the
     cp company_profile.example.json company_profile.json
 fi
 
-CURRENT_DOMAIN=$(grep -o '"domain": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4 || echo "example-corp.tech")
+CURRENT_DOMAIN=$(grep -o '"domain": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4 || echo "your-company-domain.tech")
 CURRENT_EMAIL=$(grep -o '"support_email": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4 || echo "support@${CURRENT_DOMAIN}")
 
 ACTIVE_DOMAIN="$CURRENT_DOMAIN"
@@ -72,7 +79,7 @@ if [ -n "$CUSTOM_DOMAIN" ]; then
     ACTIVE_DOMAIN="$CUSTOM_DOMAIN"
     ACTIVE_EMAIL="${CUSTOM_EMAIL:-support@$ACTIVE_DOMAIN}"
 elif [ -t 0 ]; then
-    echo -e "${C_CYAN}  Configure Custom Domain (e.g. example-corp.tech or your own registrar domain):${C_RESET}"
+    echo -e "${C_CYAN}  Configure Custom Domain (e.g. your-company-domain.tech or your own registrar domain):${C_RESET}"
     read -p "  Enter Domain [Press Enter to keep '$CURRENT_DOMAIN']: " PROMPT_DOMAIN
     if [ -n "$PROMPT_DOMAIN" ]; then
         ACTIVE_DOMAIN="$PROMPT_DOMAIN"
@@ -199,7 +206,7 @@ aws ecs update-service \
   --region "${AWS_REGION}" >/dev/null
 
 echo -e "${C_BOLD}${C_GREEN}==============================================================================${C_RESET}"
-echo -e "${C_BOLD}${C_GREEN}  DEPLOYMENT COMPLETE!${C_RESET}"
-echo -e "${C_BOLD}${C_GREEN}  Access Operations Console at: http://${ALB_DNS}${C_RESET}"
+echo -e "${C_BOLD}${C_GREEN}  ${COMPANY_NAME}: Full Production Deployment Complete!${C_RESET}"
+echo -e "${C_BOLD}${C_GREEN}  Operations Console URL: http://${ALB_DNS}${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}  Inbound emails to ${ACTIVE_EMAIL} will route natively to Amazon SES!${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}==============================================================================${C_RESET}\n"

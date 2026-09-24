@@ -37,6 +37,8 @@ class BedrockService:
     def _load_grounding_context(self) -> str:
         """Load company profile grounding context from local filesystem or container bundle."""
         path = settings.GROUNDING_CONTEXT_PATH
+        if not os.path.exists(path) and os.path.exists("company_profile.example.json"):
+            path = "company_profile.example.json"
         if os.path.exists(path):
             try:
                 with open(path, "r", encoding="utf-8") as f:

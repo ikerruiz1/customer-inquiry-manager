@@ -74,7 +74,7 @@ resource "aws_db_instance" "main" {
   backup_window           = "03:00-04:00"
   maintenance_window      = "Sun:04:30-Sun:05:30"
 
-  # Clean Teardown Guarantees (0.00 € Residual Cost)
+  # 1-Click Clean Teardown
   skip_final_snapshot = true
   deletion_protection = false
 

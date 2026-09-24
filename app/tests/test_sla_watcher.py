@@ -43,7 +43,7 @@ async def test_sla_breach_watcher_escalates_overdue_p1_ticket(
 
     # Initialize daemon and run single audit cycle with isolated db_session
     daemon = SLABreachWatcherDaemon()
-    daemon.manager_email = "ops-manager@example-corp.tech"
+    daemon.manager_email = "ops-manager@company.internal"
     daemon.target_threshold = 95.0
 
     results = await daemon.audit_breaches_and_compliance(db=db_session)

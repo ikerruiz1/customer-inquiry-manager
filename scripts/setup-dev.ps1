@@ -1,12 +1,25 @@
 # ==============================================================================
 # 1-Click Local Developer Environment Bootstrap (Windows PowerShell)
-# Customer Inquiry Manager (ExampleCorp CIM)
+# Customer Inquiry Manager
 # ==============================================================================
 $ErrorActionPreference = "Stop"
 
+$companyName = "Customer Inquiry Manager"
+if (Test-Path "company_profile.json") {
+    try {
+        $p = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
+        if ($p.company_name) { $companyName = $p.company_name }
+    } catch {}
+} elseif (Test-Path "company_profile.example.json") {
+    try {
+        $p = Get-Content "company_profile.example.json" -Raw | ConvertFrom-Json
+        if ($p.company_name) { $companyName = $p.company_name }
+    } catch {}
+}
+
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "  ExampleCorp CIM: 1-Click Local Developer Environment Bootstrap" -ForegroundColor Cyan
+Write-Host "  $($companyName): 1-Click Local Developer Environment Bootstrap" -ForegroundColor Cyan
 Write-Host "==============================================================================" -ForegroundColor Cyan
 Write-Host ""
 

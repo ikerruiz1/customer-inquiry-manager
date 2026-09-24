@@ -86,7 +86,7 @@ class Settings(BaseSettings):
         description="Authoritative customer support inbound email address parsed from company profile",
     )
     COMPANY_NAME: str = Field(
-        default="ExampleCorp Technologies",
+        default="Customer Inquiry Manager",
         description="Authoritative company name parsed from company profile",
     )
     COMPANY_DOMAIN: str = Field(
@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     SLA_TARGET_COMPLIANCE_THRESHOLD: float = 95.0
     SLA_PROACTIVE_WARNING_MINUTES: int = 10
     EXECUTIVE_ESCALATION_COOLDOWN_SECONDS: int = 900  # 15-minute anti-fatigue cooldown
-    OPERATIONS_MANAGER_EMAIL: str = "ops-manager@example-corp.tech"
+    OPERATIONS_MANAGER_EMAIL: str = "ops-manager@company.internal"
     OPERATIONAL_AUTH_TOKEN: str = "cim-operational-secret-token"
     SLACK_WEBHOOK_URL: Optional[str] = None
     SLACK_NOTIFICATION_POLICY: Literal["CRITICAL_AND_SLA_ONLY", "ALL_INQUIRIES"] = "CRITICAL_AND_SLA_ONLY"
@@ -156,9 +156,13 @@ class Settings(BaseSettings):
                 pass
 
         import os, json
-        if os.path.exists(self.GROUNDING_CONTEXT_PATH):
+        profile_path = self.GROUNDING_CONTEXT_PATH
+        if not os.path.exists(profile_path) and os.path.exists("company_profile.example.json"):
+            profile_path = "company_profile.example.json"
+
+        if os.path.exists(profile_path):
             try:
-                with open(self.GROUNDING_CONTEXT_PATH, "r", encoding="utf-8") as f:
+                with open(profile_path, "r", encoding="utf-8") as f:
                     profile_data = json.load(f)
                     if "company_name" in profile_data:
                         self.COMPANY_NAME = profile_data["company_name"]

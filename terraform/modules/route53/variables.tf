@@ -1,7 +1,7 @@
 variable "domain_name" {
   type        = string
   description = "Authoritative apex domain name for the Route 53 public hosted zone"
-  default     = "example-corp.tech"
+  default     = "your-company-domain.tech"
 }
 
 variable "project_name" {

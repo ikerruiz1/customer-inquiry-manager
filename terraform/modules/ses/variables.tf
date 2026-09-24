@@ -13,13 +13,13 @@ variable "environment" {
 variable "domain_name" {
   type        = string
   description = "Authoritative apex or subdomain for inbound SES mail receipt"
-  default     = "example-corp.tech"
+  default     = "your-company-domain.tech"
 }
 
 variable "support_email" {
   type        = string
   description = "Inbound support mailbox address"
-  default     = "support@example-corp.tech"
+  default     = "support@your-company-domain.tech"
 }
 
 variable "aws_region" {

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # 1-Click Local Developer Environment Bootstrap (Linux / macOS)
-# Customer Inquiry Manager (ExampleCorp CIM)
+# Customer Inquiry Manager
 # ==============================================================================
 set -euo pipefail
 
@@ -12,8 +12,15 @@ C_YELLOW="\033[33m"
 C_RED="\033[31m"
 C_CYAN="\033[36m"
 
+COMPANY_NAME="Customer Inquiry Manager"
+if [ -f "company_profile.json" ]; then
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+elif [ -f "company_profile.example.json" ]; then
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.example.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+fi
+
 echo -e "\n${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
-echo -e "${C_BOLD}${C_CYAN}  ExampleCorp CIM: 1-Click Local Developer Environment Bootstrap${C_RESET}"
+echo -e "${C_BOLD}${C_CYAN}  ${COMPANY_NAME}: 1-Click Local Developer Environment Bootstrap${C_RESET}"
 echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}\n"
 
 # 1. Prerequisite Validation

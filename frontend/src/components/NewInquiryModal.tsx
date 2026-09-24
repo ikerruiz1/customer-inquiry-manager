@@ -232,7 +232,7 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
             <strong style={{ color: '#0F172A' }}>
               {typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
                 ? `support@${window.location.hostname.replace(/^(portal\.|app\.|www\.)/, '')}`
-                : 'support@example-corp.tech'}
+                : 'support@company.internal'}
             </strong>
           </span>
           <span style={{ fontSize: '0.68rem', color: '#64748B' }}>
