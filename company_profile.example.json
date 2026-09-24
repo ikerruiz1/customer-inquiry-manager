@@ -1,5 +1,5 @@
 {
-  "company_name": "ExampleCorp Technologies",
+  "company_name": "Example Enterprises Inc.",
   "domain": "your-company-domain.tech",
   "support_email": "support@your-company-domain.tech",
   "operations_manager_email": "ops-manager@your-company-domain.tech",
@@ -17,7 +17,7 @@
     "unregistered_customer_handling": "ACCEPT_WITH_UNVERIFIED_BADGE",
     "quarantine_unregistered": false
   },
-  "description": "Enterprise cloud infrastructure, managed Kubernetes clusters, high-throughput API gateways, and developer platform services.",
+  "description": "Provider of commercial products, digital software applications, and customer support services.",
   "departments": [
     {
       "code": "BILLING",
@@ -33,8 +33,8 @@
     },
     {
       "code": "TECH_SUPPORT",
-      "name": "Technical & Developer Support",
-      "scope": "Platform outages, 5xx server errors, REST API integration errors, webhook delivery timeouts, SDK bugs, and performance degradation.",
+      "name": "Technical & Operational Support",
+      "scope": "System disruptions, 5xx server errors, application integration errors, webhook delivery timeouts, software bugs, and performance degradation.",
       "precedence_rank": 3
     },
     {
@@ -45,7 +45,7 @@
     },
     {
       "code": "SALES",
-      "name": "Enterprise Sales & Commercial Partnerships",
+      "name": "Commercial Sales & Partnerships",
       "scope": "Volume tier discounts, enterprise contract upgrades, bespoke SLA negotiation, procurement reviews, and commercial demo scheduling.",
       "precedence_rank": 5
     },
@@ -57,9 +57,9 @@
     }
   ],
   "precedence_rules": [
-    "Financial disputes (double-billing, disputed charges, refund demands) MUST route to BILLING even if caused by technical API glitches.",
+    "Financial disputes (double-billing, disputed charges, refund demands) MUST route to BILLING even if caused by technical glitches.",
     "Compromised credentials, unauthorized logins, or leaked secrets MUST route to SECURITY even if involving account lockout.",
-    "Service disruptions impacting managed Kubernetes clusters, API gateways, or developer infrastructure route to TECH_SUPPORT.",
+    "System disruptions impacting software applications, service availability, or core platforms route to TECH_SUPPORT.",
     "Authentication failures and TOTP MFA device resets route to ACCOUNTS.",
     "Pricing inquiries and subscription tier upgrades route to SALES.",
     "Vague, unclassifiable, or non-actionable inquiries route to GENERAL with the CLARIFICATION_REQUEST strategy."

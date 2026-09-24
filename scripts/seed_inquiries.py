@@ -185,7 +185,7 @@ def main():
     parser.add_argument("--google-secret", default="", help="Optional header secret for Google Reviews")
     args = parser.parse_args()
 
-    print(f"\n{C_BOLD}{C_CYAN}=== ExampleCorp CIM Omnichannel Traffic Harness ==={C_RESET}")
+    print(f"\n{C_BOLD}{C_CYAN}=== Customer Inquiry Manager: Omnichannel Traffic Harness ==={C_RESET}")
     print(f"Target Host: {args.host}")
     print(f"Scenario:    {args.scenario}")
     print(f"Cycles:      {args.count}\n")

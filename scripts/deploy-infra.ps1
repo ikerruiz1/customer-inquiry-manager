@@ -1,6 +1,6 @@
 # ==============================================================================
 # 1-Click Production Deployment Bootstrap (Windows PowerShell)
-# Customer Inquiry Manager (ExampleCorp CIM)
+# Customer Inquiry Manager
 # Fully Parameterized & Automated (Zero Hardcoded Domain Dependencies)
 # ==============================================================================
 param(
@@ -13,9 +13,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$companyName = "Customer Inquiry Manager"
+if (Test-Path "company_profile.json") {
+    try {
+        $p = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
+        if ($p.company_name) { $companyName = $p.company_name }
+    } catch {}
+} elseif (Test-Path "company_profile.example.json") {
+    try {
+        $p = Get-Content "company_profile.example.json" -Raw | ConvertFrom-Json
+        if ($p.company_name) { $companyName = $p.company_name }
+    } catch {}
+}
+
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "  ExampleCorp CIM: 1-Click Infrastructure & Container Bootstrap (Windows)" -ForegroundColor Cyan
+Write-Host "  $($companyName): 1-Click Infrastructure & Container Bootstrap (Windows)" -ForegroundColor Cyan
 Write-Host "==============================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -35,7 +48,12 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue) -and -not $DnsOnly) 
 }
 
 $awsAccount = (aws sts get-caller-identity --query "Account" --output text).Trim()
-$targetRegion = if ($AwsRegion) { $AwsRegion } elseif ($env:AWS_DEFAULT_REGION) { $env:AWS_DEFAULT_REGION } else { "eu-west-1" }
+$targetRegion = "eu-west-1"
+if ($AwsRegion) {
+    $targetRegion = $AwsRegion
+} elseif ($env:AWS_DEFAULT_REGION) {
+    $targetRegion = $env:AWS_DEFAULT_REGION
+}
 Write-Host "  OK: AWS Authentication confirmed: Account $awsAccount in $targetRegion" -ForegroundColor Green
 Write-Host ""
 
@@ -47,8 +65,14 @@ if (-not (Test-Path "company_profile.json") -and (Test-Path "company_profile.exa
 }
 
 $profileJson = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
-$currentDomain = if ($profileJson.domain) { $profileJson.domain } else { "example-corp.tech" }
-$currentEmail = if ($profileJson.support_email) { $profileJson.support_email } else { "support@$currentDomain" }
+$currentDomain = "your-company-domain.tech"
+if ($profileJson.domain) {
+    $currentDomain = $profileJson.domain
+}
+$currentEmail = "support@$currentDomain"
+if ($profileJson.support_email) {
+    $currentEmail = $profileJson.support_email
+}
 
 # Determine active domain and support email
 $activeDomain = $currentDomain
@@ -56,14 +80,20 @@ $activeEmail = $currentEmail
 
 if ($Domain) {
     $activeDomain = $Domain.Trim()
-    $activeEmail = if ($SupportEmail) { $SupportEmail.Trim() } else { "support@$activeDomain" }
+    $activeEmail = "support@$activeDomain"
+    if ($SupportEmail) {
+        $activeEmail = $SupportEmail.Trim()
+    }
 } elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
-    Write-Host "  Configure Custom Domain (e.g. example-corp.tech or your own registrar domain):" -ForegroundColor Cyan
+    Write-Host "  Configure Custom Domain (e.g. your-company-domain.tech or your own registrar domain):" -ForegroundColor Cyan
     $promptDomain = Read-Host "  Enter Domain [Press Enter to keep '$currentDomain']"
     if ($promptDomain -and $promptDomain.Trim() -ne "") {
         $activeDomain = $promptDomain.Trim()
+        $activeEmail = "support@$activeDomain"
         $promptEmail = Read-Host "  Enter Support Inbound Email [Press Enter for 'support@$activeDomain']"
-        $activeEmail = if ($promptEmail -and $promptEmail.Trim() -ne "") { $promptEmail.Trim() } else { "support@$activeDomain" }
+        if ($promptEmail -and $promptEmail.Trim() -ne "") {
+            $activeEmail = $promptEmail.Trim()
+        }
     }
 }
 
@@ -80,15 +110,16 @@ $profileJson | ConvertTo-Json -Depth 10 | Set-Content "company_profile.json" -En
 Write-Host "  OK: Synchronized company_profile.json with domain: $activeDomain" -ForegroundColor Green
 
 # Automatically write synchronized terraform.tfvars
-$tfvarsContent = @"
-aws_region         = "$targetRegion"
-project_name       = "customer-inquiry-manager"
-environment        = "dev"
-vpc_cidr           = "10.0.0.0/16"
-availability_zones = ["${targetRegion}a", "${targetRegion}b"]
-domain_name        = "$activeDomain"
-support_email      = "$activeEmail"
-"@
+$tfvarsLines = @(
+    "aws_region         = `"$targetRegion`"",
+    "project_name       = `"customer-inquiry-manager`"",
+    "environment        = `"dev`"",
+    "vpc_cidr           = `"10.0.0.0/16`"",
+    "availability_zones = [`"${targetRegion}a`", `"${targetRegion}b`"]",
+    "domain_name        = `"$activeDomain`"",
+    "support_email      = `"$activeEmail`""
+)
+$tfvarsContent = $tfvarsLines -join "`r`n"
 Set-Content "terraform/environments/dev/terraform.tfvars" $tfvarsContent -Encoding UTF8
 Write-Host "  OK: Synchronized terraform/environments/dev/terraform.tfvars" -ForegroundColor Green
 Write-Host ""
@@ -169,6 +200,8 @@ Write-Host "  OK: Infrastructure provisioned successfully." -ForegroundColor Gre
 Write-Host "  - ALB Public DNS:  http://$albDns" -ForegroundColor Cyan
 Write-Host "  - ECR Repository:  $ecrRepo" -ForegroundColor Cyan
 Write-Host "  - Cognito Pool ID: $cognitoPool" -ForegroundColor Cyan
+Write-Host "  - SES Inbound MX:  $sesMx" -ForegroundColor Cyan
+Write-Host "  - SES Token:       $sesVerif" -ForegroundColor Cyan
 Write-Host ""
 
 Write-Host "==============================================================================" -ForegroundColor Yellow
@@ -203,8 +236,8 @@ aws ecs update-service `
 
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Green
-Write-Host "  DEPLOYMENT COMPLETE!" -ForegroundColor Green
-Write-Host "  Access Operations Console at: http://$albDns" -ForegroundColor Green
+Write-Host "  $($companyName): Full Production Deployment Complete!" -ForegroundColor Green
+Write-Host "  Operations Console URL: http://$albDns" -ForegroundColor Green
 Write-Host "  Inbound emails to $activeEmail will route natively to Amazon SES!" -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
 Write-Host ""

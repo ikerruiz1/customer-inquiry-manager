@@ -1,4 +1,4 @@
-# Customer Inquiry Manager (ExampleCorp CIM)
+# Customer Inquiry Manager
 ## Enterprise AI Customer Inquiry & Ticket Triage Platform
 
 An enterprise-grade, cloud-native customer inquiry ingestion, AI triage, and Human-in-the-Loop (HITL) resolution platform built on **Amazon Web Services (AWS)** and modern DevOps/DevSecOps practices.
@@ -17,7 +17,7 @@ An enterprise-grade, cloud-native customer inquiry ingestion, AI triage, and Hum
 - **Amazon Cognito Zero-Trust Authentication:** Enforces RFC 6238 Software Token Multi-Factor Authentication (TOTP) without SMS telecom dependencies. Features granular Role-Based Access Control (RBAC) separating `Tier1_Agents` and `Operations_Managers`.
 - **ECS Fargate Spot Dual-Container Topology:** High-availability container architecture utilizing Fargate Spot (`capacity_provider_strategy`) for ~70% compute cost reduction, coupled with an official `aws-xray-daemon` sidecar for distributed tracing.
 - **FinOps S3 Multi-Tier Lifecycle:** Automated transitions for customer attachments (`Standard` -> `Glacier Instant Retrieval` at Day 60) and ALB access logs (`Standard` -> `Glacier` at Day 30 -> Expiration at Day 90).
-- **Clean Teardown Guarantee (0.00 € Residual Cost):** Built with `force_destroy = true` across all S3 buckets and `skip_final_snapshot = true` / `deletion_protection = false` on RDS to guarantee clean destruction without orphaned resources.
+- **1-Click Clean Teardown:** Built with `force_destroy = true` across all S3 buckets and `skip_final_snapshot = true` / `deletion_protection = false` on RDS to ensure immediate, clean destruction without orphaned cloud resources.
 - **100% Native AWS Developer Tools CI/CD:** Unified under **AWS CodePipeline, AWS CodeBuild, and AWS CodeDeploy** with Canary traffic shifting (`Canary10Percent5Minutes`) for zero-downtime Blue/Green deployments.
 
 ---
@@ -105,7 +105,8 @@ customer-inquiry-manager/
 ├── docs/                             # Authoritative Documentation & Decision Memory
 │   ├── PROJECT_CONTEXT.md            # 3-Tier topology blueprint & 48 chronological flows across 10 blocks
 │   └── ARCHITECTURE_DECISIONS_AND_QA.md # Historical ledger of engineering debates & resolutions
-├── company_profile.json              # Domain grounding document (ITIL matrix, business hours & refund policies)
+├── company_profile.example.json      # Declarative configuration template (ITIL matrix, business hours & refund policies)
+├── company_profile.json              # Local active profile (Auto-generated from template or configured by operator)
 ├── Dockerfile                        # Production Python 3.12-slim runtime container (Non-root security)
 ├── buildspec.yml                     # AWS CodeBuild spec (Pytest, Semgrep SAST, KICS, Trivy, Syft)
 ├── appspec.yaml                      # AWS CodeDeploy spec (ECS Fargate Blue/Green Canary)
@@ -119,8 +120,8 @@ customer-inquiry-manager/
 │   ├── k6-load-test.js               # Load and auto-scaling validation script
 │   ├── deploy-infra.ps1              # 1-Click AWS deployment bootstrap with -DnsOnly support
 │   ├── deploy-infra.sh               # 1-Click AWS deployment bootstrap with --dns-only support
-│   ├── teardown-infra.ps1            # 1-Click clean cloud teardown (0.00 € residual cost)
-│   └── teardown-infra.sh             # 1-Click clean cloud teardown (0.00 € residual cost)
+│   ├── teardown-infra.ps1            # 1-Click clean cloud teardown
+│   └── teardown-infra.sh             # 1-Click clean cloud teardown
 ├── requirements.txt                  # Locked Python dependencies
 ├── pyproject.toml                    # Standard Python project metadata & tool configurations (PEP 518/621)
 ├── LICENSE
@@ -471,34 +472,9 @@ cd customer-inquiry-manager
 
 ---
 
-### Step 2: Initialize Configuration (`company_profile.json`)
+### Step 2: Bootstrap Local Environment & Quality Gate
 
-Copy the environment configuration template:
-
-- **Windows (PowerShell):**
-  ```powershell
-  Copy-Item company_profile.example.json company_profile.json
-  ```
-- **Linux / macOS (Bash):**
-  ```bash
-  cp company_profile.example.json company_profile.json
-  ```
-
-Open `company_profile.json` and set your domain and support email:
-```json
-{
-  "company_name": "Your Company",
-  "domain": "your-company.tech",
-  "support_email": "support@your-company.tech",
-  "operations_manager_email": "ops-manager@your-company.tech"
-}
-```
-
----
-
-### Step 3: Bootstrap Toolchain & Dependencies
-
-Run the automated developer environment setup script to validate toolchains, initialize the Python virtual environment (`.venv`), install locked backend dependencies, execute the 48-test Pytest quality gate, and compile the frontend:
+Run the automated developer setup script. This validates toolchains, initializes the Python virtual environment (`.venv`), installs locked dependencies, creates your local `company_profile.json`, executes the 48-test Pytest quality gate (100% pass), and prepares the frontend:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -512,9 +488,9 @@ Run the automated developer environment setup script to validate toolchains, ini
 
 ---
 
-### Step 4: Provision Route 53 & Delegate Registrar Nameservers
+### Step 3: Provision Route 53 & Delegate Registrar Nameservers
 
-Provision the authoritative AWS Route 53 Public Hosted Zone (~3 seconds, $0.00 compute spend) to retrieve your assigned nameservers:
+Run the pre-flight DNS deployment (~3 seconds, $0.00 compute spend). The script prompts for your custom apex domain (e.g. `your-company.tech`), automatically synchronizes `company_profile.json` and `terraform.tfvars`, and provisions the public hosted zone:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -525,20 +501,21 @@ Provision the authoritative AWS Route 53 Public Hosted Zone (~3 seconds, $0.00 c
   ./scripts/deploy-infra.sh --dns-only
   ```
 
-The command outputs the 4 authoritative AWS Route 53 Name Servers assigned to your domain:
+The terminal prints your 4 authoritative AWS Route 53 Name Servers:
 ```text
-1. ns-842.awsdns-41.net
-2. ns-1823.awsdns-35.co.uk
-3. ns-134.awsdns-16.com
-4. ns-1392.awsdns-46.org
+  AUTHORITATIVE AWS ROUTE 53 NAME SERVERS:
+    Nameserver 1 : ns-842.awsdns-41.net
+    Nameserver 2 : ns-1823.awsdns-35.co.uk
+    Nameserver 3 : ns-134.awsdns-16.com
+    Nameserver 4 : ns-1392.awsdns-46.org
 ```
 
-**Registrar Dashboard Delegation (`get.tech`, Namecheap, GoDaddy):**
-1. Sign in to your domain registrar console (e.g. `manage.get.tech`).
-2. Go to **Domain Management** ➔ `your-company.tech` ➔ **Nameservers**.
-3. Select **Custom Nameservers** and enter the 4 servers into **Nameserver 1** through **Nameserver 4**.
-4. Click **Save Changes**.
-5. Verify delegation propagation directly in terminal:
+**Delegate in your Registrar (get.tech, Namecheap, GoDaddy):**
+1. Sign in to your registrar console (e.g. `manage.get.tech`).
+2. Go to **Domain Management** ➔ your domain ➔ **Nameservers**.
+3. Select **Custom Nameservers** and paste the 4 AWS servers into Nameserver 1 through 4.
+4. Click **Save Changes** *(no third-party mailbox purchase needed; AWS SES handles mail natively)*.
+5. Verify delegation directly in terminal:
    - **Windows (PowerShell):**
      ```powershell
      Resolve-DnsName -Name "your-company.tech" -Type NS | Select-Object -ExpandProperty NameHost
@@ -550,9 +527,9 @@ The command outputs the 4 authoritative AWS Route 53 Name Servers assigned to yo
 
 ---
 
-### Step 5: Deploy Full Production Infrastructure
+### Step 4: Deploy Full Production Infrastructure
 
-Execute the production cloud deployment script to provision all 12 Terraform modules, build and package the production Docker container, push the image to Amazon ECR, and deploy to Amazon ECS Fargate Spot:
+Execute the automated production deployment to provision all 12 Terraform modules (3-tier VPC with Zero-Internet Egress, PrivateLink, RDS PostgreSQL 16, SES, Cognito), compile the production Docker image, push to Amazon ECR, and deploy to Amazon ECS Fargate Spot:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -565,21 +542,25 @@ Execute the production cloud deployment script to provision all 12 Terraform mod
 
 Upon completion, access the live Operations Console at the printed Application Load Balancer endpoint:
 ```text
-Access Operations Console at: http://<alb-dns-name>
+==============================================================================
+  Your Company: Full Production Deployment Complete!
+  Operations Console URL: http://<alb-dns-name>
+  Inbound emails to support@your-company.tech will route natively to Amazon SES!
+==============================================================================
 ```
 
 ---
 
-### Step 6: Operator Authentication & MFA Setup
+### Step 5: Operator Authentication & MFA Setup
 
 1. Open the Application Load Balancer URL in your browser.
-2. Sign in with operator credentials.
+2. Sign in or register a new operator account.
 3. Scan the QR code using a mobile authenticator app (Google Authenticator, 1Password, Authy) to enroll RFC 6238 TOTP MFA.
-4. Enter the 6-digit verification code to access the operational dashboard.
+4. Enter the 6-digit verification code to access the operational command center.
 
 ---
 
-### Step 7: Clean Teardown Guarantee (0.00 € Residual Billing)
+### Step 6: 1-Click Clean Teardown
 
 When your evaluation or demonstration is complete, destroy all provisioned AWS cloud infrastructure to prevent ongoing charges:
 
@@ -619,7 +600,7 @@ For development without AWS infrastructure:
 | **Local Toolchain Setup** | `.\scripts\setup-dev.ps1` | `./scripts/setup-dev.sh` |
 | **DNS Pre-Flight Deployment** | `.\scripts\deploy-infra.ps1 -DnsOnly` | `./scripts/deploy-infra.sh --dns-only` |
 | **Full Production Cloud Deploy** | `.\scripts\deploy-infra.ps1` | `./scripts/deploy-infra.sh` |
-| **Clean Cloud Teardown (0.00 €)** | `.\scripts\teardown-infra.ps1` | `./scripts/teardown-infra.sh` |
+| **1-Click Clean Teardown** | `.\scripts\teardown-infra.ps1` | `./scripts/teardown-infra.sh` |
 | **Run Local Backend Service** | `.\.venv\Scripts\uvicorn app.main:app --reload` | `./.venv/bin/uvicorn app.main:app --reload` |
 | **Run Local Frontend Console** | `cd frontend && npm run dev` | `cd frontend && npm run dev` |
 | **Run Local Test Simulator** | `python scripts/seed_inquiries.py --scenario all` | `python3 scripts/seed_inquiries.py --scenario all` |

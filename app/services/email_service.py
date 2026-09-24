@@ -54,7 +54,7 @@ class EmailService:
         agent_name: str = "Support Specialist",
     ) -> Dict[str, Any]:
         """Dispatch real outbound notification to customer's personal email inbox."""
-        short_id = str(ticket_id)[:8].upper()
+        short_id = ticket_id[:8].upper()
         subject = f"[Ticket #{short_id}] {ticket_subject}"
         is_paused = action_type == "REQUEST_INFO"
 
@@ -78,7 +78,7 @@ class EmailService:
         plain_text = "\n".join(text_lines)
 
         delivery_result = {
-            "ticket_id": str(ticket_id),
+            "ticket_id": ticket_id,
             "recipient": customer_email,
             "sender": self.from_email,
             "subject": subject,
@@ -150,7 +150,7 @@ class EmailService:
         department: str,
     ) -> Dict[str, Any]:
         """Dispatch early warning escalation email before an SLA deadline breaches."""
-        short_id = str(ticket_id)[:8].upper()
+        short_id = ticket_id[:8].upper()
         subject = f"[EARLY WARNING] {priority} Ticket #{short_id} SLA Breach Imminent ({remaining_minutes}m Remaining)"
         body = (
             f"PROACTIVE SLA RISK ALERT\n\n"
@@ -183,7 +183,7 @@ class EmailService:
         department: str,
     ) -> Dict[str, Any]:
         """Dispatch high-priority escalation email to operations leadership when an SLA deadline is breached."""
-        short_id = str(ticket_id)[:8].upper()
+        short_id = ticket_id[:8].upper()
         subject = f"[CRITICAL SLA BREACH] {priority} Ticket #{short_id} Overdue ({overdue_minutes}m)"
         body = (
             f"URGENT OPERATIONAL ESCALATION\n\n"

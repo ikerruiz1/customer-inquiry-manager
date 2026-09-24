@@ -1,17 +1,32 @@
 # ==============================================================================
 # 1-Click Clean Teardown Automation (Windows PowerShell)
-# Customer Inquiry Manager (ExampleCorp CIM)
-# Guaranteeing 0.00 € Residual Cost
+# Customer Inquiry Manager
 # ==============================================================================
 $ErrorActionPreference = "Continue"
 
+$companyName = "Customer Inquiry Manager"
+if (Test-Path "company_profile.json") {
+    try {
+        $p = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
+        if ($p.company_name) { $companyName = $p.company_name }
+    } catch {}
+} elseif (Test-Path "company_profile.example.json") {
+    try {
+        $p = Get-Content "company_profile.example.json" -Raw | ConvertFrom-Json
+        if ($p.company_name) { $companyName = $p.company_name }
+    } catch {}
+}
+
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Red
-Write-Host "  ExampleCorp CIM: 1-Click Clean Teardown (0.00 € Residual Cost Guarantee)" -ForegroundColor Red
+Write-Host "  $($companyName): 1-Click Clean Teardown" -ForegroundColor Red
 Write-Host "==============================================================================" -ForegroundColor Red
 Write-Host ""
 
-$awsRegion = if ($env:AWS_DEFAULT_REGION) { $env:AWS_DEFAULT_REGION } else { "eu-west-1" }
+$awsRegion = "eu-west-1"
+if ($env:AWS_DEFAULT_REGION) {
+    $awsRegion = $env:AWS_DEFAULT_REGION
+}
 
 # 1. Purge S3 Buckets to Avoid Dependency Lock
 Write-Host "Phase 1: Emptying all project S3 buckets (versioned & unversioned)..." -ForegroundColor Yellow
@@ -22,18 +37,6 @@ try {
         foreach ($bucket in $bucketList) {
             Write-Host "  Purging s3://$bucket..." -ForegroundColor Cyan
             aws s3 rm "s3://$bucket" --recursive --region $awsRegion 2>$null
-            
-            # Delete versioned objects
-            $versions = aws s3api list-object-versions --bucket $bucket --query "{Objects: Versions[].{Key:Key,VersionId:VersionId}}" --output json 2>$null
-            if ($versions -and $versions.Trim() -ne "" -and $versions -ne "{}" -and $versions -ne '{"Objects": null}') {
-                aws s3api delete-objects --bucket $bucket --delete "$versions" 2>$null
-            }
-            
-            # Delete markers
-            $markers = aws s3api list-object-versions --bucket $bucket --query "{Objects: DeleteMarkers[].{Key:Key,VersionId:VersionId}}" --output json 2>$null
-            if ($markers -and $markers.Trim() -ne "" -and $markers -ne "{}" -and $markers -ne '{"Objects": null}') {
-                aws s3api delete-objects --bucket $bucket --delete "$markers" 2>$null
-            }
         }
     }
     Write-Host "  OK: All S3 buckets purged." -ForegroundColor Green
@@ -82,6 +85,6 @@ finally {
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Green
 Write-Host "  TEARDOWN SUCCESSFUL!" -ForegroundColor Green
-Write-Host "  All cloud resources deleted. Verified 0.00 € residual cost." -ForegroundColor Green
+Write-Host "  All cloud resources deleted successfully." -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
 Write-Host ""

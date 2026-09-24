@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# 1-Click Clean Teardown Automation: Guaranteeing 0.00 € Residual Cost
+# 1-Click Clean Teardown Automation
 # ==============================================================================
 set -euo pipefail
 
@@ -12,8 +12,15 @@ C_YELLOW="\033[33m"
 C_RED="\033[31m"
 C_CYAN="\033[36m"
 
+COMPANY_NAME="Customer Inquiry Manager"
+if [ -f "company_profile.json" ]; then
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+elif [ -f "company_profile.example.json" ]; then
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.example.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+fi
+
 echo -e "\n${C_BOLD}${C_RED}==============================================================================${C_RESET}"
-echo -e "${C_BOLD}${C_RED}  ExampleCorp CIM: 1-Click Clean Teardown (0.00 € Residual Cost Guarantee)${C_RESET}"
+echo -e "${C_BOLD}${C_RED}  ${COMPANY_NAME}: 1-Click Clean Teardown${C_RESET}"
 echo -e "${C_BOLD}${C_RED}==============================================================================${C_RESET}\n"
 
 AWS_REGION=${AWS_DEFAULT_REGION:-"eu-west-1"}
@@ -63,5 +70,5 @@ cd ../../../
 
 echo -e "\n${C_BOLD}${C_GREEN}==============================================================================${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}  TEARDOWN SUCCESSFUL!${C_RESET}"
-echo -e "${C_BOLD}${C_GREEN}  All cloud resources deleted. Verified 0.00 € residual cost.${C_RESET}"
+echo -e "${C_BOLD}${C_GREEN}  All cloud resources deleted successfully.${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}==============================================================================${C_RESET}\n"

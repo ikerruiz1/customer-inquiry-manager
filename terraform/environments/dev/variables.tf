@@ -31,11 +31,11 @@ variable "availability_zones" {
 variable "domain_name" {
   type        = string
   description = "Authoritative apex domain for inbound Amazon SES mail receipt"
-  default     = "example-corp.tech"
+  default     = "your-company-domain.tech"
 }
 
 variable "support_email" {
   type        = string
   description = "Support inbound email mailbox"
-  default     = "support@example-corp.tech"
+  default     = "support@your-company-domain.tech"
 }
