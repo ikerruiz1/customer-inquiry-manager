@@ -141,6 +141,14 @@ export const App: React.FC = () => {
 
   const handleLogout = () => {
     logoutOperator();
+    setCurrentAgent({
+      id: '',
+      name: 'Operator',
+      email: '',
+      role: 'Tier1_Agent',
+      initials: 'OP',
+      color: '#3b82f6',
+    });
     setIsAuthenticated(false);
     setIsAuthModalOpen(true);
   };
@@ -400,7 +408,6 @@ export const App: React.FC = () => {
           currentAgent={currentAgent}
           onSelectAgent={setCurrentAgent}
           onLogout={handleLogout}
-          onOpenAuthModal={() => setIsAuthModalOpen(true)}
           isLiveBackend={isLiveBackend}
           isRefreshing={isRefreshing}
           searchQuery={searchQuery}

@@ -54,6 +54,20 @@ class Settings(BaseSettings):
     COGNITO_APP_CLIENT_ID: Optional[str] = None
     COGNITO_JWKS_URL: Optional[str] = None
 
+    # Operator Provisioning & Secrets Resolution (Decoupled from code)
+    INITIAL_OPERATOR_NAME: str = Field(
+        default="Cloud Administrator",
+        description="Initial seed administrator full name",
+    )
+    INITIAL_OPERATOR_EMAIL: str = Field(
+        default="admin@company.internal",
+        description="Initial seed administrator email address",
+    )
+    INITIAL_OPERATOR_PASSWORD: str = Field(
+        default="Agent123!",
+        description="Initial seed operator password loaded from environment variable or AWS Secrets Manager",
+    )
+
     # Amazon S3 Multi-Tier Storage
     S3_ATTACHMENTS_BUCKET: str = "customer-inquiry-attachments-dev"
     S3_PRESIGNED_EXPIRATION_SECONDS: int = 900  # 15 minutes
@@ -170,8 +184,18 @@ class Settings(BaseSettings):
                         self.COMPANY_DOMAIN = profile_data["domain"]
                     if "support_email" in profile_data:
                         self.SUPPORT_EMAIL = profile_data["support_email"]
-                    if "operations_manager_email" in profile_data:
-                        self.OPERATIONS_MANAGER_EMAIL = profile_data["operations_manager_email"]
+                    if "admin_name" in profile_data:
+                        self.INITIAL_OPERATOR_NAME = profile_data["admin_name"]
+                    elif "operator_name" in profile_data:
+                        self.INITIAL_OPERATOR_NAME = profile_data["operator_name"]
+                    if "admin_email" in profile_data:
+                        self.INITIAL_OPERATOR_EMAIL = profile_data["admin_email"]
+                    elif "operator_email" in profile_data:
+                        self.INITIAL_OPERATOR_EMAIL = profile_data["operator_email"]
+                    elif self.COMPANY_DOMAIN and (not self.INITIAL_OPERATOR_EMAIL or self.INITIAL_OPERATOR_EMAIL in ("employer1@company.internal", "admin@company.internal")):
+                        self.INITIAL_OPERATOR_EMAIL = f"admin@{self.COMPANY_DOMAIN}"
+                    if self.COMPANY_DOMAIN and (not self.OPERATIONS_MANAGER_EMAIL or self.OPERATIONS_MANAGER_EMAIL == "ops-manager@company.internal"):
+                        self.OPERATIONS_MANAGER_EMAIL = f"ops-alerts@{self.COMPANY_DOMAIN}"
                     if "sla_proactive_warning_minutes" in profile_data:
                         self.SLA_PROACTIVE_WARNING_MINUTES = int(profile_data["sla_proactive_warning_minutes"])
                     if "slack_webhook_url" in profile_data and not self.SLACK_WEBHOOK_URL:

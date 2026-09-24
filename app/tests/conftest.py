@@ -135,6 +135,28 @@ class MockCognitoService(CognitoService):
             "color": "#3b82f6",
         }
 
+    async def respond_to_new_password(self, session: str, username: str, new_password: str) -> dict:
+        return {
+            "challenge_name": "SOFTWARE_TOKEN_MFA",
+            "session": "mock-mfa-session-after-pwd",
+            "message": "Permanent password established. Multi-Factor Authentication required.",
+            "totp_secret": "JBSWY3DPEHPK3PXP",
+            "otpauth_url": f"otpauth://totp/SupportPortal:{username}?secret=JBSWY3DPEHPK3PXP&issuer=SupportPortal",
+            "email": username,
+        }
+
+    def invite_operator(self, name: str, email: str, role: str, temp_password: str) -> dict:
+        return {
+            "id": "mock-invited-operator-uuid",
+            "name": name,
+            "email": email,
+            "role": role,
+            "groups": ["Operations_Managers", "Tier1_Agents"] if role == "Operations_Manager" else ["Tier1_Agents"],
+            "totp_secret": "JBSWY3DPEHPK3PXP",
+            "initials": "IO",
+            "color": "#10b981",
+        }
+
     def get_operator(self, email: str):
         return {
             "id": "mock-operator-uuid",

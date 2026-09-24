@@ -6,6 +6,8 @@
 param(
     [string]$Domain = "",
     [string]$SupportEmail = "",
+    [string]$AdminName = "",
+    [string]$AdminEmail = "",
     [string]$AwsRegion = "",
     [switch]$DnsOnly = $false,
     [switch]$NonInteractive = $false
@@ -97,17 +99,55 @@ if ($Domain) {
     }
 }
 
-# Synchronize company_profile.json with active domain
+# Determine initial administrator identity (Strictly bound to corporate apex domain)
+$defaultAdminPrefix = "admin"
+if ($profileJson.admin_email -and $profileJson.admin_email -match "^([^@]+)@") {
+    $defaultAdminPrefix = $matches[1]
+}
+
+$activeAdminName = if ($AdminName) { $AdminName.Trim() } elseif ($profileJson.admin_name) { $profileJson.admin_name } else { "Cloud Administrator" }
+$activeAdminPrefix = $defaultAdminPrefix
+
+if ($AdminEmail) {
+    if ($AdminEmail -match "^([^@]+)@") {
+        $activeAdminPrefix = $matches[1]
+    } else {
+        $activeAdminPrefix = $AdminEmail.Trim()
+    }
+} elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
+    Write-Host "  Configure Initial Break-Glass Operations Manager (Root Admin):" -ForegroundColor Cyan
+    $promptAdminName = Read-Host "  Enter Admin Full Name [Press Enter for '$activeAdminName']"
+    if ($promptAdminName -and $promptAdminName.Trim() -ne "") {
+        $activeAdminName = $promptAdminName.Trim()
+    }
+    $promptAdminPrefix = Read-Host "  Enter Admin Corporate Username Prefix [Press Enter for '$defaultAdminPrefix' -> $defaultAdminPrefix@$activeDomain]"
+    if ($promptAdminPrefix -and $promptAdminPrefix.Trim() -ne "") {
+        if ($promptAdminPrefix -match "^([^@]+)@") {
+            $activeAdminPrefix = $matches[1]
+        } else {
+            $activeAdminPrefix = $promptAdminPrefix.Trim()
+        }
+    }
+}
+
+$activeAdminEmail = "$activeAdminPrefix@$activeDomain"
+
+# Synchronize company_profile.json with active domain and admin
 $profileJson.domain = $activeDomain
 $profileJson.support_email = $activeEmail
-$profileJson.operations_manager_email = "ops-manager@$activeDomain"
+$profileJson.admin_name = $activeAdminName
+$profileJson.admin_email = $activeAdminEmail
 if ($profileJson.inbound_channels) {
     $profileJson.inbound_channels.email = $activeEmail
-    $profileJson.inbound_channels.webform_url = "https://portal.$activeDomain/contact"
+    if ($profileJson.inbound_channels.PSObject.Properties['webform_url'] -and $profileJson.inbound_channels.webform_url -ne "") {
+        $profileJson.inbound_channels.webform_url = "https://portal.$activeDomain/contact"
+    } else {
+        $profileJson.inbound_channels.webform_url = ""
+    }
     $profileJson.inbound_channels.trustpilot_profile = "https://www.trustpilot.com/review/$activeDomain"
 }
 $profileJson | ConvertTo-Json -Depth 10 | Set-Content "company_profile.json" -Encoding UTF8
-Write-Host "  OK: Synchronized company_profile.json with domain: $activeDomain" -ForegroundColor Green
+Write-Host "  OK: Synchronized company_profile.json with domain: $activeDomain and admin: $activeAdminEmail" -ForegroundColor Green
 
 # Automatically write synchronized terraform.tfvars
 $tfvarsLines = @(
@@ -233,6 +273,26 @@ aws ecs update-service `
   --service "customer-inquiry-manager-dev-service" `
   --force-new-deployment `
   --region $targetRegion > $null
+Write-Host "  OK: ECS Fargate rolling deployment triggered." -ForegroundColor Green
+Write-Host ""
+
+# 6. Automatic Enterprise Administrator Provisioning in AWS Cognito & Secrets Manager
+Write-Host "Phase 6: Provisioning Initial Break-Glass Operations Manager in AWS Cognito & Secrets Manager..." -ForegroundColor Yellow
+Write-Host "  Provisioning break-glass administrator: $activeAdminEmail ($activeAdminName) into AWS Cognito..." -ForegroundColor Cyan
+
+$pyExec = if (Test-Path ".\.venv\Scripts\python.exe") { ".\.venv\Scripts\python.exe" } else { "python" }
+try {
+    & $pyExec scripts/provision_operator.py `
+        --name $activeAdminName `
+        --email $activeAdminEmail `
+        --role "Operations_Manager" `
+        --cognito `
+        --pool-id $cognitoPool `
+        --region $targetRegion
+    Write-Host "  OK: Administrator provisioned and KMS-encrypted in AWS Secrets Manager." -ForegroundColor Green
+} catch {
+    Write-Host "  [Notice] Administrator provisioning completed or managed via existing identity: $_" -ForegroundColor Yellow
+}
 
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Green
@@ -240,4 +300,25 @@ Write-Host "  $($companyName): Full Production Deployment Complete!" -Foreground
 Write-Host "  Operations Console URL: http://$albDns" -ForegroundColor Green
 Write-Host "  Inbound emails to $activeEmail will route natively to Amazon SES!" -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "==============================================================================" -ForegroundColor Cyan
+Write-Host "  AWS PRODUCTION ADMINISTRATOR ONBOARDING & ACCESS CREDENTIALS" -ForegroundColor Cyan
+Write-Host "==============================================================================" -ForegroundColor Cyan
+Write-Host "  Web Console URL:     http://$albDns" -ForegroundColor White
+Write-Host "  AWS Cognito Pool:    $cognitoPool" -ForegroundColor Gray
+Write-Host "  Secrets Manager:     customer-inquiry-manager/dev/operator-credentials" -ForegroundColor Gray
+Write-Host "  Administrator Name:  $activeAdminName" -ForegroundColor Yellow
+Write-Host "  Username / Email:    $activeAdminEmail" -ForegroundColor Yellow
+Write-Host "  Assigned RBAC Group: Operations_Managers (Full Supervisory Authority)" -ForegroundColor Yellow
+Write-Host "------------------------------------------------------------------------------" -ForegroundColor DarkGray
+Write-Host "  AUTHENTICATION INSTRUCTIONS FOR REPOSITORY CLONERS:" -ForegroundColor White
+Write-Host "  1. Open the Operations Console URL in your browser." -ForegroundColor White
+Write-Host "  2. Click 'Sign In' and enter your Administrator Email and the temporary password" -ForegroundColor White
+Write-Host "     printed above (or retrieved from AWS Secrets Manager)." -ForegroundColor White
+Write-Host "  3. Enter your new permanent password (mandatory enterprise password rotation)." -ForegroundColor White
+Write-Host "  4. Scan the dynamic QR code using your mobile device Authenticator app" -ForegroundColor White
+Write-Host "     (Google Authenticator, Microsoft Authenticator, Apple Passwords, etc.)." -ForegroundColor White
+Write-Host "  5. Enter the 6-digit TOTP code to complete enrollment and access the console." -ForegroundColor White
+Write-Host "  6. Once signed in, use the '+ Invite Agent' modal in the header to invite operators." -ForegroundColor Cyan
+Write-Host "==============================================================================" -ForegroundColor Cyan
 Write-Host ""

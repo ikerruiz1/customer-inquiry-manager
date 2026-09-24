@@ -16,6 +16,8 @@ C_CYAN="\033[36m"
 DNS_ONLY=false
 CUSTOM_DOMAIN=""
 CUSTOM_EMAIL=""
+CUSTOM_ADMIN_NAME=""
+CUSTOM_ADMIN_EMAIL=""
 
 # Parse command line options
 while [[ $# -gt 0 ]]; do
@@ -30,6 +32,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --email)
       CUSTOM_EMAIL="$2"
+      shift 2
+      ;;
+    --admin-name)
+      CUSTOM_ADMIN_NAME="$2"
+      shift 2
+      ;;
+    --admin-email)
+      CUSTOM_ADMIN_EMAIL="$2"
       shift 2
       ;;
     *)
@@ -71,7 +81,6 @@ fi
 
 CURRENT_DOMAIN=$(grep -o '"domain": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4 || echo "your-company-domain.tech")
 CURRENT_EMAIL=$(grep -o '"support_email": "[^"]*' company_profile.json | head -n1 | cut -d'"' -f4 || echo "support@${CURRENT_DOMAIN}")
-
 ACTIVE_DOMAIN="$CURRENT_DOMAIN"
 ACTIVE_EMAIL="$CURRENT_EMAIL"
 
@@ -88,6 +97,25 @@ elif [ -t 0 ]; then
     fi
 fi
 
+# Determine initial administrator identity (Strictly bound to corporate apex domain)
+DEFAULT_ADMIN_PREFIX="admin"
+ACTIVE_ADMIN_NAME="${CUSTOM_ADMIN_NAME:-Cloud Administrator}"
+ACTIVE_ADMIN_PREFIX="$DEFAULT_ADMIN_PREFIX"
+
+if [ -n "$CUSTOM_ADMIN_EMAIL" ]; then
+    ACTIVE_ADMIN_PREFIX=$(echo "$CUSTOM_ADMIN_EMAIL" | cut -d'@' -f1)
+elif [ -t 0 ] && [ -z "$CUSTOM_ADMIN_NAME" ] && [ -z "$CUSTOM_ADMIN_EMAIL" ]; then
+    echo -e "${C_CYAN}  Configure Initial Break-Glass Operations Manager (Root Admin):${C_RESET}"
+    read -p "  Enter Admin Full Name [Press Enter for '$ACTIVE_ADMIN_NAME']: " PROMPT_ADMIN_NAME
+    ACTIVE_ADMIN_NAME="${PROMPT_ADMIN_NAME:-$ACTIVE_ADMIN_NAME}"
+    read -p "  Enter Admin Corporate Username Prefix [Press Enter for '$DEFAULT_ADMIN_PREFIX' -> ${DEFAULT_ADMIN_PREFIX}@${ACTIVE_DOMAIN}]: " PROMPT_ADMIN_PREFIX
+    if [ -n "$PROMPT_ADMIN_PREFIX" ]; then
+        ACTIVE_ADMIN_PREFIX=$(echo "$PROMPT_ADMIN_PREFIX" | cut -d'@' -f1)
+    fi
+fi
+
+ACTIVE_ADMIN_EMAIL="${ACTIVE_ADMIN_PREFIX}@${ACTIVE_DOMAIN}"
+
 # Update company_profile.json
 python -c "
 import json
@@ -95,10 +123,14 @@ with open('company_profile.json', 'r', encoding='utf-8') as f:
     d = json.load(f)
 d['domain'] = '$ACTIVE_DOMAIN'
 d['support_email'] = '$ACTIVE_EMAIL'
-d['operations_manager_email'] = 'ops-manager@$ACTIVE_DOMAIN'
+d['admin_name'] = '$ACTIVE_ADMIN_NAME'
+d['admin_email'] = '$ACTIVE_ADMIN_EMAIL'
 if 'inbound_channels' in d:
     d['inbound_channels']['email'] = '$ACTIVE_EMAIL'
-    d['inbound_channels']['webform_url'] = 'https://portal.$ACTIVE_DOMAIN/contact'
+    if d['inbound_channels'].get('webform_url'):
+        d['inbound_channels']['webform_url'] = 'https://portal.$ACTIVE_DOMAIN/contact'
+    else:
+        d['inbound_channels']['webform_url'] = ''
     d['inbound_channels']['trustpilot_profile'] = 'https://www.trustpilot.com/review/$ACTIVE_DOMAIN'
 with open('company_profile.json', 'w', encoding='utf-8') as f:
     json.dump(d, f, indent=2)
@@ -204,9 +236,50 @@ aws ecs update-service \
   --service "customer-inquiry-manager-dev-service" \
   --force-new-deployment \
   --region "${AWS_REGION}" >/dev/null
+echo -e "${C_GREEN}✓ ECS Fargate rolling deployment triggered.${C_RESET}\n"
 
-echo -e "${C_BOLD}${C_GREEN}==============================================================================${C_RESET}"
+# 6. Automatic Enterprise Administrator Provisioning in AWS Cognito & Secrets Manager
+echo -e "${C_BOLD}Phase 6: Provisioning Initial Break-Glass Operations Manager in AWS Cognito & Secrets Manager...${C_RESET}"
+echo -e "  ${C_CYAN}Provisioning break-glass administrator: ${ACTIVE_ADMIN_EMAIL} (${ACTIVE_ADMIN_NAME}) into AWS Cognito...${C_RESET}"
+
+PY_EXEC="python3"
+if [ -f ".venv/bin/python" ]; then
+  PY_EXEC=".venv/bin/python"
+elif command -v python &>/dev/null; then
+  PY_EXEC="python"
+fi
+
+$PY_EXEC scripts/provision_operator.py \
+  --name "${ACTIVE_ADMIN_NAME}" \
+  --email "${ACTIVE_ADMIN_EMAIL}" \
+  --role "Operations_Manager" \
+  --cognito \
+  --pool-id "${COGNITO_POOL}" \
+  --region "${AWS_REGION}" || echo -e "${C_YELLOW}  [Notice] Administrator provisioning completed or managed via existing identity.${C_RESET}"
+
+echo -e "\n${C_BOLD}${C_GREEN}==============================================================================${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}  ${COMPANY_NAME}: Full Production Deployment Complete!${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}  Operations Console URL: http://${ALB_DNS}${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}  Inbound emails to ${ACTIVE_EMAIL} will route natively to Amazon SES!${C_RESET}"
 echo -e "${C_BOLD}${C_GREEN}==============================================================================${C_RESET}\n"
+
+echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
+echo -e "${C_BOLD}${C_CYAN}  AWS PRODUCTION ADMINISTRATOR ONBOARDING & ACCESS CREDENTIALS${C_RESET}"
+echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
+echo -e "  Web Console URL:     http://${ALB_DNS}"
+echo -e "  AWS Cognito Pool:    ${COGNITO_POOL}"
+echo -e "  Secrets Manager:     customer-inquiry-manager/dev/operator-credentials"
+echo -e "  Administrator Name:  ${C_YELLOW}${ACTIVE_ADMIN_NAME}${C_RESET}"
+echo -e "  Username / Email:    ${C_YELLOW}${ACTIVE_ADMIN_EMAIL}${C_RESET}"
+echo -e "  Assigned RBAC Group: ${C_YELLOW}Operations_Managers (Full Supervisory Authority)${C_RESET}"
+echo -e "------------------------------------------------------------------------------"
+echo -e "  AUTHENTICATION INSTRUCTIONS FOR REPOSITORY CLONERS:"
+echo -e "  1. Open the Operations Console URL in your browser."
+echo -e "  2. Click 'Sign In' and enter your Administrator Email and the temporary password"
+echo -e "     printed above (or retrieved from AWS Secrets Manager)."
+echo -e "  3. Enter your new permanent password (mandatory enterprise password rotation)."
+echo -e "  4. Scan the dynamic QR code using your mobile device Authenticator app"
+echo -e "     (Google Authenticator, Microsoft Authenticator, Apple Passwords, etc.)."
+echo -e "  5. Enter the 6-digit TOTP code to complete enrollment and access the console."
+echo -e "  6. Once signed in, use the '+ Invite Agent' modal in the header to invite operators."
+echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}\n"

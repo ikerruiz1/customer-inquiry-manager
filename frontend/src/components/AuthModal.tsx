@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import {
   loginOperator,
+  setPermanentPassword,
   verifyMfaCode,
 } from '../api/client';
 import type { MFAChallenge, AuthUser } from '../types/inquiry';
@@ -32,11 +33,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   if (!isOpen) return null;
 
-  const [step, setStep] = useState<'credentials' | 'mfa'>('credentials');
+  const [step, setStep] = useState<'credentials' | 'new_password' | 'mfa'>('credentials');
 
-  // Form Fields
-  const [email, setEmail] = useState('carlos.m@company.internal');
-  const [password, setPassword] = useState('Agent123!');
+  // Form Fields (Empty by default for true multi-tenant and external cloner compatibility)
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   // MFA Challenge State
   const [mfaChallenge, setMfaChallenge] = useState<MFAChallenge | null>(null);
@@ -77,7 +80,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     try {
       const response = await loginOperator(email.trim().toLowerCase(), password);
-      if ('challenge_name' in response && response.challenge_name === 'SOFTWARE_TOKEN_MFA') {
+      if ('challenge_name' in response && response.challenge_name === 'NEW_PASSWORD_REQUIRED') {
+        setMfaChallenge(response as MFAChallenge);
+        setStep('new_password');
+        setNewPassword('');
+        setConfirmPassword('');
+      } else if ('challenge_name' in response && response.challenge_name === 'SOFTWARE_TOKEN_MFA') {
         setMfaChallenge(response as MFAChallenge);
         setStep('mfa');
         setTotpCode('');
@@ -88,6 +96,40 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } catch (err: any) {
       setError(err.message || 'Invalid credentials. Please verify your email and password.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNewPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword.length < 8) {
+      setError('Permanent password must be at least 8 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (!mfaChallenge) {
+      setError('Session expired. Please restart sign-in.');
+      return;
+    }
+
+    setError(null);
+    setLoading(true);
+
+    try {
+      const response = await setPermanentPassword(
+        mfaChallenge.session,
+        email.trim().toLowerCase(),
+        newPassword
+      );
+      setMfaChallenge(response);
+      setStep('mfa');
+      setTotpCode('');
+    } catch (err: any) {
+      setError(err.message || 'Failed to establish permanent password');
     } finally {
       setLoading(false);
     }
@@ -128,12 +170,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     navigator.clipboard.writeText(mfaChallenge.totp_secret);
     setCopiedSecret(true);
     setTimeout(() => setCopiedSecret(false), 2000);
-  };
-
-  const handleQuickPrefill = (prefillEmail: string, prefillPass: string) => {
-    setEmail(prefillEmail);
-    setPassword(prefillPass);
-    setError(null);
   };
 
   return (
@@ -197,7 +233,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   letterSpacing: '-0.02em',
                 }}
               >
-                {step === 'credentials' ? 'Support Portal Login' : 'Two-Factor Verification'}
+                {step === 'credentials'
+                  ? 'Support Portal Login'
+                  : step === 'new_password'
+                  ? 'Mandatory Password Rotation'
+                  : 'Two-Factor Verification'}
               </h2>
             </div>
             {canClose && onClose && (
@@ -225,6 +265,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           >
             {step === 'credentials'
               ? 'Enter your assigned enterprise credentials to access the ticket management and triage queue.'
+              : step === 'new_password'
+              ? 'Temporary password detected. Enterprise security policy requires establishing a permanent password.'
               : 'Open Google Authenticator or Microsoft Authenticator on your mobile device to scan the code and enter your 6-digit verification code.'}
           </p>
         </div>
@@ -337,48 +379,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
               </div>
 
-              {/* Pre-provisioned Operator Quick Login Helpers (Strictly in Local Development) */}
-              {import.meta.env.DEV && (
-                <div style={{ marginTop: '4px' }}>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#888888', display: 'block', marginBottom: '6px' }}>
-                    Pre-provisioned Enterprise Accounts:
-                  </span>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPrefill('carlos.m@company.internal', 'Agent123!')}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '9999px',
-                        border: '1px solid rgba(12, 13, 13, 0.15)',
-                        backgroundColor: email === 'carlos.m@company.internal' ? '#0C0D0D' : '#F9F9F9',
-                        color: email === 'carlos.m@company.internal' ? '#FFFFFF' : '#0C0D0D',
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Carlos M. (Tier 1 Support Agent)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickPrefill('alex.rivera@company.internal', 'Manager123!')}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '9999px',
-                        border: '1px solid rgba(12, 13, 13, 0.15)',
-                        backgroundColor: email === 'alex.rivera@company.internal' ? '#0C0D0D' : '#F9F9F9',
-                        color: email === 'alex.rivera@company.internal' ? '#FFFFFF' : '#0C0D0D',
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Alex Rivera (Operations Manager)
-                    </button>
-                  </div>
-                </div>
-              )}
+
 
               <button
                 type="submit"
@@ -405,74 +406,236 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <ArrowRight size={15} />
               </button>
             </form>
-          ) : (
-            /* MFA Step */
-            <form onSubmit={handleMfaSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  padding: '14px',
-                  backgroundColor: '#FAFAFA',
-                  borderRadius: '14px',
-                  border: '1px solid rgba(12, 13, 13, 0.08)',
-                }}
-              >
-                <div
+          ) : step === 'new_password' ? (
+            <form onSubmit={handleNewPasswordSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label
                   style={{
-                    backgroundColor: '#FFFFFF',
-                    padding: '8px',
+                    display: 'block',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: '#0C0D0D',
+                    marginBottom: '6px',
+                  }}
+                >
+                  New Permanent Password
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Lock
+                    size={15}
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#888888',
+                    }}
+                  />
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    placeholder="Min. 8 characters (letters, numbers, symbols)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px 9px 36px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(12, 13, 13, 0.18)',
+                      fontSize: '0.86rem',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label
+                  style={{
+                    display: 'block',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    color: '#0C0D0D',
+                    marginBottom: '6px',
+                  }}
+                >
+                  Confirm Permanent Password
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <Lock
+                    size={15}
+                    style={{
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#888888',
+                    }}
+                  />
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    placeholder="Re-type new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '9px 12px 9px 36px',
+                      borderRadius: '10px',
+                      border: '1px solid rgba(12, 13, 13, 0.18)',
+                      fontSize: '0.86rem',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStep('credentials');
+                    setError(null);
+                  }}
+                  style={{
+                    padding: '11px 16px',
                     borderRadius: '12px',
-                    border: '1px solid rgba(12, 13, 13, 0.1)',
+                    border: '1px solid rgba(12, 13, 13, 0.18)',
+                    backgroundColor: '#FFFFFF',
+                    color: '#0C0D0D',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <ArrowLeft size={14} />
+                  <span>Back</span>
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading || !newPassword || !confirmPassword}
+                  style={{
+                    flex: 1,
+                    padding: '11px 16px',
+                    borderRadius: '12px',
+                    backgroundColor: '#0C0D0D',
+                    color: '#FFFFFF',
+                    border: 'none',
+                    fontSize: '0.86rem',
+                    fontWeight: 700,
+                    cursor: loading || !newPassword || !confirmPassword ? 'not-allowed' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    gap: '8px',
+                    opacity: loading || !newPassword || !confirmPassword ? 0.6 : 1,
                   }}
                 >
-                  <canvas ref={canvasRef} style={{ width: '170px', height: '170px', display: 'block' }} />
-                </div>
-
-                <span style={{ fontSize: '0.74rem', color: '#666666', marginTop: '10px', textAlign: 'center' }}>
-                  Scan this code using <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong>
-                </span>
-
-                {mfaChallenge?.totp_secret && (
+                  <span>{loading ? 'Establishing Password...' : 'Save Password & Set Up 2FA'}</span>
+                  <ArrowRight size={15} />
+                </button>
+              </div>
+            </form>
+          ) : (
+            /* MFA Step */
+            <form onSubmit={handleMfaSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {mfaChallenge?.otpauth_url ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: '14px',
+                    backgroundColor: '#FAFAFA',
+                    borderRadius: '14px',
+                    border: '1px solid rgba(12, 13, 13, 0.08)',
+                  }}
+                >
                   <div
                     style={{
+                      backgroundColor: '#FFFFFF',
+                      padding: '8px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(12, 13, 13, 0.1)',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      marginTop: '10px',
-                      padding: '6px 12px',
-                      backgroundColor: '#FFFFFF',
-                      borderRadius: '8px',
-                      border: '1px dashed rgba(12, 13, 13, 0.2)',
+                      justifyContent: 'center',
                     }}
                   >
-                    <span style={{ fontSize: '0.72rem', color: '#666666' }}>Manual key:</span>
-                    <code style={{ fontSize: '0.76rem', fontWeight: 700, letterSpacing: '1px', color: '#0C0D0D' }}>
-                      {mfaChallenge.totp_secret}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={copySecretToClipboard}
+                    <canvas ref={canvasRef} style={{ width: '170px', height: '170px', display: 'block' }} />
+                  </div>
+
+                  <span style={{ fontSize: '0.74rem', color: '#666666', marginTop: '10px', textAlign: 'center' }}>
+                    First-Time Setup: Scan this code using <strong>Google Authenticator</strong> or <strong>Microsoft Authenticator</strong>
+                  </span>
+
+                  {mfaChallenge?.totp_secret && (
+                    <div
                       style={{
-                        background: 'none',
-                        border: 'none',
-                        padding: '2px',
-                        cursor: 'pointer',
-                        color: copiedSecret ? '#16A34A' : '#666666',
                         display: 'flex',
                         alignItems: 'center',
+                        gap: '8px',
+                        marginTop: '10px',
+                        padding: '6px 12px',
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '8px',
+                        border: '1px dashed rgba(12, 13, 13, 0.2)',
                       }}
-                      title="Copy manual secret key"
                     >
-                      {copiedSecret ? <Check size={14} /> : <Copy size={14} />}
-                    </button>
+                      <span style={{ fontSize: '0.72rem', color: '#666666' }}>Manual key:</span>
+                      <code style={{ fontSize: '0.76rem', fontWeight: 700, letterSpacing: '1px', color: '#0C0D0D' }}>
+                        {mfaChallenge.totp_secret}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={copySecretToClipboard}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          padding: '2px',
+                          cursor: 'pointer',
+                          color: copiedSecret ? '#16A34A' : '#666666',
+                          display: 'flex',
+                          alignItems: 'center',
+                        }}
+                        title="Copy manual secret key"
+                      >
+                        {copiedSecret ? <Check size={14} /> : <Copy size={14} />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: '12px',
+                    backgroundColor: '#F8FAFC',
+                    border: '1px solid rgba(12, 13, 13, 0.08)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                  }}
+                >
+                  <Smartphone size={22} style={{ color: '#0F172A', flexShrink: 0 }} />
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '0.80rem', fontWeight: 700, color: '#0F172A' }}>
+                      Security Verification Challenge
+                    </span>
+                    <span style={{ fontSize: '0.72rem', color: '#64748B', lineHeight: 1.3 }}>
+                      Open your enrolled mobile authenticator device and enter the live 6-digit TOTP verification code.
+                    </span>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
               <div>
                 <label
@@ -503,7 +666,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     maxLength={6}
                     required
                     autoFocus
-                    placeholder="123456"
+                    placeholder="••••••"
                     value={totpCode}
                     onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     style={{
@@ -520,28 +683,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     }}
                   />
                 </div>
-                {import.meta.env.DEV && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
-                    <span style={{ fontSize: '0.72rem', color: '#666666' }}>
-                      Local development test code: 123456
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setTotpCode('123456')}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: '#2563EB',
-                        fontSize: '0.72rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        padding: 0,
-                      }}
-                    >
-                      Fill 123456
-                    </button>
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px' }}>
+                  <Smartphone size={13} style={{ color: '#10B981', flexShrink: 0 }} />
+                  <span style={{ fontSize: '0.72rem', color: '#666666' }}>
+                    Open your mobile authenticator app and enter the live 6-digit TOTP code.
+                  </span>
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '10px', marginTop: '6px' }}>

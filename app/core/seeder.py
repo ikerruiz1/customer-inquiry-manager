@@ -10,6 +10,7 @@ from sqlalchemy import select, func
 
 from app.core.database import Base, engine, AsyncSessionLocal
 from app.models.inquiry import Inquiry, Operator, InquiryMessage
+from app.core.config import settings
 
 logger = logging.getLogger("app.core.seeder")
 
@@ -17,13 +18,13 @@ logger = logging.getLogger("app.core.seeder")
 CANONICAL_OPERATORS: List[Dict[str, Any]] = [
     {
         "id": "00000000-0000-0000-0000-000000000001",
-        "name": "Carlos M.",
-        "email": "carlos.m@company.internal",
-        "password": "Agent123!",
-        "role": "Tier1_Agent",
-        "groups": ["Tier1_Agents"],
+        "name": getattr(settings, "INITIAL_OPERATOR_NAME", "Cloud Administrator"),
+        "email": settings.INITIAL_OPERATOR_EMAIL,
+        "password": settings.INITIAL_OPERATOR_PASSWORD,
+        "role": "Operations_Manager",
+        "groups": ["Operations_Managers", "Tier1_Agents"],
         "totp_secret": "JBSWY3DPEHPK3PXP",
-        "initials": "CM",
+        "initials": "".join([part[0] for part in getattr(settings, "INITIAL_OPERATOR_NAME", "Cloud Administrator").split()][:2]).upper() or "CA",
         "color": "#3b82f6",
     },
     {
@@ -56,8 +57,12 @@ def build_canonical_operator_registry() -> Dict[str, Dict[str, Any]]:
     registry: Dict[str, Dict[str, Any]] = {}
     for op in CANONICAL_OPERATORS:
         registry[op["email"]] = {**op}
-    # Maintain legacy .local aliases for test clients
-    registry["carlos.m@company.local"] = registry["carlos.m@company.internal"]
+    # Maintain legacy aliases for backwards compatibility with earlier tests
+    primary_email = CANONICAL_OPERATORS[0]["email"]
+    registry["employer1@company.local"] = registry[primary_email]
+    registry["employer1@company.internal"] = registry[primary_email]
+    registry["carlos.m@company.internal"] = registry[primary_email]
+    registry["carlos.m@company.local"] = registry[primary_email]
     registry["laura.g@company.local"] = registry["laura.g@company.internal"]
     registry["alex.rivera@company.local"] = registry["alex.rivera@company.internal"]
     return registry
@@ -153,8 +158,8 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
                 ),
                 InquiryMessage(
                     sender_type="AGENT",
-                    sender_name="Carlos M.",
-                    sender_email="carlos.m@company.internal",
+                    sender_name=getattr(settings, "INITIAL_OPERATOR_NAME", "Cloud Administrator"),
+                    sender_email=settings.INITIAL_OPERATOR_EMAIL,
                     body="Hello David, we have identified node worker-04 memory saturation. Our SRE team is rolling an updated capacity configuration now.",
                     is_internal_note=False,
                     attachments=[],
@@ -246,8 +251,8 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
                 ),
                 InquiryMessage(
                     sender_type="AGENT",
-                    sender_name="Carlos M.",
-                    sender_email="carlos.m@company.internal",
+                    sender_name=getattr(settings, "INITIAL_OPERATOR_NAME", "Cloud Administrator"),
+                    sender_email=settings.INITIAL_OPERATOR_EMAIL,
                     body="Hello Jorge, could you please provide your `vite.config.ts` proxy configuration and any custom request headers sent by your client so we can test the exact CORS preflight match?",
                     is_internal_note=False,
                     attachments=[],
@@ -378,8 +383,8 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
                 ),
                 InquiryMessage(
                     sender_type="AGENT",
-                    sender_name="Carlos M.",
-                    sender_email="carlos.m@company.internal",
+                    sender_name=getattr(settings, "INITIAL_OPERATOR_NAME", "Cloud Administrator"),
+                    sender_email=settings.INITIAL_OPERATOR_EMAIL,
                     body="Hello Sarah, 3DS v2 multi-currency authorization has been completed successfully. Your corporate card is verified and the invoice receipt has been issued.",
                     is_internal_note=False,
                     attachments=[],

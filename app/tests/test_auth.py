@@ -117,3 +117,54 @@ def test_rfc6238_totp_mathematical_precision():
     assert verify_rfc6238_totp(secret, "123456") is True
     # Bogus code must fail
     assert verify_rfc6238_totp(secret, "000000") is False
+
+
+@pytest.mark.asyncio
+async def test_auth_set_new_permanent_password_advances_to_mfa(client: AsyncClient):
+    """Verify NEW_PASSWORD_REQUIRED challenge response successfully sets password and issues MFA challenge."""
+    payload = {
+        "session": "mock-session-temp-pwd",
+        "username": "new.agent@company.internal",
+        "new_password": "NewPermanentPassword2026!",
+    }
+    response = await client.post("/api/v1/auth/password/new", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["challenge_name"] == "SOFTWARE_TOKEN_MFA"
+    assert "session" in data
+    assert "otpauth_url" in data
+    assert data["totp_secret"] == "JBSWY3DPEHPK3PXP"
+
+
+@pytest.mark.asyncio
+async def test_supervisor_invite_operator_success(client: AsyncClient):
+    """Verify an Operations Manager can provision a new support agent with temporary credentials."""
+    payload = {
+        "name": "Carlos Gomez",
+        "email": "carlos.g@company.internal",
+        "role": "Tier1_Agent",
+    }
+    response = await client.post("/api/v1/auth/invite", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert "temporary_password" in data
+    assert len(data["temporary_password"]) >= 12
+    assert data["operator"]["email"] == "carlos.g@company.internal"
+    assert data["operator"]["role"] == "Tier1_Agent"
+
+
+@pytest.mark.asyncio
+async def test_supervisor_invite_operator_external_domain_rejected(client: AsyncClient):
+    """Verify inviting an agent with an external non-corporate email (@gmail.com) is rejected with 422."""
+    payload = {
+        "name": "External Contractor",
+        "email": "contractor@gmail.com",
+        "role": "Tier1_Agent",
+    }
+    response = await client.post("/api/v1/auth/invite", json=payload)
+    assert response.status_code == 422
+    data = response.json()
+    assert "Enterprise security violation" in data["detail"]
+    assert "must belong to the verified corporate domain" in data["detail"]
+
+

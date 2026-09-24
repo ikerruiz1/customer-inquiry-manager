@@ -10,6 +10,7 @@ import type {
   AuditLog,
   MFAChallenge,
   AuthUser,
+  InviteOperatorResponse,
   TokenAuthResponse,
   DashboardMetricsResponse,
   AgentProfile,
@@ -113,6 +114,55 @@ export async function registerOperator(payload: {
     }
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || 'Operator registration failed');
+  }
+  return await res.json();
+}
+
+/**
+ * Submit permanent password in response to NEW_PASSWORD_REQUIRED challenge
+ */
+export async function setPermanentPassword(
+  session: string,
+  username: string,
+  newPassword: string
+): Promise<MFAChallenge> {
+  const res = await fetch('/api/v1/auth/password/new', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session, username, new_password: newPassword }),
+  });
+  if (!res.ok) {
+    if (res.status >= 500) {
+      throw new Error(`Backend service unavailable (HTTP ${res.status}). Ensure FastAPI is running on port 8000.`);
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to update permanent password');
+  }
+  return await res.json();
+}
+
+/**
+ * Supervisor Invitation: Operations Manager provisions a new support agent
+ */
+export async function inviteOperator(payload: {
+  name: string;
+  email: string;
+  role: 'Tier1_Agent' | 'Operations_Manager';
+}): Promise<InviteOperatorResponse> {
+  const res = await fetch('/api/v1/auth/invite', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${authToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    if (res.status >= 500) {
+      throw new Error(`Backend service unavailable (HTTP ${res.status}). Ensure FastAPI is running on port 8000.`);
+    }
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || 'Failed to invite operator');
   }
   return await res.json();
 }
