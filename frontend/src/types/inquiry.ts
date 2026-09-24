@@ -177,6 +177,17 @@ export interface AuthUser {
   groups?: string[];
 }
 
+export interface InviteOperatorResponse {
+  message: string;
+  temporary_password: string;
+  operator: {
+    id?: string;
+    name: string;
+    email: string;
+    role: 'Tier1_Agent' | 'Operations_Manager';
+  };
+}
+
 export interface TokenAuthResponse {
   access_token: string;
   id_token: string;

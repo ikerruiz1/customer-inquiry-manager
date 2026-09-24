@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.models.inquiry import Inquiry, InquiryMessage, AuditLog
+from app.models.inquiry import Inquiry, InquiryMessage, AuditLog, Operator
 from app.services.email_service import get_email_service
 from app.services.sns_service import get_sns_service
 
@@ -37,6 +37,22 @@ class SLABreachWatcherDaemon:
         self.is_running = False
         self._task: Optional[asyncio.Task] = None
         self._last_executive_escalation_at: Optional[datetime] = None
+
+    async def _resolve_operations_manager_recipients(self, db: AsyncSession) -> List[str]:
+        """Dynamically resolve notification recipients for supervisor escalations.
+        
+        Queries active operators holding the 'Operations_Manager' RBAC role from the database.
+        Falls back to self.manager_email if no supervisor records are registered.
+        """
+        try:
+            stmt = select(Operator.email).where(Operator.role == "Operations_Manager")
+            res = await db.execute(stmt)
+            emails = [r[0] for r in res.fetchall() if r[0]]
+            if emails:
+                return emails
+        except Exception as exc:
+            logger.warning(f"Deferred dynamic supervisor resolution: {exc}")
+        return [self.manager_email]
 
     def _compute_warning_threshold_seconds(self, priority: str) -> float:
         """Compute dynamic proactive SLA warning threshold based on ITIL priority duration (20-25% rule)."""
@@ -132,6 +148,7 @@ class SLABreachWatcherDaemon:
         in_bounds_count = 0
         breached_count = 0
         overdue_inquiries: List[Inquiry] = []
+        manager_recipients = await self._resolve_operations_manager_recipients(db)
 
         # 2. Evaluate each ticket against its SLA deadline
         for inquiry in active_inquiries:
@@ -175,16 +192,17 @@ class SLABreachWatcherDaemon:
                         }
                         await sns_service.publish_ops_alert(warning_dict)
 
-                        # 2b. Dispatch Proactive Warning Email
-                        await email_service.send_proactive_sla_warning(
-                            manager_email=self.manager_email,
-                            ticket_id=str(inquiry.id),
-                            priority=inquiry.priority,
-                            customer_name=inquiry.customer_name,
-                            ticket_subject=inquiry.subject,
-                            remaining_minutes=remaining_minutes,
-                            department=inquiry.department,
-                        )
+                        # 2b. Dispatch Proactive Warning Email to active Operations Managers
+                        for mgr_email in manager_recipients:
+                            await email_service.send_proactive_sla_warning(
+                                manager_email=mgr_email,
+                                ticket_id=str(inquiry.id),
+                                priority=inquiry.priority,
+                                customer_name=inquiry.customer_name,
+                                ticket_subject=inquiry.subject,
+                                remaining_minutes=remaining_minutes,
+                                department=inquiry.department,
+                            )
 
                         # 2c. Log Audit Entry
                         audit_log = AuditLog(
@@ -195,11 +213,11 @@ class SLABreachWatcherDaemon:
                             new_value={
                                 "sla_warning_alerted": True,
                                 "remaining_minutes": remaining_minutes,
-                                "escalated_to": self.manager_email,
+                                "escalated_to": ", ".join(manager_recipients),
                             },
                             reason=(
                                 f"Automated monitor identified impending SLA deadline ({remaining_minutes} minutes remaining). "
-                                f"Dispatched proactive Ops Alert and supervisor warning."
+                                f"Dispatched proactive Ops Alert and supervisor warning to {', '.join(manager_recipients)}."
                             ),
                         )
                         db.add(audit_log)
@@ -214,7 +232,7 @@ class SLABreachWatcherDaemon:
                             body=(
                                 f"⏳ [PROACTIVE SLA WARNING] Ticket #{short_id} is within {remaining_minutes} minutes "
                                 f"of breaching its contractual SLA deadline. Early warning notification dispatched to "
-                                f"{self.manager_email} and ChatOps channel."
+                                f"{', '.join(manager_recipients)} and ChatOps channel."
                             ),
                             is_internal_note=True,
                             attachments=[],
@@ -263,16 +281,17 @@ class SLABreachWatcherDaemon:
                 }
                 await sns_service.publish_ops_alert(alert_dict)
 
-                # 3b. Dispatch High-Priority Email Escalation to Operations Manager
-                await email_service.send_sla_breach_escalation(
-                    manager_email=self.manager_email,
-                    ticket_id=str(inquiry.id),
-                    priority=inquiry.priority,
-                    customer_name=inquiry.customer_name,
-                    ticket_subject=inquiry.subject,
-                    overdue_minutes=overdue_minutes,
-                    department=inquiry.department,
-                )
+                # 3b. Dispatch High-Priority Email Escalation to active Operations Managers
+                for mgr_email in manager_recipients:
+                    await email_service.send_sla_breach_escalation(
+                        manager_email=mgr_email,
+                        ticket_id=str(inquiry.id),
+                        priority=inquiry.priority,
+                        customer_name=inquiry.customer_name,
+                        ticket_subject=inquiry.subject,
+                        overdue_minutes=overdue_minutes,
+                        department=inquiry.department,
+                    )
 
                 # 3c. Append an immutable AuditLog entry
                 audit_log = AuditLog(
@@ -283,11 +302,11 @@ class SLABreachWatcherDaemon:
                     new_value={
                         "sla_breach_alerted": True,
                         "overdue_minutes": overdue_minutes,
-                        "escalated_to": self.manager_email,
+                        "escalated_to": ", ".join(manager_recipients),
                     },
                     reason=(
                         f"Automated daemon detected contractual SLA resolution breach "
-                        f"({overdue_minutes} minutes overdue). Dispatched Ops Alert and manager escalation."
+                        f"({overdue_minutes} minutes overdue). Dispatched Ops Alert and manager escalation to {', '.join(manager_recipients)}."
                     ),
                 )
                 db.add(audit_log)
@@ -302,7 +321,7 @@ class SLABreachWatcherDaemon:
                     body=(
                         f"⚠️ [AUTOMATED SLA ESCALATION] Ticket #{short_id} has exceeded its resolution deadline "
                         f"by {overdue_minutes} minutes. High-priority incident notification dispatched to "
-                        f"{self.manager_email} and ChatOps SNS topic."
+                        f"{', '.join(manager_recipients)} and ChatOps SNS topic."
                     ),
                     is_internal_note=True,
                     attachments=[],
@@ -330,18 +349,19 @@ class SLABreachWatcherDaemon:
                 self._last_executive_escalation_at = now
                 results["executive_alert_triggered"] = True
 
-                await email_service.send_compliance_threshold_alert(
-                    manager_email=self.manager_email,
-                    current_compliance_rate=compliance_rate,
-                    target_threshold=self.target_threshold,
-                    breached_count=breached_count,
-                    total_active=total_active,
-                )
+                for mgr_email in manager_recipients:
+                    await email_service.send_compliance_threshold_alert(
+                        manager_email=mgr_email,
+                        current_compliance_rate=compliance_rate,
+                        target_threshold=self.target_threshold,
+                        breached_count=breached_count,
+                        total_active=total_active,
+                    )
 
                 logger.error(
                     f"[EXECUTIVE ESCALATION] Active operational queue compliance dropped to {compliance_rate}% "
                     f"(Contractual SLO: >={self.target_threshold}%). Breached tickets: {breached_count}/{total_active}. "
-                    f"Executive alert dispatched to {self.manager_email}."
+                    f"Executive alert dispatched to {', '.join(manager_recipients)}."
                 )
 
         # Commit all state updates, audit logs, and system notes

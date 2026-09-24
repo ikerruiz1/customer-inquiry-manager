@@ -24,8 +24,8 @@ export const NewInquiryModal: React.FC<NewInquiryModalProps> = ({
   if (!isOpen) return null;
 
   const [channel, setChannel] = useState<ChannelEnum>(ChannelEnum.WEB_FORM);
-  const [name, setName] = useState<string>('Carlos Mendoza');
-  const [email, setEmail] = useState<string>('carlos.mendoza@empresa.com');
+  const [name, setName] = useState<string>('Alex Turner');
+  const [email, setEmail] = useState<string>('alex.turner@enterprise-client.io');
   const [subject, setSubject] = useState<string>('');
   const [body, setBody] = useState<string>('');
   const [error, setError] = useState<string | null>(null);

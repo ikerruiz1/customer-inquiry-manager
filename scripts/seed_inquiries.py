@@ -19,6 +19,13 @@ from typing import Dict, Any, List
 import urllib.request
 import urllib.error
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # ANSI Terminal Colors
 C_RESET = "\033[0m"
 C_BOLD = "\033[1m"
@@ -166,14 +173,14 @@ def dispatch_inquiry(host: str, scenario_key: str, trustpilot_secret: str = "", 
         priority = res.get("priority", "N/A")
         prio_color = C_RED if priority == "P1" else C_YELLOW if priority == "P2" else C_CYAN if priority == "P3" else C_BLUE
 
-        print(f"[{C_GREEN}✓ INGESTED{C_RESET}] Channel: {C_BOLD}{channel.upper():<14}{C_RESET} | "
+        print(f"[{C_GREEN}OK: INGESTED{C_RESET}] Channel: {C_BOLD}{channel.upper():<14}{C_RESET} | "
               f"Priority: {prio_color}{C_BOLD}{priority:<4}{C_RESET} | "
               f"Dept: {C_PURPLE}{res.get('department', 'N/A'):<12}{C_RESET} | "
               f"Churn: {C_RED if res.get('churn_risk') else C_GREEN}{str(res.get('churn_risk')):<5}{C_RESET} | "
               f"Latency: {elapsed:.2f}s | "
               f"Subject: {res.get('subject', '')[:35]}...")
     except Exception as exc:
-        print(f"[{C_RED}✗ FAILED{C_RESET}] Scenario: {scenario_key} | Error: {exc}")
+        print(f"[{C_RED}FAIL{C_RESET}] Scenario: {scenario_key} | Error: {exc}")
 
 
 def main():

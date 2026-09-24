@@ -7,6 +7,8 @@ import secrets
 import struct
 import time
 import uuid
+import os
+import sqlite3
 from typing import Dict, Any, Optional, List
 import boto3
 from botocore.config import Config
@@ -142,28 +144,44 @@ class CognitoService:
                     "InitiateAuth",
                 )
 
-            # Generate a fresh 16-character Base32 secret on each authentication challenge
-            # so the QR code and TOTP code generation are completely unique and dynamic every time
-            base32_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
-            fresh_totp_secret = "".join(secrets.choice(base32_alphabet) for _ in range(16))
-            operator["totp_secret"] = fresh_totp_secret
+            # Check if this is an initial login requiring mandatory password rotation
+            if operator.get("must_change_password"):
+                session_id = f"pwd-session-{secrets.token_hex(16)}"
+                _MFA_SESSIONS[session_id] = {
+                    "user_id": operator["id"],
+                    "email": operator["email"],
+                    "created_at": time.time(),
+                }
+                return {
+                    "challenge_name": "NEW_PASSWORD_REQUIRED",
+                    "session": session_id,
+                    "message": "Initial login detected with temporary password. You must set a permanent password.",
+                    "email": operator["email"],
+                }
+
+            # Use operator's established TOTP secret if present, or generate a fresh Base32 secret
+            totp_secret = operator.get("totp_secret")
+            if not totp_secret:
+                base32_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+                totp_secret = "".join(secrets.choice(base32_alphabet) for _ in range(16))
+                operator["totp_secret"] = totp_secret
 
             session_id = f"mfa-session-{secrets.token_hex(16)}"
             _MFA_SESSIONS[session_id] = {
                 "user_id": operator["id"],
                 "email": operator["email"],
-                "totp_secret": fresh_totp_secret,
+                "totp_secret": totp_secret,
                 "created_at": time.time(),
             }
 
             # Standard otpauth URI for Google Authenticator / Microsoft Authenticator QR scanning
-            otpauth_url = f"otpauth://totp/SupportPortal:{operator['email']}?secret={fresh_totp_secret}&issuer=SupportPortal"
+            otpauth_url = f"otpauth://totp/SupportPortal:{operator['email']}?secret={totp_secret}&issuer=SupportPortal"
 
             return {
                 "challenge_name": "SOFTWARE_TOKEN_MFA",
                 "session": session_id,
                 "message": "Multi-Factor Authentication required. Enter the 6-digit TOTP code.",
-                "totp_secret": fresh_totp_secret,
+                "totp_secret": totp_secret,
                 "otpauth_url": otpauth_url,
                 "email": operator["email"],
             }
@@ -176,6 +194,13 @@ class CognitoService:
             )
 
             challenge = response.get("ChallengeName")
+            if challenge == "NEW_PASSWORD_REQUIRED":
+                return {
+                    "challenge_name": "NEW_PASSWORD_REQUIRED",
+                    "session": response.get("Session"),
+                    "message": "Initial login detected with temporary password. You must set a permanent password.",
+                    "email": username,
+                }
             if challenge == "SOFTWARE_TOKEN_MFA":
                 return {
                     "challenge_name": challenge,
@@ -195,6 +220,156 @@ class CognitoService:
             logger.warning(f"Cognito initiate_auth error for user {username}: {exc}")
             raise
 
+    async def respond_to_new_password(self, session: str, username: str, new_password: str) -> Dict[str, Any]:
+        """Set permanent password in response to NEW_PASSWORD_REQUIRED and advance to Software Token MFA."""
+        clean_username = username.strip().lower()
+
+        if not self.client_id or session.startswith("pwd-session-") or session.startswith("mock-session-"):
+            session_data = _MFA_SESSIONS.get(session)
+            if not session_data and not session.startswith("mock-session-"):
+                raise ClientError(
+                    {"Error": {"Code": "ExpiredCodeException", "Message": "Invalid or expired password reset session."}},
+                    "RespondToAuthChallenge",
+                )
+
+            operator = _OPERATOR_REGISTRY.get(clean_username)
+            if not operator:
+                raise ClientError(
+                    {"Error": {"Code": "UserNotFoundException", "Message": "Operator not found."}},
+                    "RespondToAuthChallenge",
+                )
+
+            # Update operator's password and clear must_change_password flag
+            operator["password"] = new_password
+            operator["must_change_password"] = False
+
+            # Update SQLite database if present
+            try:
+                db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "customer_inquiries.db"))
+                if os.path.exists(db_path):
+                    conn = sqlite3.connect(db_path)
+                    conn.execute("UPDATE operators SET password_hash = ? WHERE email = ?", (new_password, clean_username))
+                    conn.commit()
+                    conn.close()
+            except Exception as db_exc:
+                logger.warning(f"Could not persist updated password to SQLite: {db_exc}")
+
+            # Now issue the mandatory MFA challenge with QR code
+            totp_secret = operator.get("totp_secret")
+            if not totp_secret:
+                base32_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+                totp_secret = "".join(secrets.choice(base32_alphabet) for _ in range(16))
+                operator["totp_secret"] = totp_secret
+
+            mfa_session_id = f"mfa-session-{secrets.token_hex(16)}"
+            _MFA_SESSIONS[mfa_session_id] = {
+                "user_id": operator["id"],
+                "email": operator["email"],
+                "totp_secret": totp_secret,
+                "created_at": time.time(),
+            }
+            # Clean up password session
+            _MFA_SESSIONS.pop(session, None)
+
+            otpauth_url = f"otpauth://totp/SupportPortal:{operator['email']}?secret={totp_secret}&issuer=SupportPortal"
+
+            return {
+                "challenge_name": "SOFTWARE_TOKEN_MFA",
+                "session": mfa_session_id,
+                "message": "Permanent password established. Scan QR code to enroll your mobile authenticator device.",
+                "totp_secret": totp_secret,
+                "otpauth_url": otpauth_url,
+                "email": operator["email"],
+            }
+
+        # AWS Cognito Live path
+        try:
+            resp = self.client.respond_to_auth_challenge(
+                ClientId=self.client_id,
+                ChallengeName="NEW_PASSWORD_REQUIRED",
+                Session=session,
+                ChallengeResponses={
+                    "USERNAME": username,
+                    "NEW_PASSWORD": new_password,
+                },
+            )
+
+            next_challenge = resp.get("ChallengeName")
+            if next_challenge == "MFA_SETUP":
+                assoc = self.client.associate_software_token(Session=resp["Session"])
+                secret_code = assoc["SecretCode"]
+                otpauth = f"otpauth://totp/SupportPortal:{username}?secret={secret_code}&issuer=SupportPortal"
+                return {
+                    "challenge_name": "SOFTWARE_TOKEN_MFA",
+                    "session": assoc["Session"],
+                    "message": "Permanent password established. Scan QR code to enroll your mobile authenticator device.",
+                    "totp_secret": secret_code,
+                    "otpauth_url": otpauth,
+                    "email": username,
+                }
+            elif next_challenge == "SOFTWARE_TOKEN_MFA":
+                return {
+                    "challenge_name": "SOFTWARE_TOKEN_MFA",
+                    "session": resp.get("Session"),
+                    "message": "Permanent password established. Enter 6-digit TOTP code.",
+                    "email": username,
+                }
+
+            auth_result = resp.get("AuthenticationResult", {})
+            return {
+                "access_token": auth_result.get("AccessToken"),
+                "id_token": auth_result.get("IdToken"),
+                "refresh_token": auth_result.get("RefreshToken"),
+                "token_type": "Bearer",
+                "expires_in": auth_result.get("ExpiresIn", 3600),
+            }
+        except ClientError as exc:
+            logger.warning(f"Cognito respond_to_auth_challenge error for user {username}: {exc}")
+            raise
+
+    def invite_operator(self, name: str, email: str, role: str, temp_password: str) -> Dict[str, Any]:
+        """Provision a new operator with a temporary password (forcing password change on first login)."""
+        clean_email = email.strip().lower()
+
+        if not self.client_id:
+            operator = self.register_operator(name=name, email=clean_email, password=temp_password, role=role)
+            operator["must_change_password"] = True
+            return operator
+
+        # AWS Cognito Live path
+        try:
+            self.client.admin_create_user(
+                UserPoolId=self.user_pool_id,
+                Username=clean_email,
+                TemporaryPassword=temp_password,
+                UserAttributes=[
+                    {"Name": "email", "Value": clean_email},
+                    {"Name": "email_verified", "Value": "true"},
+                    {"Name": "name", "Value": name.strip()},
+                ],
+                MessageAction="SUPPRESS",
+            )
+            group_name = "Operations_Managers" if role == "Operations_Manager" else "Tier1_Agents"
+            try:
+                self.client.admin_add_user_to_group(
+                    UserPoolId=self.user_pool_id,
+                    Username=clean_email,
+                    GroupName=group_name,
+                )
+            except Exception as grp_exc:
+                logger.warning(f"Cognito group assignment note: {grp_exc}")
+
+            return {
+                "id": str(uuid.uuid4()),
+                "name": name.strip(),
+                "email": clean_email,
+                "role": role,
+                "groups": [group_name],
+            }
+        except ClientError as exc:
+            logger.warning(f"Cognito invite_operator error for {clean_email}: {exc}")
+            raise
+
     async def verify_software_token_mfa(self, session: str, totp_code: str) -> Dict[str, Any]:
         """Verify 6-digit TOTP code and return signed JWT with authentic operator identity and RBAC role."""
         if not self.client_id or session.startswith("mfa-session-") or session.startswith("mock-session-"):
@@ -206,7 +381,7 @@ class CognitoService:
             else:
                 # Fallback for standard tests
                 totp_secret = "JBSWY3DPEHPK3PXP"
-                operator = _OPERATOR_REGISTRY.get("carlos.m@company.internal")
+                operator = _OPERATOR_REGISTRY.get(settings.INITIAL_OPERATOR_EMAIL) or next(iter(_OPERATOR_REGISTRY.values()), None)
 
             # Validate TOTP code using RFC 6238 HMAC-SHA1
             if not verify_rfc6238_totp(totp_secret, totp_code):

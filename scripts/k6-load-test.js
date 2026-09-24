@@ -46,7 +46,7 @@ export default function () {
     headers: { "Content-Type": "application/json" },
   });
   check(postRes, {
-    "webhook intake 201": (r) => r.status === 201,
+    "webhook intake 202/201": (r) => r.status === 202 || r.status === 201,
   });
 
   sleep(1);

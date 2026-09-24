@@ -8,16 +8,17 @@ import {
   RotateCcw,
   LogOut,
   UserCheck,
+  UserPlus,
 } from 'lucide-react';
 import type { AgentProfile } from '../types/inquiry';
 import { ThemeSelector } from './ThemeSelector';
 import type { ThemeId } from '../types/theme';
+import { InviteOperatorModal } from './InviteOperatorModal';
 
 interface LoadLogicTopHeaderProps {
   currentAgent: AgentProfile;
   onSelectAgent?: (agent: AgentProfile) => void;
   onLogout?: () => void;
-  onOpenAuthModal?: () => void;
   isLiveBackend: boolean;
   isRefreshing: boolean;
   searchQuery: string;
@@ -36,7 +37,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   currentAgent,
   onSelectAgent: _onSelectAgent,
   onLogout,
-  onOpenAuthModal,
   isLiveBackend: _isLiveBackend,
   isRefreshing: _isRefreshing,
   searchQuery,
@@ -52,6 +52,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
 }) => {
 
   const [agentMenuOpen, setAgentMenuOpen] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -253,31 +254,38 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                   <span>Two-Factor Authentication Active</span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '4px' }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAgentMenuOpen(false);
-                      if (onOpenAuthModal) onOpenAuthModal();
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      border: '1px solid var(--color-border)',
-                      backgroundColor: '#FAFAFA',
-                      color: 'var(--color-black)',
-                      fontSize: '0.76rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                  >
-                    <Lock size={13} />
-                    <span>Switch Operator / Sign In</span>
-                  </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: '4px' }}>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', lineHeight: 1.3, padding: '2px 4px' }}>
+                    Single active session. To change operator credentials, you must explicitly sign out.
+                  </div>
+
+                  {currentAgent.role === 'Operations_Manager' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAgentMenuOpen(false);
+                        setShowInviteModal(true);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(12, 13, 13, 0.15)',
+                        backgroundColor: '#0C0D0D',
+                        color: '#FFFFFF',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        transition: 'opacity 0.15s ease',
+                      }}
+                    >
+                      <UserPlus size={14} />
+                      <span>Invite Support Operator</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -289,24 +297,51 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                       display: 'flex',
                       alignItems: 'center',
                       gap: '8px',
-                      padding: '8px 10px',
+                      padding: '9px 12px',
                       borderRadius: '8px',
                       border: 'none',
                       backgroundColor: '#FEE2E2',
                       color: '#991B1B',
-                      fontSize: '0.76rem',
-                      fontWeight: 600,
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
                       cursor: 'pointer',
                       textAlign: 'left',
+                      transition: 'background-color 0.15s ease',
                     }}
                   >
-                    <LogOut size={13} />
+                    <LogOut size={14} />
                     <span>Sign Out</span>
                   </button>
                 </div>
               </div>
             )}
           </div>
+
+          {/* Quick Invite Button for Operations Managers */}
+          {currentAgent.role === 'Operations_Manager' && (
+            <button
+              type="button"
+              onClick={() => setShowInviteModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 12px',
+                borderRadius: '9999px',
+                border: '1px solid #7C3AED',
+                backgroundColor: '#EDE9FE',
+                color: '#6D28D9',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title="Supervisor Action: Provision new support operator with temporary credentials"
+            >
+              <UserPlus size={13} />
+              <span>+ Invite Agent</span>
+            </button>
+          )}
         </div>
 
 
@@ -467,6 +502,11 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
           </button>
         </div>
       </div>
+
+      <InviteOperatorModal
+        isOpen={showInviteModal}
+        onClose={() => setShowInviteModal(false)}
+      />
     </header>
   );
 };

@@ -14,6 +14,9 @@ from app.schemas.auth import (
     MFAChallengeResponse,
     MFAVerifyRequest,
     RegisterRequest,
+    NewPasswordRequest,
+    InviteOperatorRequest,
+    InviteOperatorResponse,
     TokenResponse,
     OperatorProfileResponse,
 )
@@ -86,6 +89,75 @@ async def register(
         )
 
 
+@router.post("/invite", response_model=InviteOperatorResponse, status_code=status.HTTP_201_CREATED)
+async def invite_operator(
+    payload: InviteOperatorRequest,
+    db: AsyncSession = Depends(get_db),
+    cognito: CognitoService = Depends(get_cognito_service),
+    current_user: Dict[str, Any] = Depends(require_operations_manager),
+):
+    """Supervisor invitation endpoint: Allows Operations Managers to onboard new agents.
+    
+    Generates an enterprise temporary password and enforces password rotation and TOTP MFA on first login.
+    """
+    # Enforce strict enterprise corporate domain binding
+    corporate_domain = (settings.COMPANY_DOMAIN or "company.internal").lower()
+    allowed_domains = {corporate_domain, "company.internal", "company.local"}
+    email_domain = payload.email.lower().split("@")[-1]
+
+    if email_domain not in allowed_domains:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"Enterprise security violation: Operator identity '{payload.email}' must belong to "
+                f"the verified corporate domain '@{corporate_domain}'. Public and unverified email domains are strictly prohibited."
+            ),
+        )
+
+    from scripts.provision_operator import generate_secure_password
+    temp_password = generate_secure_password(14)
+
+    try:
+        operator = cognito.invite_operator(
+            name=payload.name,
+            email=payload.email,
+            role=payload.role,
+            temp_password=temp_password,
+        )
+
+        # Persist operator to relational database for durability
+        db_op = Operator(
+            id=operator["id"],
+            name=operator["name"],
+            email=operator["email"],
+            password_hash=temp_password,
+            role=operator["role"],
+            groups=operator.get("groups", ["Tier1_Agents"]),
+            totp_secret=operator.get("totp_secret", "JBSWY3DPEHPK3PXP"),
+            initials=operator.get("initials", "OP"),
+            color=operator.get("color", "#3b82f6"),
+        )
+        db.add(db_op)
+        await db.flush()
+
+        return InviteOperatorResponse(
+            message="Operator provisioned successfully. Share temporary credentials with the operator.",
+            temporary_password=temp_password,
+            operator={
+                "id": operator["id"],
+                "name": operator["name"],
+                "email": operator["email"],
+                "role": operator["role"],
+            },
+        )
+    except Exception as exc:
+        logger.warning(f"Invitation failed for {payload.email}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc) if "already exists" in str(exc) else "Failed to invite operator",
+        )
+
+
 @router.post("/login", status_code=status.HTTP_200_OK)
 async def login(
     credentials: LoginRequest,
@@ -94,14 +166,19 @@ async def login(
     """Initial username/password authentication challenge."""
     try:
         result = await cognito.initiate_auth(credentials.username, credentials.password)
-        if result.get("challenge_name") == "SOFTWARE_TOKEN_MFA":
+        if result.get("challenge_name") in ("SOFTWARE_TOKEN_MFA", "NEW_PASSWORD_REQUIRED"):
+            default_msg = (
+                "Initial login detected with temporary password. You must set a permanent password."
+                if result.get("challenge_name") == "NEW_PASSWORD_REQUIRED"
+                else "Multi-Factor Authentication required. Enter 6-digit TOTP code."
+            )
             return MFAChallengeResponse(
-                challenge_name="SOFTWARE_TOKEN_MFA",
+                challenge_name=result["challenge_name"],
                 session=result["session"],
-                message=result.get("message", "Multi-Factor Authentication required. Enter 6-digit TOTP code."),
+                message=result.get("message", default_msg),
                 totp_secret=result.get("totp_secret"),
                 otpauth_url=result.get("otpauth_url"),
-                email=result.get("email"),
+                email=result.get("email", credentials.username),
             )
         return TokenResponse(**result)
     except Exception as exc:
@@ -109,6 +186,34 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials or authentication challenge failed",
+        )
+
+
+@router.post("/password/new", response_model=MFAChallengeResponse, status_code=status.HTTP_200_OK)
+async def set_new_permanent_password(
+    payload: NewPasswordRequest,
+    cognito: CognitoService = Depends(get_cognito_service),
+):
+    """Establish permanent password in response to NEW_PASSWORD_REQUIRED challenge and advance to Software Token MFA."""
+    try:
+        result = await cognito.respond_to_new_password(
+            session=payload.session,
+            username=payload.username,
+            new_password=payload.new_password,
+        )
+        return MFAChallengeResponse(
+            challenge_name=result.get("challenge_name", "SOFTWARE_TOKEN_MFA"),
+            session=result["session"],
+            message=result.get("message", "Permanent password set. Multi-Factor Authentication required."),
+            totp_secret=result.get("totp_secret"),
+            otpauth_url=result.get("otpauth_url"),
+            email=result.get("email", payload.username),
+        )
+    except Exception as exc:
+        logger.warning(f"Setting new password failed for {payload.username}: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc) if "Password" in str(exc) or "expired" in str(exc).lower() else "Password update challenge failed",
         )
 
 

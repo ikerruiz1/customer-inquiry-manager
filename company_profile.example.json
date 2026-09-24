@@ -2,13 +2,14 @@
   "company_name": "Example Enterprises Inc.",
   "domain": "your-company-domain.tech",
   "support_email": "support@your-company-domain.tech",
-  "operations_manager_email": "ops-manager@your-company-domain.tech",
+  "admin_name": "Cloud Administrator",
+  "admin_email": "admin@your-company-domain.tech",
   "sla_proactive_warning_minutes": 10,
   "slack_webhook_url": "",
   "slack_notification_policy": "CRITICAL_AND_SLA_ONLY",
   "inbound_channels": {
     "email": "support@your-company-domain.tech",
-    "webform_url": "https://portal.your-company-domain.tech/contact",
+    "webform_url": "",
     "trustpilot_profile": "https://www.trustpilot.com/review/your-company-domain.tech"
   },
   "customer_access_policy": {
