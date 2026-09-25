@@ -1,7 +1,3 @@
-# ==============================================================================
-# Isolated Amazon RDS PostgreSQL 16 with Secrets Manager
-# ==============================================================================
-
 resource "random_password" "master_password" {
   length           = 24
   special          = true
@@ -11,7 +7,7 @@ resource "random_password" "master_password" {
 resource "aws_secretsmanager_secret" "db_credentials" {
   name                    = "${var.project_name}-${var.environment}-db-credentials"
   description             = "PostgreSQL master credentials for ${var.project_name}"
-  recovery_window_in_days = 0 # Immediate purge upon destroy for clean teardown
+  recovery_window_in_days = 0
 
   tags = {
     Name = "${var.project_name}-${var.environment}-db-credentials"
@@ -69,12 +65,10 @@ resource "aws_db_instance" "main" {
   auto_minor_version_upgrade = true
   copy_tags_to_snapshot      = true
 
-  # Automated Backups & Continuous Point-in-Time Recovery (PITR)
   backup_retention_period = 7
   backup_window           = "03:00-04:00"
   maintenance_window      = "Sun:04:30-Sun:05:30"
 
-  # 1-Click Clean Teardown
   skip_final_snapshot = true
   deletion_protection = false
 

@@ -1,7 +1,3 @@
-# ==============================================================================
-# Application Load Balancer with Blue/Green Target Groups
-# ==============================================================================
-
 resource "aws_lb" "main" {
   name               = "${var.project_name}-${var.environment}-alb"
   internal           = false
@@ -17,9 +13,6 @@ resource "aws_lb" "main" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# Blue/Green Target Groups for Zero-Downtime Traffic Shifting
-# ------------------------------------------------------------------------------
 resource "aws_lb_target_group" "blue" {
   name        = "${var.project_name}-${var.environment}-tg-blue"
   port        = 8000
@@ -64,7 +57,6 @@ resource "aws_lb_target_group" "green" {
   }
 }
 
-# Primary Production Listener (Port 80)
 resource "aws_lb_listener" "production" {
   load_balancer_arn = aws_lb.main.arn
   port              = 80
@@ -76,11 +68,10 @@ resource "aws_lb_listener" "production" {
   }
 
   lifecycle {
-    ignore_changes = [default_action] # Allows CodeDeploy to shift traffic to green
+    ignore_changes = [default_action]
   }
 }
 
-# Secondary Test Listener for CodeDeploy Pre-Traffic Hook Validation (Port 8080)
 resource "aws_lb_listener" "test" {
   load_balancer_arn = aws_lb.main.arn
   port              = 8080

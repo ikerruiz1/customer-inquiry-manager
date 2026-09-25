@@ -1,4 +1,3 @@
-# Authoritative Public Hosted Zone in Amazon Route 53
 resource "aws_route53_zone" "primary" {
   name          = var.domain_name
   force_destroy = true

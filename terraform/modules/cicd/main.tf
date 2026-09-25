@@ -1,13 +1,6 @@
-# ==============================================================================
-# 100% AWS Developer Tools CI/CD Suite (CodePipeline, CodeBuild, CodeDeploy)
-# ==============================================================================
-
 data "aws_region" "current" {}
 data "aws_caller_identity" "current" {}
 
-# ------------------------------------------------------------------------------
-# 1. IAM Roles: CodePipeline, CodeBuild, and CodeDeploy
-# ------------------------------------------------------------------------------
 resource "aws_iam_role" "codebuild_role" {
   name = "${var.project_name}-${var.environment}-codebuild-role"
 
@@ -161,9 +154,6 @@ resource "aws_iam_role_policy_attachment" "codepipeline_attach" {
   policy_arn = aws_iam_policy.codepipeline_policy.arn
 }
 
-# ------------------------------------------------------------------------------
-# 2. AWS CodeBuild Project (Tests, Security Scanning & Image Build)
-# ------------------------------------------------------------------------------
 resource "aws_codebuild_project" "build" {
   name          = "${var.project_name}-${var.environment}-build"
   description   = "Executes Pytest, SAST/SCA security scans, multi-stage Docker build, and ECR push"
@@ -178,7 +168,7 @@ resource "aws_codebuild_project" "build" {
     compute_type    = "BUILD_GENERAL1_SMALL"
     image           = "aws/codebuild/standard:7.0"
     type            = "LINUX_CONTAINER"
-    privileged_mode = true # Required for Docker daemon in container builds
+    privileged_mode = true
 
     environment_variable {
       name  = "AWS_DEFAULT_REGION"
@@ -208,9 +198,6 @@ resource "aws_codebuild_project" "build" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# 3. AWS CodeDeploy Application & Canary Deployment Group
-# ------------------------------------------------------------------------------
 resource "aws_codedeploy_app" "ecs" {
   name             = "${var.project_name}-${var.environment}-app"
   compute_platform = "ECS"
@@ -259,9 +246,6 @@ resource "aws_codedeploy_deployment_group" "ecs" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# 4. AWS CodePipeline (Automated Pipeline Orchestration)
-# ------------------------------------------------------------------------------
 resource "aws_codepipeline" "pipeline" {
   name     = "${var.project_name}-${var.environment}-pipeline"
   role_arn = aws_iam_role.codepipeline_role.arn

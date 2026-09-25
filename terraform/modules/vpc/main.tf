@@ -1,7 +1,3 @@
-# ==============================================================================
-# 3-Tier Zero-Egress VPC Architecture
-# ==============================================================================
-
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -14,7 +10,6 @@ resource "aws_vpc" "main" {
   }
 }
 
-# Internet Gateway (Ingress Only for Public ALB)
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
 
@@ -23,9 +18,6 @@ resource "aws_internet_gateway" "main" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# Tier 1: Public Subnets (ALB & WAF Boundary)
-# ------------------------------------------------------------------------------
 resource "aws_subnet" "public" {
   count                   = length(var.public_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
@@ -58,10 +50,6 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# ------------------------------------------------------------------------------
-# Tier 2: Private Compute Subnets (ECS Fargate & VPC Endpoints)
-# NO NAT GATEWAY PROVISIONED - Route table is 100% local only
-# ------------------------------------------------------------------------------
 resource "aws_subnet" "private" {
   count                   = length(var.private_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
@@ -90,10 +78,6 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private.id
 }
 
-# ------------------------------------------------------------------------------
-# Tier 3: Isolated Database Subnets (Amazon RDS PostgreSQL 16)
-# Strictly isolated - No route to Internet, NAT, or external networks
-# ------------------------------------------------------------------------------
 resource "aws_subnet" "database" {
   count                   = length(var.database_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
@@ -132,9 +116,6 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# Security Group for AWS PrivateLink Interface Endpoints
-# ------------------------------------------------------------------------------
 resource "aws_security_group" "vpc_endpoints" {
   name        = "${var.project_name}-${var.environment}-vpce-sg"
   description = "Controls inbound HTTPS traffic from Fargate tasks to Interface VPC Endpoints"
@@ -161,9 +142,6 @@ resource "aws_security_group" "vpc_endpoints" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# Gateway Endpoint: Amazon S3 (Cost-Free High-Throughput Access)
-# ------------------------------------------------------------------------------
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = aws_vpc.main.id
   service_name      = "com.amazonaws.${data.aws_region.current.name}.s3"
@@ -175,9 +153,6 @@ resource "aws_vpc_endpoint" "s3" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# AWS PrivateLink: 9 Interface VPC Endpoints (Zero-Internet Egress)
-# ------------------------------------------------------------------------------
 locals {
   interface_services = [
     "ecr.api",

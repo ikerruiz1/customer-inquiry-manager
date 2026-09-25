@@ -24,7 +24,6 @@ provider "aws" {
   }
 }
 
-# 1. 3-Tier Network & AWS PrivateLink Interface Endpoints (Zero-Internet Egress)
 module "vpc" {
   source             = "../../modules/vpc"
   vpc_cidr           = var.vpc_cidr
@@ -33,7 +32,6 @@ module "vpc" {
   environment        = var.environment
 }
 
-# 2. Least-Privilege Security Groups
 module "security_groups" {
   source       = "../../modules/security_groups"
   vpc_id       = module.vpc.vpc_id
@@ -41,14 +39,12 @@ module "security_groups" {
   environment  = var.environment
 }
 
-# 3. Amazon Cognito Zero-Trust TOTP MFA Authentication
 module "cognito" {
   source       = "../../modules/cognito"
   project_name = var.project_name
   environment  = var.environment
 }
 
-# 4. Isolated Amazon RDS PostgreSQL 16
 module "rds" {
   source               = "../../modules/rds"
   project_name         = var.project_name
@@ -57,14 +53,12 @@ module "rds" {
   rds_sg_id            = module.security_groups.rds_sg_id
 }
 
-# 5. S3 Multi-Tier Lifecycle & Clean Teardown Buckets
 module "s3" {
   source       = "../../modules/s3"
   project_name = var.project_name
   environment  = var.environment
 }
 
-# 6. IAM Task Execution Role vs Task Role
 module "iam" {
   source                 = "../../modules/iam"
   project_name           = var.project_name
@@ -73,7 +67,6 @@ module "iam" {
   db_secret_arn          = module.rds.secret_arn
 }
 
-# 7. Application Load Balancer with Blue/Green Target Groups
 module "alb" {
   source            = "../../modules/alb"
   project_name      = var.project_name
@@ -83,14 +76,12 @@ module "alb" {
   alb_sg_id         = module.security_groups.alb_sg_id
 }
 
-# 8. Amazon SQS FIFO Decoupled Ingestion Buffer & Dead-Letter Queue
 module "sqs" {
   source       = "../../modules/sqs"
   project_name = var.project_name
   environment  = var.environment
 }
 
-# 9. ECS Fargate Spot Dual-Container Cluster & Tasks
 module "ecs" {
   source                       = "../../modules/ecs"
   project_name                 = var.project_name
@@ -111,7 +102,6 @@ module "ecs" {
   sqs_inquiries_dlq_url        = module.sqs.dlq_url
 }
 
-# 10. CloudWatch Metrics, Alarms, Dashboard & Outbound SNS Topics
 module "monitoring" {
   source               = "../../modules/monitoring"
   project_name         = var.project_name
@@ -123,7 +113,6 @@ module "monitoring" {
   inquiries_dlq_name   = module.sqs.dlq_name
 }
 
-# 10. 100% AWS Developer Tools CI/CD Suite (CodePipeline, CodeBuild, CodeDeploy)
 module "cicd" {
   source                         = "../../modules/cicd"
   project_name                   = var.project_name
@@ -139,7 +128,6 @@ module "cicd" {
   test_listener_arn              = module.alb.test_listener_arn
 }
 
-# 11. Amazon Route 53 Authoritative Public Hosted Zone
 module "route53" {
   source       = "../../modules/route53"
   project_name = var.project_name
@@ -147,7 +135,6 @@ module "route53" {
   domain_name  = var.domain_name
 }
 
-# 12. Amazon SES Native Inbound Email Ingestion & S3 Encrypted Storage
 module "ses" {
   source          = "../../modules/ses"
   project_name    = var.project_name
@@ -157,5 +144,3 @@ module "ses" {
   aws_region      = var.aws_region
   route53_zone_id = module.route53.zone_id
 }
-
-
