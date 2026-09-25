@@ -17,11 +17,9 @@ import type {
   InquiryMessage,
 } from '../types/inquiry';
 
-// Active session token keys
 const AUTH_TOKEN_KEY = 'auth_token_v2';
 const AUTH_USER_KEY = 'auth_user_v2';
 
-// Active bearer token
 let authToken: string = localStorage.getItem(AUTH_TOKEN_KEY) || '';
 
 export const setAuthToken = (token: string) => {
@@ -72,9 +70,6 @@ const getHeaders = () => {
   return headers;
 };
 
-/**
- * Initial login challenge: returns either MFA challenge or token response
- */
 export async function loginOperator(
   username: string,
   password: string
@@ -94,9 +89,6 @@ export async function loginOperator(
   return await res.json();
 }
 
-/**
- * Register a new operator and initiate MFA enrollment
- */
 export async function registerOperator(payload: {
   name: string;
   email: string;
@@ -118,9 +110,6 @@ export async function registerOperator(payload: {
   return await res.json();
 }
 
-/**
- * Submit permanent password in response to NEW_PASSWORD_REQUIRED challenge
- */
 export async function setPermanentPassword(
   session: string,
   username: string,
@@ -141,9 +130,6 @@ export async function setPermanentPassword(
   return await res.json();
 }
 
-/**
- * Supervisor Invitation: Operations Manager provisions a new support agent
- */
 export async function inviteOperator(payload: {
   name: string;
   email: string;
@@ -167,9 +153,6 @@ export async function inviteOperator(payload: {
   return await res.json();
 }
 
-/**
- * Verify 6-digit TOTP code (Google/Microsoft Authenticator) and establish session
- */
 export async function verifyMfaCode(
   session: string,
   totpCode: string
@@ -197,9 +180,6 @@ export async function verifyMfaCode(
   return tokenData;
 }
 
-/**
- * Fetch current operator identity and RBAC profile
- */
 export async function fetchCurrentOperator(): Promise<AuthUser> {
   const res = await fetch('/api/v1/auth/me', {
     headers: getHeaders(),
@@ -212,9 +192,6 @@ export async function fetchCurrentOperator(): Promise<AuthUser> {
   return user;
 }
 
-/**
- * Check if the live FastAPI microservice is reachable on port 8000
- */
 export async function checkBackendHealth(): Promise<boolean> {
   try {
     const res = await fetch('/health/live', { method: 'GET' });
@@ -224,9 +201,6 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 }
 
-/**
- * Fetch prioritized inquiry queue directly from persistent backend database
- */
 export async function fetchInquiries(params?: {
   status?: InquiryStatusEnum;
   department?: DepartmentEnum;
@@ -250,9 +224,6 @@ export async function fetchInquiries(params?: {
   return Array.isArray(liveItems) ? liveItems : [];
 }
 
-/**
- * Retrieve single inquiry detail from persistent database
- */
 export async function getInquiry(id: string): Promise<Inquiry> {
   const res = await fetch(`/api/v1/inquiries/${id}`, {
     headers: getHeaders(),
@@ -264,9 +235,6 @@ export async function getInquiry(id: string): Promise<Inquiry> {
   return await res.json();
 }
 
-/**
- * Atomic Claim: Assigns inquiry to the current agent in database with race-condition guard
- */
 export async function claimInquiry(
   id: string,
   _agentId?: string
@@ -285,9 +253,6 @@ export async function claimInquiry(
   return await res.json();
 }
 
-/**
- * Human-in-the-Loop Resolution: Approves response and closes ticket in database
- */
 export async function resolveInquiry(
   id: string,
   resolutionText: string,
@@ -308,9 +273,6 @@ export async function resolveInquiry(
   return await res.json();
 }
 
-/**
- * MLOps Classification Override with mandatory audit justification in database
- */
 export async function overrideInquiry(
   id: string,
   newDepartment: DepartmentEnum,
@@ -333,9 +295,6 @@ export async function overrideInquiry(
   return await res.json();
 }
 
-/**
- * Intake / Ingest new customer inquiry via backend pipeline
- */
 export async function createInquiry(payload: {
   channel: ChannelEnum;
   customer_email: string;
@@ -355,9 +314,6 @@ export async function createInquiry(payload: {
   return await res.json();
 }
 
-/**
- * Fetch compliance audit trail for a ticket from persistent database
- */
 export async function getAuditLogs(inquiryId: string): Promise<AuditLog[]> {
   const res = await fetch(`/api/v1/inquiries/${inquiryId}/audit-logs`, {
     headers: getHeaders(),
@@ -369,9 +325,6 @@ export async function getAuditLogs(inquiryId: string): Promise<AuditLog[]> {
   return await res.json();
 }
 
-/**
- * Fetch live SQL-aggregated KPIs and categorical distribution metrics from backend
- */
 export async function fetchDashboardMetrics(): Promise<DashboardMetricsResponse> {
   const res = await fetch('/api/v1/metrics/dashboard', {
     headers: getHeaders(),
@@ -383,9 +336,6 @@ export async function fetchDashboardMetrics(): Promise<DashboardMetricsResponse>
   return await res.json();
 }
 
-/**
- * Fetch all registered support operators dynamically from backend database
- */
 export async function fetchRegisteredOperators(): Promise<AgentProfile[]> {
   const res = await fetch('/api/v1/auth/operators', {
     headers: getHeaders(),
@@ -398,9 +348,6 @@ export async function fetchRegisteredOperators(): Promise<AgentProfile[]> {
   return Array.isArray(data) ? data : [];
 }
 
-/**
- * Reset dev inquiries and audit logs to canonical seed state
- */
 export async function resetDemoInquiries(): Promise<{ message: string; total_inquiries: number }> {
   const res = await fetch('/api/v1/inquiries/reset-demo-data', {
     method: 'POST',
@@ -413,9 +360,6 @@ export async function resetDemoInquiries(): Promise<{ message: string; total_inq
   return await res.json();
 }
 
-/**
- * Retrieve chronological conversation thread for a ticket
- */
 export async function getInquiryMessages(inquiryId: string): Promise<InquiryMessage[]> {
   const res = await fetch(`/api/v1/inquiries/${inquiryId}/messages`, {
     headers: getHeaders(),
@@ -427,9 +371,6 @@ export async function getInquiryMessages(inquiryId: string): Promise<InquiryMess
   return await res.json();
 }
 
-/**
- * Send an agent reply, ask for info (pausing SLA), or add an internal note
- */
 export async function postInquiryMessage(
   inquiryId: string,
   payload: {
@@ -454,9 +395,6 @@ export async function postInquiryMessage(
   return await res.json();
 }
 
-/**
- * Simulate customer reply to test conversation thread and SLA clock resumption
- */
 export async function postCustomerReply(
   inquiryId: string,
   payload: {
@@ -483,9 +421,6 @@ export async function postCustomerReply(
   return await res.json();
 }
 
-/**
- * Retrieve tailored AI Copilot draft dynamically based on selected action mode (REPLY, REQUEST_INFO, INTERNAL_NOTE)
- */
 export async function getCopilotDraft(
   inquiryId: string,
   actionType: MessageActionEnum | string = 'REPLY'

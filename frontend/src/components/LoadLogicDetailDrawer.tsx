@@ -485,7 +485,6 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
             </div>
           </div>
 
-          {/* Section 2: Extracted Key Data Entities (NER Chips with 1-click Copy) */}
           <div
             style={{
               backgroundColor: '#FAFAFA',

@@ -66,7 +66,6 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
   const [activeFacetFilter, setActiveFacetFilter] = useState<FacetFilter>('ALL');
   const [isFiltersBarOpen, setIsFiltersBarOpen] = useState<boolean>(false);
 
-  // Live ticker updating every 1000ms for exact countdown recalculation
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(Date.now());
@@ -74,14 +73,12 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     return () => clearInterval(timer);
   }, []);
 
-  // Reset quick facet filter when switching to DEFAULT or ALL queue view
   useEffect(() => {
     if (activeTab === 'DEFAULT' || activeTab === 'ALL') {
       setActiveFacetFilter('ALL');
     }
   }, [activeTab]);
 
-  // Compute tab counts: 'all' represents active unresolved tickets in the operational backlog
   const activeInquiries = inquiries.filter((t) => t.status !== InquiryStatusEnum.RESOLVED);
   const tabCounts = {
     all: activeInquiries.length,
@@ -92,7 +89,6 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     completed: inquiries.filter((t) => t.status === InquiryStatusEnum.RESOLVED).length,
   };
 
-  // Compute facet counts for quick filter chips (strictly on active unresolved inquiries)
   const facetCounts = {
     p1: activeInquiries.filter((t) => t.priority === PriorityEnum.P1).length,
     p2: activeInquiries.filter((t) => t.priority === PriorityEnum.P2).length,
@@ -105,18 +101,15 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     webForm: activeInquiries.filter((t) => t.channel === ChannelEnum.WEB_FORM).length,
   };
 
-  // 1. Filter based on active tab: Resolved tickets strictly disappear from active task lists!
   const tabFilteredInquiries = inquiries.filter((ticket) => {
     if (activeTab === 'PENDING') return ticket.status === InquiryStatusEnum.UNASSIGNED;
     if (activeTab === 'IN_PROGRESS') return ticket.status === InquiryStatusEnum.CLAIMED;
     if (activeTab === 'PENDING_CUSTOMER') return ticket.status === InquiryStatusEnum.PENDING_CUSTOMER;
     if (activeTab === 'ASSIGNED') return ticket.assigned_agent_id === currentAgent.id && ticket.status !== InquiryStatusEnum.RESOLVED;
     if (activeTab === 'COMPLETED') return ticket.status === InquiryStatusEnum.RESOLVED;
-    // For 'DEFAULT', 'ALL', and 'FILTERS': exclude resolved inquiries from the active task queue
     return ticket.status !== InquiryStatusEnum.RESOLVED;
   });
 
-  // 2. Filter based on active quick facet
   const facetFilteredInquiries = tabFilteredInquiries.filter((ticket) => {
     if (activeFacetFilter === 'ALL') return true;
     if (activeFacetFilter === 'P1') return ticket.priority === PriorityEnum.P1;
@@ -131,7 +124,6 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     return true;
   });
 
-  // 3. Sorting Engine: ITIL SLA Urgency Prioritization (Breached > P1-P4 > Churn Risk > SLA Deadline > Newest)
   const sortedInquiries = [...facetFilteredInquiries].sort((a, b) => {
     const now = currentTime;
     const aDeadline = new Date(a.sla_deadline_at).getTime();
@@ -139,10 +131,8 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     const aBreached = a.status !== InquiryStatusEnum.RESOLVED && aDeadline < now;
     const bBreached = b.status !== InquiryStatusEnum.RESOLVED && bDeadline < now;
 
-    // 1. is_sla_breached DESC
     if (aBreached !== bBreached) return aBreached ? -1 : 1;
 
-    // 2. priority: P1 > P2 > P3 > P4
     const priorityWeight: Record<PriorityEnum, number> = {
       [PriorityEnum.P1]: 1,
       [PriorityEnum.P2]: 2,
@@ -152,13 +142,10 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     const pDiff = (priorityWeight[a.priority] || 4) - (priorityWeight[b.priority] || 4);
     if (pDiff !== 0) return pDiff;
 
-    // 3. churn_risk DESC
     if (a.churn_risk !== b.churn_risk) return a.churn_risk ? -1 : 1;
 
-    // 4. sla_deadline_at ASC
     if (aDeadline !== bDeadline) return aDeadline - bDeadline;
 
-    // 5. created_at DESC (tie-breaker: newer inquiries first)
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
   });
 
@@ -197,14 +184,11 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     }
   };
 
-  // Synchronized 3-grey and 3-green distinct department palette
   const getDepartmentBadge = (dept: DepartmentEnum) => {
     const meta: Record<DepartmentEnum, { label: string; color: string; bg: string; dot: string; dotBorder?: string }> = {
-      // 3 Greys:
       [DepartmentEnum.TECH_SUPPORT]: { label: 'Tech Support', color: '#111827', bg: 'rgba(17, 24, 39, 0.08)', dot: '#111827' },
       [DepartmentEnum.SECURITY]: { label: 'Security', color: '#374151', bg: 'rgba(107, 114, 128, 0.12)', dot: '#6B7280' },
       [DepartmentEnum.GENERAL]: { label: 'General', color: '#4B5563', bg: 'rgba(203, 213, 225, 0.25)', dot: '#CBD5E1', dotBorder: '1px solid #94A3B8' },
-      // 3 Greens:
       [DepartmentEnum.BILLING]: { label: 'Billing', color: '#064E3B', bg: 'rgba(6, 78, 59, 0.08)', dot: '#064E3B' },
       [DepartmentEnum.ACCOUNTS]: { label: 'Accounts', color: '#047857', bg: 'rgba(16, 185, 129, 0.12)', dot: '#10B981' },
       [DepartmentEnum.SALES]: { label: 'Sales', color: '#4D7C0F', bg: 'rgba(132, 204, 22, 0.15)', dot: '#84CC16' },
@@ -240,7 +224,6 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     );
   };
 
-  // Severity / Priority Pill: Explicit P1, P2, P3, P4 prominently visible from the outside
   const getSeverityBadge = (priority: PriorityEnum) => {
     switch (priority) {
       case PriorityEnum.P1:
@@ -324,7 +307,6 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     }
   };
 
-  // SLA Due Countdown Pill matching Image 2
   const getSlaDuePill = (ticket: Inquiry) => {
     if (ticket.status === InquiryStatusEnum.RESOLVED) {
       return (
@@ -480,12 +462,11 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
     return operators?.find((a) => a.id === agentId || a.email === agentId) || null;
   };
 
-  // Fixed CSS Grid Layout across Table Headers and Data Rows (6 Columns matching Image 2)
   const gridColumns = '100px 165px 1fr 190px 115px 110px';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%' }}>
-      {/* Top Bar: Title + Status Tabs + Dedicated Filters Tab */}
+      
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <div
           style={{
@@ -497,7 +478,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            {/* Title with live count badge */}
+            
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0C0D0D', letterSpacing: '-0.02em', margin: 0 }}>
                 Inquiries
@@ -516,9 +497,9 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               </span>
             </div>
 
-            {/* Status Pills */}
+            
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-              {/* Default Tab: Auto Urgent First */}
+              
               <button
                 onClick={() => {
                   onTabChange('DEFAULT');
@@ -582,7 +563,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                 Completed {tabCounts.completed}
               </button>
 
-              {/* Dedicated Filters Tab Toggle */}
+              
               <button
                 onClick={() => {
                   setIsFiltersBarOpen(!isFiltersBarOpen);
@@ -618,13 +599,13 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
             </div>
           </div>
 
-          {/* Right indicator: Drag Handle */}
+          
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {dragHandle}
           </div>
         </div>
 
-        {/* Dedicated Filters Tab Content: 1-Click Quick Facet Chips */}
+        
         {(isFiltersBarOpen || activeTab === 'FILTERS' || activeFacetFilter !== 'ALL') && (
           <div
             style={{
@@ -642,7 +623,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               Filter By:
             </span>
 
-            {/* P1 Only */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'P1' ? 'ALL' : 'P1')}
               style={{
@@ -664,7 +645,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>P1 Only ({facetCounts.p1})</span>
             </button>
 
-            {/* P2 Only */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'P2' ? 'ALL' : 'P2')}
               style={{
@@ -684,7 +665,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>P2 Only ({facetCounts.p2})</span>
             </button>
 
-            {/* P3 Only */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'P3' ? 'ALL' : 'P3')}
               style={{
@@ -704,7 +685,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>P3 Only ({facetCounts.p3})</span>
             </button>
 
-            {/* P4 Only */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'P4' ? 'ALL' : 'P4')}
               style={{
@@ -724,7 +705,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>P4 Only ({facetCounts.p4})</span>
             </button>
 
-            {/* Churn Risk Only */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'CHURN_RISK' ? 'ALL' : 'CHURN_RISK')}
               style={{
@@ -746,7 +727,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>Churn Risk ({facetCounts.churn})</span>
             </button>
 
-            {/* Stripe */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'STRIPE' ? 'ALL' : 'STRIPE')}
               style={{
@@ -768,7 +749,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>Stripe ({facetCounts.stripe})</span>
             </button>
 
-            {/* Email */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'EMAIL' ? 'ALL' : 'EMAIL')}
               style={{
@@ -790,7 +771,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>Email ({facetCounts.email})</span>
             </button>
 
-            {/* Trustpilot */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'TRUSTPILOT' ? 'ALL' : 'TRUSTPILOT')}
               style={{
@@ -812,7 +793,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>Trustpilot ({facetCounts.trustpilot})</span>
             </button>
 
-            {/* Web Form */}
+            
             <button
               onClick={() => setActiveFacetFilter(activeFacetFilter === 'WEB_FORM' ? 'ALL' : 'WEB_FORM')}
               style={{
@@ -834,7 +815,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
               <span>Web Form ({facetCounts.webForm})</span>
             </button>
 
-            {/* Reset / Clear Button */}
+            
             {activeFacetFilter !== 'ALL' && (
               <button
                 onClick={() => setActiveFacetFilter('ALL')}
@@ -859,7 +840,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
         )}
       </div>
 
-      {/* Table Column Header: Strictly Aligned Grid (6 Columns Matching Image 2) */}
+      
       <div
         style={{
           display: 'grid',
@@ -885,7 +866,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
         <span style={{ textAlign: 'right' }}>Actions</span>
       </div>
 
-      {/* Empty State */}
+      
       {sortedInquiries.length === 0 ? (
         <div
           style={{
@@ -922,7 +903,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
           </p>
         </div>
       ) : (
-        /* High-Density Row List: Strict Grid Alignment (Matching Image 2) */
+        
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {sortedInquiries.map((ticket) => {
             const isSelected = selectedTicket?.id === ticket.id;
@@ -951,7 +932,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                     : '0 1px 3px rgba(12, 13, 13, 0.02)',
                 }}
               >
-                {/* Col 1: Ticket ID (Fixed width 100px) */}
+                
                 <div>
                   <span
                     style={{
@@ -965,7 +946,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                   </span>
                 </div>
 
-                {/* Col 2: Customer & Channel (Fixed width 165px) */}
+                
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', overflow: 'hidden' }}>
                   <span
                     style={{
@@ -983,7 +964,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                   <div>{getChannelBadge(ticket.channel)}</div>
                 </div>
 
-                {/* Col 3: Issue & Key Entities (Flexible 1fr) */}
+                
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     {Date.now() - new Date(ticket.created_at).getTime() < 180000 && (
@@ -1021,7 +1002,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                     </span>
                   </div>
 
-                  {/* Horizontal row of Entities + Department Badge */}
+                  
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     {getDepartmentBadge(ticket.department)}
                     {ticket.entities?.monetary_amount && (
@@ -1069,13 +1050,13 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                   </div>
                 </div>
 
-                {/* Col 4: Severity & SLA Due (Side-by-side, Fixed width 190px) */}
+                
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   {getSeverityBadge(ticket.priority)}
                   {getSlaDuePill(ticket)}
                 </div>
 
-                {/* Col 5: Flags (Fixed width 115px) */}
+                
                 <div style={{ display: 'flex', alignItems: 'center' }}>
                   {ticket.churn_risk ? (
                     <span
@@ -1097,7 +1078,7 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                   )}
                 </div>
 
-                {/* Col 6: Actions (Fixed width 110px, right-aligned) */}
+                
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
                   {ticket.status === InquiryStatusEnum.UNASSIGNED ? (
                     <button

@@ -93,9 +93,7 @@ export const App: React.FC = () => {
       if (saved && THEMES.some((t) => t.id === saved)) {
         return saved as ThemeId;
       }
-    } catch {
-      // fallback
-    }
+    } catch {}
     return 'cloudscape';
   });
 
@@ -103,12 +101,9 @@ export const App: React.FC = () => {
     setThemeId(newTheme);
     try {
       localStorage.setItem('ambient_theme_v2', newTheme);
-    } catch {
-      // ignore
-    }
+    } catch {}
   };
 
-  // Check stored session or validate token on initial mount
   useEffect(() => {
     const stored = getStoredUser();
     if (!stored) {
@@ -153,7 +148,6 @@ export const App: React.FC = () => {
     setIsAuthModalOpen(true);
   };
 
-  // Load inquiries and live dashboard metrics from backend
   const loadData = useCallback(async () => {
     setIsRefreshing(true);
     try {
@@ -168,7 +162,6 @@ export const App: React.FC = () => {
       setDashboardMetrics(metrics);
       setRegisteredOperators(ops);
 
-      // Keep selected ticket in sync if open
       if (selectedTicket) {
         const updated = data.find((i) => i.id === selectedTicket.id);
         if (updated) setSelectedTicket(updated);
@@ -180,12 +173,10 @@ export const App: React.FC = () => {
     }
   }, [selectedTicket]);
 
-  // Initial load
   useEffect(() => {
     loadData();
   }, []);
 
-  // Periodic short-polling interval (every 3000ms for multi-agent real-time concurrency)
   useEffect(() => {
     const interval = setInterval(() => {
       loadData();
@@ -193,7 +184,6 @@ export const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [loadData]);
 
-  // Handle ticket claim with concurrency conflict guard
   const handleClaimTicket = async (ticketId: string) => {
     setIsClaiming(true);
     try {
@@ -208,7 +198,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handle ticket resolution
   const handleResolveTicket = async (
     ticketId: string,
     resolutionText: string,
@@ -226,7 +215,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handle AI classification override
   const handleOverride = async (
     ticketId: string,
     newDepartment: DepartmentEnum,
@@ -250,7 +238,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handle customer inquiry creation from modal
   const handleCreateCustomerInquiry = async (payload: {
     channel: ChannelEnum;
     customer_email: string;
@@ -273,7 +260,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Zero-manual reset of demo inquiries back to canonical state
   const handleResetData = async () => {
     if (window.confirm('Reset all customer inquiries back to the initial dataset?')) {
       try {
@@ -286,7 +272,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Export audit logs as JSON file
   const handleExportAuditLogs = () => {
     const exportData = {
       exportTimestamp: new Date().toISOString(),
@@ -321,7 +306,6 @@ export const App: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
-  // Filter inquiries based on search query
   const searchedInquiries = useMemo(() => {
     if (!searchQuery.trim()) return inquiries;
     const q = searchQuery.toLowerCase();
@@ -337,7 +321,6 @@ export const App: React.FC = () => {
     });
   }, [inquiries, searchQuery]);
 
-  // Derived KPIs with live SQL aggregation priority
   const kpis: KPIStats = useMemo(() => {
     if (dashboardMetrics?.kpis) {
       return {
@@ -353,7 +336,6 @@ export const App: React.FC = () => {
   }, [dashboardMetrics]);
   const currentTheme = THEMES.find((t) => t.id === themeId) || THEMES[0];
 
-  // Completely gate project rendering behind active authentication (Zero-Trust)
   if (!isAuthenticated) {
     return (
       <div
@@ -379,7 +361,6 @@ export const App: React.FC = () => {
 
   return (
     <>
-      {/* Zero-Lag Fixed Hardware-Accelerated Ambient Canvas Layer */}
       <AmbientBackground themeId={themeId} />
 
       <div
@@ -403,7 +384,6 @@ export const App: React.FC = () => {
           transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
         }}
       >
-        {/* 1. Global Full-Width Header Bar */}
         <LoadLogicTopHeader
           currentAgent={currentAgent}
           onSelectAgent={setCurrentAgent}
@@ -422,7 +402,6 @@ export const App: React.FC = () => {
           modelName={inquiries.find((i) => i.model_id)?.model_id || 'Claude Haiku 4.5'}
         />
 
-      {/* 2. Interactive Mobile-Widget Drag & Drop Operations Grid */}
       <main style={{ width: '100%' }}>
         <DashboardWidgetGrid
           kpis={kpis}
@@ -441,7 +420,6 @@ export const App: React.FC = () => {
         />
       </main>
 
-      {/* 3. Centered Spacious Ticket Detail Modal (Backdrop-Blurred) */}
       {selectedTicket && (
         <div
           style={{
@@ -455,7 +433,6 @@ export const App: React.FC = () => {
             boxSizing: 'border-box',
           }}
         >
-          {/* High-Blur Darkened Backdrop */}
           <div
             onClick={() => setSelectedTicket(null)}
             style={{
@@ -484,7 +461,6 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      {/* 4. MLOps Category Override Modal (Centered & Backdrop-Blurred) */}
       {selectedTicket && (
         <OverrideModal
           isOpen={isOverrideModalOpen}
@@ -495,7 +471,6 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* 5. New Customer Inquiry Modal (Centered & Backdrop-Blurred) */}
       <NewInquiryModal
         isOpen={isNewInquiryModalOpen}
         onClose={() => setIsNewInquiryModalOpen(false)}
@@ -503,7 +478,6 @@ export const App: React.FC = () => {
         isSubmitting={isInjecting}
       />
 
-      {/* 6. Enforced RFC 6238 Software Token TOTP MFA Authentication Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onSuccess={handleAuthSuccess}

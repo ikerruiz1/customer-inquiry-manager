@@ -1,7 +1,3 @@
-# ==============================================================================
-# 1-Click Clean Teardown Automation (Windows PowerShell)
-# Customer Inquiry Manager
-# ==============================================================================
 $ErrorActionPreference = "Continue"
 
 $companyName = "Customer Inquiry Manager"
@@ -19,7 +15,7 @@ if (Test-Path "company_profile.json") {
 
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Red
-Write-Host "  $($companyName): 1-Click Clean Teardown" -ForegroundColor Red
+Write-Host "  $companyName - Cloud Teardown" -ForegroundColor Red
 Write-Host "==============================================================================" -ForegroundColor Red
 Write-Host ""
 
@@ -28,8 +24,8 @@ if ($env:AWS_DEFAULT_REGION) {
     $awsRegion = $env:AWS_DEFAULT_REGION
 }
 
-# 1. Purge S3 Buckets to Avoid Dependency Lock
-Write-Host "Phase 1: Emptying all project S3 buckets (versioned & unversioned)..." -ForegroundColor Yellow
+# S3 and ECR reject deletion when containing artifacts; emptying them prevents Terraform state locks
+Write-Host "1. Emptying project S3 buckets..." -ForegroundColor Yellow
 try {
     $buckets = aws s3api list-buckets --query "Buckets[?contains(Name, 'customer-inquiry-manager')].Name" --output text
     if ($buckets -and $buckets.Trim() -ne "") {
@@ -39,15 +35,14 @@ try {
             aws s3 rm "s3://$bucket" --recursive --region $awsRegion 2>$null
         }
     }
-    Write-Host "  OK: All S3 buckets purged." -ForegroundColor Green
+    Write-Host "  OK: S3 buckets emptied." -ForegroundColor Green
 }
 catch {
     Write-Host "  Warning during S3 purge: $_" -ForegroundColor Yellow
 }
 Write-Host ""
 
-# 2. Delete ECR Container Images
-Write-Host "Phase 2: Purging ECR container repository images..." -ForegroundColor Yellow
+Write-Host "2. Deleting ECR container images..." -ForegroundColor Yellow
 $repoName = "customer-inquiry-manager-dev"
 try {
     $imageIds = aws ecr list-images --repository-name $repoName --region $awsRegion --query "imageIds[*]" --output json 2>$null
@@ -55,15 +50,14 @@ try {
         Write-Host "  Purging images from $repoName..." -ForegroundColor Cyan
         aws ecr batch-delete-image --repository-name $repoName --image-ids "$imageIds" --region $awsRegion 2>$null
     }
-    Write-Host "  OK: ECR repository purged." -ForegroundColor Green
+    Write-Host "  OK: ECR images deleted." -ForegroundColor Green
 }
 catch {
     Write-Host "  Warning during ECR purge: $_" -ForegroundColor Yellow
 }
 Write-Host ""
 
-# 3. Execute Complete Terraform Destroy
-Write-Host "Phase 3: Executing Terraform Destroy in terraform/environments/dev..." -ForegroundColor Yellow
+Write-Host "3. Running terraform destroy..." -ForegroundColor Yellow
 $extraVars = @()
 if (Test-Path "company_profile.json") {
     $profileJson = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
@@ -84,7 +78,7 @@ finally {
 
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Green
-Write-Host "  TEARDOWN SUCCESSFUL!" -ForegroundColor Green
+Write-Host "  Teardown Complete" -ForegroundColor Green
 Write-Host "  All cloud resources deleted successfully." -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
 Write-Host ""

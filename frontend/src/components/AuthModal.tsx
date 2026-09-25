@@ -35,24 +35,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const [step, setStep] = useState<'credentials' | 'new_password' | 'mfa'>('credentials');
 
-  // Form Fields (Empty by default for true multi-tenant and external cloner compatibility)
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // MFA Challenge State
   const [mfaChallenge, setMfaChallenge] = useState<MFAChallenge | null>(null);
   const [totpCode, setTotpCode] = useState('');
   const [copiedSecret, setCopiedSecret] = useState(false);
 
-  // Status & Error
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Draw QR code onto HTML5 canvas whenever MFA challenge provides otpauth_url
   useEffect(() => {
     if (step === 'mfa' && mfaChallenge?.otpauth_url && canvasRef.current) {
       QRCode.toCanvas(
@@ -200,7 +196,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           border: '1px solid rgba(12, 13, 13, 0.12)',
         }}
       >
-        {/* Modal Header */}
         <div
           style={{
             padding: '26px 28px 18px 28px',
@@ -271,7 +266,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           </p>
         </div>
 
-        {/* Modal Body */}
         <div style={{ padding: '24px 28px' }}>
           {error && (
             <div
@@ -545,7 +539,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </form>
           ) : (
-            /* MFA Step */
             <form onSubmit={handleMfaSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {mfaChallenge?.otpauth_url ? (
                 <div

@@ -75,16 +75,13 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
           return parsed;
         }
       }
-    } catch {
-      // ignore JSON parse error and fallback to default
-    }
+    } catch {}
     return DEFAULT_WIDGET_ORDER;
   });
 
   const [draggedId, setDraggedId] = useState<WidgetId | null>(null);
   const [dragOverId, setDragOverId] = useState<WidgetId | null>(null);
 
-  // Notify parent if layout is customized vs default
   useEffect(() => {
     const isCustom = JSON.stringify(widgets) !== JSON.stringify(DEFAULT_WIDGET_ORDER);
     if (onLayoutChange) {
@@ -92,7 +89,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
     }
   }, [widgets, onLayoutChange]);
 
-  // Handle external reset signal from top bar
   useEffect(() => {
     if (resetSignal && resetSignal > 0) {
       setWidgets(DEFAULT_WIDGET_ORDER);
@@ -123,7 +119,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
 
   const handleDragLeave = (e: React.DragEvent, targetId: WidgetId) => {
     e.preventDefault();
-    // Ignore dragleave if cursor transitions within children of currentTarget
     if (e.currentTarget.contains(e.relatedTarget as Node)) {
       return;
     }
@@ -151,9 +146,7 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
       setWidgets(currentOrder);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentOrder));
-      } catch {
-        // ignore localStorage quota error
-      }
+      } catch {}
     }
 
     setDraggedId(null);
@@ -244,7 +237,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               transition: 'transform 0.2s cubic-bezier(0.2, 0.9, 0.3, 1), box-shadow 0.2s ease',
             }}
           >
-            {/* Live Drop Target Preview Box with prominent dotted/dashed boundary & high-contrast frosted backdrop */}
             {isDragOver && (
               <div
                 className="widget-drop-placeholder"
@@ -314,7 +306,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               </div>
             )}
 
-            {/* 1. Top Row Left: SLA Compliance Rate Card (Individually Draggable) */}
             {id === 'kpi_sla' && (
               <TasklySlaCard
                 kpis={kpis}
@@ -324,7 +315,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               />
             )}
 
-            {/* 2. Top Row Right: AI MTTR Resolution Velocity Card (Individually Draggable) */}
             {id === 'kpi_mttr' && (
               <TasklyMttrCard
                 kpis={kpis}
@@ -334,7 +324,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               />
             )}
 
-            {/* 3. Middle Row Left: Domain Hatched Pill Bar Chart */}
             {id === 'domain_distribution' && (
               <TasklyDomainBarChart
                 inquiries={inquiries}
@@ -343,7 +332,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               />
             )}
 
-            {/* 4. Middle Row Right: Priority & SLA Hatched Pill Bar Chart */}
             {id === 'priority_distribution' && (
               <TasklyPriorityBarChart
                 inquiries={inquiries}
@@ -352,7 +340,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               />
             )}
 
-            {/* 5. Ingestion Channels / 4 Sources Creative Bar Chart (Half-Width) */}
             {id === 'sources_distribution' && (
               <TasklySourcesBarChart
                 inquiries={inquiries}
@@ -361,7 +348,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               />
             )}
 
-            {/* 6. Customer Sentiment & Churn Risk Analytics Bar Chart (Half-Width) */}
             {id === 'sentiment_distribution' && (
               <TasklySentimentBarChart
                 inquiries={inquiries}
@@ -370,7 +356,6 @@ export const DashboardWidgetGrid: React.FC<DashboardWidgetGridProps> = ({
               />
             )}
 
-            {/* 7. Lower Section: Inquiries Queue Table */}
             {id === 'queue_table' && (
               <div
                 className="loadlogic-card"

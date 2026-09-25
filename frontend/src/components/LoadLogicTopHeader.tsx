@@ -55,7 +55,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
   const [showInviteModal, setShowInviteModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -76,7 +75,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
         paddingBottom: '4px',
       }}
     >
-      {/* Upper Row: Brand Logo + Operator Switcher + Telemetry Badges + Global Actions */}
       <div
         style={{
           display: 'flex',
@@ -86,7 +84,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
           flexWrap: 'wrap',
         }}
       >
-        {/* Brand Logo & Title */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
@@ -136,7 +133,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
             </div>
           </div>
 
-          {/* Operator Profile Card with Authenticated Session Menu */}
           <div style={{ position: 'relative' }} ref={dropdownRef}>
             <div
               onClick={() => setAgentMenuOpen(!agentMenuOpen)}
@@ -185,7 +181,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
               <ChevronDown size={13} style={{ color: 'var(--color-text-muted)' }} />
             </div>
 
-            {/* Operator Session Dropdown */}
             {agentMenuOpen && (
               <div
                 style={{
@@ -317,7 +312,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
             )}
           </div>
 
-          {/* Quick Invite Button for Operations Managers */}
           {currentAgent.role === 'Operations_Manager' && (
             <button
               type="button"
@@ -347,7 +341,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
 
       </div>
 
-      {/* Lower Row: Full-Width Search Omnibar + Action Controls */}
       <div
         style={{
           display: 'flex',
@@ -358,7 +351,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
           width: '100%',
         }}
       >
-        {/* Full-Width Search Input */}
         <div
           style={{
             position: 'relative',
@@ -396,9 +388,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
           />
         </div>
 
-        {/* Action Controls */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {/* Reset Custom Widget Layout Button */}
           {isLayoutCustomized && (
             <button
               onClick={onResetLayout}
@@ -423,7 +413,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
             </button>
           )}
 
-          {/* Reset Demo Inquiries Button */}
           {onResetData && (
             <button
               onClick={onResetData}
@@ -448,13 +437,11 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
             </button>
           )}
 
-          {/* Ambient Background Theme Selector */}
           <ThemeSelector
             currentThemeId={currentThemeId}
             onSelectTheme={onSelectTheme}
           />
 
-          {/* Export Audit Logs Button */}
           <button
             onClick={onExportAuditLogs}
             style={{
@@ -477,7 +464,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
             <span>Export</span>
           </button>
 
-          {/* "+ Add New Inquiry" Black Action Button */}
           <button
             onClick={onOpenNewInquiryModal}
             style={{

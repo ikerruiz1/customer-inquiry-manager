@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""CLI Omnichannel Ingestion Test Harness for Customer Inquiry Manager.
-
-Simulates incoming customer communications across all 5 inbound webhooks:
-1. Corporate Email (AWS SES / SendGrid)
-2. Customer Web Form
-3. Trustpilot Review (with HMAC-SHA256 cryptographic signature)
-4. Google Review (with X-Google-Webhook-Secret authentication header)
-5. Stripe Billing Dispute (charge.dispute.created)
-"""
 import argparse
 import hashlib
 import hmac
@@ -26,7 +17,6 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# ANSI Terminal Colors
 C_RESET = "\033[0m"
 C_BOLD = "\033[1m"
 C_RED = "\033[31m"
@@ -192,7 +182,7 @@ def main():
     parser.add_argument("--google-secret", default="", help="Optional header secret for Google Reviews")
     args = parser.parse_args()
 
-    print(f"\n{C_BOLD}{C_CYAN}=== Customer Inquiry Manager: Omnichannel Traffic Harness ==={C_RESET}")
+    print(f"\n{C_BOLD}{C_CYAN}Customer Inquiry Manager - Ingest Test Traffic{C_RESET}")
     print(f"Target Host: {args.host}")
     print(f"Scenario:    {args.scenario}")
     print(f"Cycles:      {args.count}\n")
@@ -201,7 +191,7 @@ def main():
 
     for cycle in range(1, args.count + 1):
         if args.count > 1:
-            print(f"\n--- Batch Cycle {cycle}/{args.count} ---")
+            print(f"\n--- Batch {cycle}/{args.count} ---")
         for scn in scenarios_to_run:
             dispatch_inquiry(
                 host=args.host,
@@ -211,7 +201,7 @@ def main():
             )
             time.sleep(0.5)
 
-    print(f"\n{C_GREEN}Traffic seeding sequence complete.{C_RESET}\n")
+    print(f"\n{C_GREEN}Traffic ingestion complete.{C_RESET}\n")
 
 
 if __name__ == "__main__":
