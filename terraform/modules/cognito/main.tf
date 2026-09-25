@@ -1,11 +1,6 @@
-# ==============================================================================
-# Amazon Cognito User Pool with Enforced Software Token TOTP MFA
-# ==============================================================================
-
 resource "aws_cognito_user_pool" "main" {
   name = "${var.project_name}-${var.environment}-user-pool"
 
-  # Zero-Trust MFA Enforcement (RFC 6238 Software Tokens)
   mfa_configuration = "ON"
 
   software_token_mfa_configuration {
@@ -48,7 +43,6 @@ resource "aws_cognito_user_pool" "main" {
   }
 }
 
-# Application Client for API & Console Authentication
 resource "aws_cognito_user_pool_client" "client" {
   name         = "${var.project_name}-${var.environment}-client"
   user_pool_id = aws_cognito_user_pool.main.id
@@ -74,7 +68,6 @@ resource "aws_cognito_user_pool_client" "client" {
   prevent_user_existence_errors = "ENABLED"
 }
 
-# Role-Based Access Control (RBAC) User Pool Groups
 resource "aws_cognito_user_group" "tier1_agents" {
   name         = "Tier1_Agents"
   user_pool_id = aws_cognito_user_pool.main.id

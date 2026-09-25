@@ -1,17 +1,10 @@
-# ==============================================================================
-# S3 Multi-Tier FinOps Lifecycle Architecture & Clean Teardown
-# ==============================================================================
-
 resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-# ------------------------------------------------------------------------------
-# 1. Customer Attachments Bucket (Standard -> Glacier IR)
-# ------------------------------------------------------------------------------
 resource "aws_s3_bucket" "attachments" {
   bucket        = "${var.project_name}-${var.environment}-attachments-${random_id.bucket_suffix.hex}"
-  force_destroy = true # 1-Click Clean Teardown
+  force_destroy = true
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-attachments"
@@ -56,7 +49,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "attachments" {
       prefix = "inquiry-attachments/"
     }
 
-    # Transition to Glacier Instant Retrieval at 60 days (68% cost reduction)
     transition {
       days          = 60
       storage_class = "GLACIER_IR"
@@ -64,9 +56,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "attachments" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# 2. ALB Access Logs Bucket (Standard -> Glacier Flexible -> Expiration)
-# ------------------------------------------------------------------------------
 resource "aws_s3_bucket" "alb_logs" {
   bucket        = "${var.project_name}-${var.environment}-alb-logs-${random_id.bucket_suffix.hex}"
   force_destroy = true
@@ -94,22 +83,17 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
 
     filter {}
 
-    # Transition to cold Glacier storage at 30 days
     transition {
       days          = 30
       storage_class = "GLACIER"
     }
 
-    # Automatic expiration and permanent purge at 90 days
     expiration {
       days = 90
     }
   }
 }
 
-# ------------------------------------------------------------------------------
-# 3. CI/CD Pipeline Artifacts Bucket (Expiration after 3 days)
-# ------------------------------------------------------------------------------
 resource "aws_s3_bucket" "pipeline_artifacts" {
   bucket        = "${var.project_name}-${var.environment}-pipeline-${random_id.bucket_suffix.hex}"
   force_destroy = true
@@ -137,7 +121,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "pipeline_artifacts" {
 
     filter {}
 
-    # Ephemeral build artifacts expire and purge after 3 days
     expiration {
       days = 3
     }

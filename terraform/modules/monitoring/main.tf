@@ -1,10 +1,3 @@
-# ==============================================================================
-# CloudWatch Monitoring, Alarms, Dashboards, and Outbound SNS Topics
-# ==============================================================================
-
-# ------------------------------------------------------------------------------
-# 1. Outbound SNS Topics
-# ------------------------------------------------------------------------------
 resource "aws_sns_topic" "ticket_events" {
   name = "${var.project_name}-${var.environment}-ticket-events"
 
@@ -21,9 +14,6 @@ resource "aws_sns_topic" "ops_alerts" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# 2. CloudWatch Alarms
-# ------------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
   alarm_name          = "${var.project_name}-${var.environment}-alb-high-5xx"
   comparison_operator = "GreaterThanOrEqualToThreshold"
@@ -59,9 +49,6 @@ resource "aws_cloudwatch_metric_alarm" "ecs_cpu_high" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# 3. CloudWatch Central Operations Dashboard
-# ------------------------------------------------------------------------------
 resource "aws_cloudwatch_dashboard" "operations" {
   dashboard_name = "${var.project_name}-${var.environment}-operations-dashboard"
 
@@ -109,9 +96,6 @@ resource "aws_cloudwatch_dashboard" "operations" {
   })
 }
 
-# ------------------------------------------------------------------------------
-# 4. EventBridge Scheduler for Decoupled SLA Audit & Compliance
-# ------------------------------------------------------------------------------
 resource "aws_cloudwatch_event_rule" "sla_audit_schedule" {
   name                = "${var.project_name}-${var.environment}-sla-audit-schedule"
   description         = "Triggers 1-minute cloud-native SLA breach audit and executive compliance evaluation"
@@ -122,9 +106,6 @@ resource "aws_cloudwatch_event_rule" "sla_audit_schedule" {
   }
 }
 
-# ------------------------------------------------------------------------------
-# 5. Production SRE Ingress Alarms: SQS Dead-Letter Queue & Queue Latency
-# ------------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "sqs_dlq_messages" {
   count               = var.inquiries_dlq_name != "" ? 1 : 0
   alarm_name          = "${var.project_name}-${var.environment}-sqs-dlq-messages"
@@ -152,7 +133,7 @@ resource "aws_cloudwatch_metric_alarm" "sqs_queue_depth" {
   namespace           = "AWS/SQS"
   period              = 60
   statistic           = "Maximum"
-  threshold           = 300 # 5 minutes message latency alert
+  threshold           = 300
   alarm_description   = "Warning: Oldest message in SQS queue exceeds 300 seconds. Worker consumer fleet falling behind."
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
 
@@ -160,4 +141,3 @@ resource "aws_cloudwatch_metric_alarm" "sqs_queue_depth" {
     QueueName = var.inquiries_queue_name
   }
 }
-

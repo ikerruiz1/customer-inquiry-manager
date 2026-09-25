@@ -1,10 +1,3 @@
-# ==============================================================================
-# Strict IAM Separation: Task Execution Role vs Task Role
-# ==============================================================================
-
-# ------------------------------------------------------------------------------
-# 1. ECS Task Execution Role (Container Agent Infrastructure Boundary)
-# ------------------------------------------------------------------------------
 data "aws_iam_policy_document" "ecs_assume_role" {
   statement {
     effect  = "Allow"
@@ -25,13 +18,11 @@ resource "aws_iam_role" "task_execution_role" {
   }
 }
 
-# Standard managed policy for ECR pull and CloudWatch logs streaming
 resource "aws_iam_role_policy_attachment" "task_execution_standard" {
   role       = aws_iam_role.task_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# Dedicated Secrets Manager access for bootstrapping database connection string
 resource "aws_iam_policy" "task_execution_secrets" {
   name        = "${var.project_name}-${var.environment}-exec-secrets-policy"
   description = "Allows ECS agent to fetch database connection parameters at container bootstrap"
@@ -53,9 +44,6 @@ resource "aws_iam_role_policy_attachment" "task_execution_secrets" {
   policy_arn = aws_iam_policy.task_execution_secrets.arn
 }
 
-# ------------------------------------------------------------------------------
-# 2. ECS Task Role (Application Runtime Boundary)
-# ------------------------------------------------------------------------------
 resource "aws_iam_role" "task_role" {
   name               = "${var.project_name}-${var.environment}-task-role"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume_role.json
@@ -72,7 +60,6 @@ resource "aws_iam_policy" "task_app_permissions" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      # Amazon Bedrock Foundation Models (Converse API) & Guardrails
       {
         Effect = "Allow"
         Action = [
@@ -84,7 +71,6 @@ resource "aws_iam_policy" "task_app_permissions" {
           "arn:aws:bedrock:*:*:guardrail/*",
         ]
       },
-      # S3 Attachments Storage
       {
         Effect = "Allow"
         Action = [
@@ -93,7 +79,6 @@ resource "aws_iam_policy" "task_app_permissions" {
         ]
         Resource = ["${var.attachments_bucket_arn}/*"]
       },
-      # Amazon SNS Fan-out Dispatch
       {
         Effect = "Allow"
         Action = [
@@ -101,7 +86,6 @@ resource "aws_iam_policy" "task_app_permissions" {
         ]
         Resource = ["arn:aws:sns:*:*:${var.project_name}-${var.environment}-*"]
       },
-      # Amazon SES Outbound Email Dispatch
       {
         Effect = "Allow"
         Action = [
@@ -110,7 +94,6 @@ resource "aws_iam_policy" "task_app_permissions" {
         ]
         Resource = ["*"]
       },
-      # CloudWatch Embedded Metric Format (EMF)
       {
         Effect = "Allow"
         Action = [
@@ -118,7 +101,6 @@ resource "aws_iam_policy" "task_app_permissions" {
         ]
         Resource = ["*"]
       },
-      # AWS X-Ray Tracing Segments
       {
         Effect = "Allow"
         Action = [
@@ -129,7 +111,6 @@ resource "aws_iam_policy" "task_app_permissions" {
         ]
         Resource = ["*"]
       },
-      # Amazon SQS FIFO Ingestion Buffer & Dead-Letter Queue
       {
         Effect = "Allow"
         Action = [

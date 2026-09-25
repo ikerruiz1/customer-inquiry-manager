@@ -1,8 +1,3 @@
-# ==============================================================================
-# Least-Privilege Security Group Architecture
-# ==============================================================================
-
-# 1. Public Application Load Balancer Security Group
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-${var.environment}-alb-sg"
   description = "Controls public HTTPS/HTTP ingress into the Application Load Balancer"
@@ -37,7 +32,6 @@ resource "aws_security_group" "alb" {
   }
 }
 
-# 2. ECS Fargate Compute Tasks Security Group
 resource "aws_security_group" "ecs_tasks" {
   name        = "${var.project_name}-${var.environment}-ecs-tasks-sg"
   description = "Controls ingress from ALB and restricted egress to RDS and PrivateLink"
@@ -72,7 +66,6 @@ resource "aws_security_group" "ecs_tasks" {
   }
 }
 
-# 3. Amazon RDS PostgreSQL Database Security Group
 resource "aws_security_group" "rds" {
   name        = "${var.project_name}-${var.environment}-rds-sg"
   description = "Controls PostgreSQL ingress strictly from ECS Fargate compute tasks"
