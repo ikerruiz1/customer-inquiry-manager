@@ -88,7 +88,15 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-    response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: https:; "
+        "connect-src 'self' https://*.amazonaws.com; "
+        "frame-ancestors 'none';"
+    )
     return response
 
 
@@ -109,13 +117,26 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
-@app.get("/")
-async def root():
-    """Root entrypoint returning service status metadata."""
-    return {
-        "service": settings.PROJECT_NAME,
-        "version": settings.VERSION,
-        "environment": settings.ENVIRONMENT,
-        "docs_url": "/docs",
-        "health_url": "/health/live",
-    }
+# Mount static production frontend if compiled, otherwise serve service metadata
+import os
+from fastapi.staticfiles import StaticFiles
+
+frontend_candidates = [
+    os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist"),
+    "frontend/dist",
+]
+frontend_dist_dir = next((p for p in frontend_candidates if os.path.isdir(p)), None)
+
+if frontend_dist_dir:
+    app.mount("/", StaticFiles(directory=frontend_dist_dir, html=True), name="frontend")
+else:
+    @app.get("/")
+    async def root():
+        """Root entrypoint returning service status metadata when static frontend is not present."""
+        return {
+            "service": settings.PROJECT_NAME,
+            "version": settings.VERSION,
+            "environment": settings.ENVIRONMENT,
+            "docs_url": "/docs",
+            "health_url": "/health/live",
+        }

@@ -38,10 +38,6 @@ if (-not (Get-Command terraform -ErrorAction SilentlyContinue)) {
     Write-Host "Error: Terraform is not installed or not in PATH." -ForegroundColor Red
     exit 1
 }
-if (-not (Get-Command docker -ErrorAction SilentlyContinue) -and -not $DnsOnly) {
-    Write-Host "Error: Docker is not installed or not in PATH." -ForegroundColor Red
-    exit 1
-}
 
 $awsAccount = (aws sts get-caller-identity --query "Account" --output text).Trim()
 $targetRegion = "eu-west-1"
@@ -202,6 +198,8 @@ try {
     $sesVerif = (terraform output -raw ses_domain_verification_token).Trim()
     $sesMx = (terraform output -raw ses_mx_record).Trim()
     $nameServers = (terraform output -json route53_name_servers | ConvertFrom-Json)
+    $pipelineBucket = (terraform output -raw pipeline_artifacts_bucket_name).Trim()
+    $pipelineName = (terraform output -raw codepipeline_name).Trim()
 }
 finally {
     Pop-Location
@@ -212,28 +210,20 @@ Write-Host "  OK: Infrastructure provisioned successfully." -ForegroundColor Gre
 Write-Host "  - ALB Public DNS:  http://$albDns" -ForegroundColor Cyan
 Write-Host "  - ECR Repository:  $ecrRepo" -ForegroundColor Cyan
 Write-Host "  - Cognito Pool ID: $cognitoPool" -ForegroundColor Cyan
-Write-Host "  - SES Inbound MX:  $sesMx" -ForegroundColor Cyan
-Write-Host "  - SES Token:       $sesVerif" -ForegroundColor Cyan
+Write-Host "  - CodePipeline:    $pipelineName" -ForegroundColor Cyan
+Write-Host "  - Pipeline Bucket: s3://$pipelineBucket" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "4. Building container image and pushing to ECR..." -ForegroundColor Yellow
-aws ecr get-login-password --region $targetRegion | docker login --username AWS --password-stdin $ecrRepo
-
-docker build -t "${ecrRepo}:latest" .
-docker push "${ecrRepo}:latest"
-Write-Host "  OK: Image pushed to ECR: ${ecrRepo}:latest" -ForegroundColor Green
+Write-Host "4. Packaging source code and triggering AWS CodePipeline..." -ForegroundColor Yellow
+$pyExec = if (Test-Path ".\.venv\Scripts\python.exe") { ".\.venv\Scripts\python.exe" } else { "python" }
+& $pyExec scripts/package_source.py source.zip
+aws s3 cp source.zip "s3://$pipelineBucket/source.zip" --region $targetRegion
+Remove-Item source.zip -ErrorAction SilentlyContinue
+Write-Host "  OK: Source archive uploaded to s3://$pipelineBucket/source.zip" -ForegroundColor Green
+Write-Host "  OK: AWS CodePipeline ($pipelineName) triggered for cloud build & DevSecOps." -ForegroundColor Green
 Write-Host ""
 
-Write-Host "5. Updating ECS Fargate service..." -ForegroundColor Yellow
-aws ecs update-service `
-  --cluster "customer-inquiry-manager-dev-cluster" `
-  --service "customer-inquiry-manager-dev-service" `
-  --force-new-deployment `
-  --region $targetRegion > $null
-Write-Host "  OK: ECS deployment triggered." -ForegroundColor Green
-Write-Host ""
-
-Write-Host "6. Setting up initial administrator in Cognito..." -ForegroundColor Yellow
+Write-Host "5. Setting up initial administrator in Cognito..." -ForegroundColor Yellow
 Write-Host "  Admin: $activeAdminEmail ($activeAdminName)" -ForegroundColor Cyan
 
 $pyExec = if (Test-Path ".\.venv\Scripts\python.exe") { ".\.venv\Scripts\python.exe" } else { "python" }
