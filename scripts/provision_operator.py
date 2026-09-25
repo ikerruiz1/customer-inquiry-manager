@@ -1,25 +1,9 @@
 #!/usr/bin/env python3
-"""Enterprise Operator Provisioning CLI Tool.
-
-Enables administrators to securely create, provision, and assign RBAC roles
-to support operators in both local development and AWS Cognito environments.
-
-Usage Examples:
-    # Provision a standard Tier 1 Agent in local dev:
-    python scripts/provision_operator.py --name "Elena Ramos" --email "elena.r@company.internal" --role Tier1_Agent
-
-    # Provision an Operations Manager:
-    python scripts/provision_operator.py --name "Sofia Chen" --email "sofia.c@company.internal" --role Operations_Manager
-
-    # Provision into live AWS Cognito User Pool:
-    python scripts/provision_operator.py --name "David Lee" --email "david.l@company.internal" --role Tier1_Agent --cognito --pool-id "eu-west-1_xxxxxxxxx"
-"""
 import argparse
 import os
 import secrets
 import sys
 
-# Ensure repository root is on sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 try:
@@ -30,7 +14,6 @@ except ImportError as err:
 
 
 def generate_secure_password(length: int = 14) -> str:
-    """Generate an enterprise-grade password meeting Cognito strict policy."""
     lower = "abcdefghijkmnopqrstuvwxyz"
     upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
     digits = "23456789"
@@ -49,7 +32,6 @@ def generate_secure_password(length: int = 14) -> str:
 
 
 def provision_local_operator(name: str, email: str, role: str, custom_password: str = None):
-    """Provision operator into local service registry."""
     password = custom_password or generate_secure_password()
     cognito = get_cognito_service()
     
@@ -61,14 +43,12 @@ def provision_local_operator(name: str, email: str, role: str, custom_password: 
             role=role,
         )
     except Exception:
-        # If already registered, update existing operator password
         if email in _OPERATOR_REGISTRY:
             _OPERATOR_REGISTRY[email]["password"] = password
             operator = _OPERATOR_REGISTRY[email]
         else:
             raise
     
-    # Persist directly into SQLite database for persistent storage across server restarts
     try:
         import sqlite3
         import json
@@ -97,19 +77,16 @@ def provision_local_operator(name: str, email: str, role: str, custom_password: 
     except Exception as exc:
         print(f"[Notice] Database synchronization deferred to next API startup: {exc}")
 
-    print("\n==================================================")
-    print("  ENTERPRISE OPERATOR PROVISIONED (LOCAL REGISTRY & DB)")
-    print("==================================================")
-    print(f"Operator ID:       {operator['id']}")
-    print(f"Full Name:         {operator['name']}")
-    print(f"Email:             {operator['email']}")
-    print(f"Temporary Pass:    {password}")
-    print(f"RBAC Role:         {operator['role']}")
-    print(f"Security Groups:   {', '.join(operator['groups'])}")
-    print(f"TOTP Seed (MFA):   {operator['totp_secret']}")
+    print("\n--------------------------------------------------")
+    print("  Local Operator Created")
     print("--------------------------------------------------")
-    print("Status: Active and persisted to database for immediate sign-in.")
-    print("==================================================\n")
+    print(f"Operator ID:   {operator['id']}")
+    print(f"Name:          {operator['name']}")
+    print(f"Email:         {operator['email']}")
+    print(f"Password:      {password}")
+    print(f"Role:          {operator['role']}")
+    print(f"TOTP Seed:     {operator['totp_secret']}")
+    print("--------------------------------------------------\n")
 
 
 
@@ -121,7 +98,6 @@ def provision_cognito_operator(
     region: str = "eu-west-1",
     secret_name: str = "customer-inquiry-manager/dev/operator-credentials",
 ):
-    """Provision operator directly into AWS Cognito User Pool via AdminCreateUser API and store in Secrets Manager."""
     try:
         import boto3
         from botocore.exceptions import ClientError
@@ -160,7 +136,6 @@ def provision_cognito_operator(
                 Permanent=False,
             )
 
-        # Add to Cognito RBAC User Pool Group
         group_name = "Operations_Managers" if role == "Operations_Manager" else "Tier1_Agents"
         try:
             client.admin_add_user_to_group(
@@ -171,7 +146,6 @@ def provision_cognito_operator(
         except Exception as grp_exc:
             print(f"  [Cognito Group Notice] {grp_exc}")
 
-        # Store in AWS Secrets Manager (KMS encrypted)
         secret_stored = False
         secret_payload = json.dumps({
             "username": email,
@@ -204,18 +178,16 @@ def provision_cognito_operator(
         except Exception as sm_exc:
             print(f"  [Secrets Manager Notice] Deferred cloud secret synchronization: {sm_exc}")
 
-        print("\n==================================================")
-        print("  AWS COGNITO OPERATOR PROVISIONED (PRODUCTION)")
-        print("==================================================")
-        print(f"User Pool ID:      {pool_id}")
-        print(f"Email / Username:  {email}")
-        print(f"Temporary Pass:    {temp_password}")
-        print(f"Assigned Group:    {group_name}")
-        if secret_stored:
-            print(f"Secrets Manager:   {secret_name} (Encrypted via KMS)")
+        print("\n--------------------------------------------------")
+        print("  Cognito Operator Created")
         print("--------------------------------------------------")
-        print("Next Step: The operator signs in and scans the mobile TOTP QR code.")
-        print("==================================================\n")
+        print(f"User Pool ID:    {pool_id}")
+        print(f"Username/Email:  {email}")
+        print(f"Temporary Pass:  {temp_password}")
+        print(f"Role:            {group_name}")
+        if secret_stored:
+            print(f"Secrets Manager: {secret_name}")
+        print("--------------------------------------------------\n")
     except Exception as exc:
         print(f"\nFailed to provision in Cognito: {exc}\n")
         sys.exit(1)

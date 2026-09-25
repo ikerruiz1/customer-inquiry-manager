@@ -1,8 +1,3 @@
-# ==============================================================================
-# 1-Click Production Deployment Bootstrap (Windows PowerShell)
-# Customer Inquiry Manager
-# Fully Parameterized & Automated (Zero Hardcoded Domain Dependencies)
-# ==============================================================================
 param(
     [string]$Domain = "",
     [string]$SupportEmail = "",
@@ -30,12 +25,11 @@ if (Test-Path "company_profile.json") {
 
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "  $($companyName): 1-Click Infrastructure & Container Bootstrap (Windows)" -ForegroundColor Cyan
+Write-Host "  $companyName - Cloud Infrastructure Deployment" -ForegroundColor Cyan
 Write-Host "==============================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Prerequisite Checks
-Write-Host "Phase 1: Validating Local Toolchain & AWS Credentials..." -ForegroundColor Yellow
+Write-Host "1. Checking AWS credentials and tools..." -ForegroundColor Yellow
 if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
     Write-Host "Error: AWS CLI is not installed or not in PATH." -ForegroundColor Red
     exit 1
@@ -56,11 +50,10 @@ if ($AwsRegion) {
 } elseif ($env:AWS_DEFAULT_REGION) {
     $targetRegion = $env:AWS_DEFAULT_REGION
 }
-Write-Host "  OK: AWS Authentication confirmed: Account $awsAccount in $targetRegion" -ForegroundColor Green
+Write-Host "  OK: AWS account $awsAccount ($targetRegion)" -ForegroundColor Green
 Write-Host ""
 
-# 2. Template / Domain Configuration Synchronization
-Write-Host "Phase 2: Resolving Dynamic Custom Domain Configuration..." -ForegroundColor Yellow
+Write-Host "2. Loading domain configuration..." -ForegroundColor Yellow
 if (-not (Test-Path "company_profile.json") -and (Test-Path "company_profile.example.json")) {
     Write-Host "  ! company_profile.json not found. Creating from company_profile.example.json..." -ForegroundColor Yellow
     Copy-Item "company_profile.example.json" "company_profile.json"
@@ -76,7 +69,6 @@ if ($profileJson.support_email) {
     $currentEmail = $profileJson.support_email
 }
 
-# Determine active domain and support email
 $activeDomain = $currentDomain
 $activeEmail = $currentEmail
 
@@ -99,7 +91,6 @@ if ($Domain) {
     }
 }
 
-# Determine initial administrator identity (Strictly bound to corporate apex domain)
 $defaultAdminPrefix = "admin"
 if ($profileJson.admin_email -and $profileJson.admin_email -match "^([^@]+)@") {
     $defaultAdminPrefix = $matches[1]
@@ -115,12 +106,12 @@ if ($AdminEmail) {
         $activeAdminPrefix = $AdminEmail.Trim()
     }
 } elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
-    Write-Host "  Configure Initial Break-Glass Operations Manager (Root Admin):" -ForegroundColor Cyan
+    Write-Host "  Administrator account configuration:" -ForegroundColor Cyan
     $promptAdminName = Read-Host "  Enter Admin Full Name [Press Enter for '$activeAdminName']"
     if ($promptAdminName -and $promptAdminName.Trim() -ne "") {
         $activeAdminName = $promptAdminName.Trim()
     }
-    $promptAdminPrefix = Read-Host "  Enter Admin Corporate Username Prefix [Press Enter for '$defaultAdminPrefix' -> $defaultAdminPrefix@$activeDomain]"
+    $promptAdminPrefix = Read-Host "  Enter Admin username prefix [Press Enter for '$defaultAdminPrefix' -> $defaultAdminPrefix@$activeDomain]"
     if ($promptAdminPrefix -and $promptAdminPrefix.Trim() -ne "") {
         if ($promptAdminPrefix -match "^([^@]+)@") {
             $activeAdminPrefix = $matches[1]
@@ -132,7 +123,6 @@ if ($AdminEmail) {
 
 $activeAdminEmail = "$activeAdminPrefix@$activeDomain"
 
-# Synchronize company_profile.json with active domain and admin
 $profileJson.domain = $activeDomain
 $profileJson.support_email = $activeEmail
 $profileJson.admin_name = $activeAdminName
@@ -149,7 +139,6 @@ if ($profileJson.inbound_channels) {
 $profileJson | ConvertTo-Json -Depth 10 | Set-Content "company_profile.json" -Encoding UTF8
 Write-Host "  OK: Synchronized company_profile.json with domain: $activeDomain and admin: $activeAdminEmail" -ForegroundColor Green
 
-# Automatically write synchronized terraform.tfvars
 $tfvarsLines = @(
     "aws_region         = `"$targetRegion`"",
     "project_name       = `"customer-inquiry-manager`"",
@@ -164,13 +153,10 @@ Set-Content "terraform/environments/dev/terraform.tfvars" $tfvarsContent -Encodi
 Write-Host "  OK: Synchronized terraform/environments/dev/terraform.tfvars" -ForegroundColor Green
 Write-Host ""
 
-# ------------------------------------------------------------------------------
-# Targeted DNS Mode (-DnsOnly)
-# Provisions Route 53 Public Hosted Zone in AWS and prints Registrar Nameservers
-# ------------------------------------------------------------------------------
+# Pre-provisioning Route 53 breaks circular dependency between registrar delegation and ACM/SES validation timeouts
 if ($DnsOnly) {
     Write-Host "==============================================================================" -ForegroundColor Cyan
-    Write-Host "  TARGETED DNS MODE (-DnsOnly): Provisioning Route 53 Public Hosted Zone..." -ForegroundColor Cyan
+    Write-Host "  Route 53 DNS Setup: Provisioning Public Hosted Zone..." -ForegroundColor Cyan
     Write-Host "==============================================================================" -ForegroundColor Cyan
     Push-Location "terraform/environments/dev"
     try {
@@ -184,40 +170,26 @@ if ($DnsOnly) {
 
     Write-Host ""
     Write-Host "==============================================================================" -ForegroundColor Green
-    Write-Host "  ROUTE 53 PUBLIC HOSTED ZONE PROVISIONED SUCCESSFULLY!" -ForegroundColor Green
+    Write-Host "  Route 53 Hosted Zone Created" -ForegroundColor Green
     Write-Host "==============================================================================" -ForegroundColor Green
-    Write-Host "  Domain:        $activeDomain" -ForegroundColor White
-    Write-Host "  Target Region: $targetRegion" -ForegroundColor White
+    Write-Host "  Domain: $activeDomain ($targetRegion)" -ForegroundColor White
     Write-Host ""
-    Write-Host "  AUTHORITATIVE AWS ROUTE 53 NAME SERVERS:" -ForegroundColor Yellow
+    Write-Host "  AWS Name Servers:" -ForegroundColor Yellow
     $i = 1
     foreach ($ns in $rawNs) {
-        Write-Host "    Nameserver $i : $ns" -ForegroundColor Cyan
+        Write-Host "    $i. $ns" -ForegroundColor Cyan
         $i++
     }
     Write-Host ""
-    Write-Host "  ACTION REQUIRED: DELEGATE IN YOUR REGISTRAR (get.tech, Namecheap, GoDaddy):" -ForegroundColor Yellow
-    Write-Host "  1. Sign in to your registrar dashboard (e.g. https://manage.get.tech)" -ForegroundColor White
-    Write-Host "  2. Go to: Domain Management -> $activeDomain -> Nameservers (or DNS Management)" -ForegroundColor White
-    Write-Host "  3. Select: 'Custom Nameservers' (replacing default/shared DNS)" -ForegroundColor White
-    Write-Host "  4. Paste the 4 AWS servers into Nameserver 1 through Nameserver 4" -ForegroundColor White
-    Write-Host "  5. Click 'Save Changes' (Do NOT purchase Titan Email; AWS SES handles mail natively)" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  VERIFICATION COMMAND (Run in terminal to verify global delegation):" -ForegroundColor Yellow
-    Write-Host "    Resolve-DnsName -Name '$activeDomain' -Type NS | Select-Object -ExpandProperty NameHost" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  NEXT COMMAND (Once verified, run this to deploy the full application):" -ForegroundColor Green
-    Write-Host "    .\scripts\deploy-infra.ps1" -ForegroundColor Green
+    Write-Host "  Next steps:" -ForegroundColor White
+    Write-Host "  1. Update nameservers in your registrar for $activeDomain with the 4 servers above." -ForegroundColor White
+    Write-Host "  2. Verify resolution with: Resolve-DnsName -Name '$activeDomain' -Type NS" -ForegroundColor Gray
+    Write-Host "  3. Run .\scripts\deploy-infra.ps1 to deploy the application." -ForegroundColor Green
     Write-Host "==============================================================================" -ForegroundColor Green
     exit 0
 }
 
-# ------------------------------------------------------------------------------
-# Full Infrastructure Deployment Mode
-# ------------------------------------------------------------------------------
-Write-Host "Phase 3: Applying Modular Terraform Infrastructure (VPC, ECS, RDS, SES, Route53)..." -ForegroundColor Yellow
-Write-Host "  [FINOPS NOTICE] This provisions full AWS infrastructure (16 PrivateLink ENIs, RDS, ALB, ECS)." -ForegroundColor Yellow
-Write-Host "  Estimated active burn rate: ~$5.00 USD/day. Use .\scripts\teardown-infra.ps1 to destroy when done." -ForegroundColor Yellow
+Write-Host "3. Provisioning AWS infrastructure with Terraform..." -ForegroundColor Yellow
 Push-Location "terraform/environments/dev"
 try {
     terraform init
@@ -244,41 +216,25 @@ Write-Host "  - SES Inbound MX:  $sesMx" -ForegroundColor Cyan
 Write-Host "  - SES Token:       $sesVerif" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "==============================================================================" -ForegroundColor Yellow
-Write-Host "  DELEGATE DOMAIN NAMESERVERS IN REGISTRAR (get.tech, Namecheap, GoDaddy)" -ForegroundColor Yellow
-Write-Host "==============================================================================" -ForegroundColor Yellow
-Write-Host "  In your registrar dashboard ($activeDomain -> DNS -> Nameservers -> Edit):" -ForegroundColor White
-$idx = 1
-foreach ($ns in $nameServers) {
-    Write-Host "    $idx. $ns" -ForegroundColor Cyan
-    $idx++
-}
-Write-Host "  AWS Route 53 automatically publishes MX, SPF, DKIM, and ALB records." -ForegroundColor Green
-Write-Host "==============================================================================" -ForegroundColor Yellow
-Write-Host ""
-
-# 4. Docker Image Build & ECR Push
-Write-Host "Phase 4: Building Multi-Stage Production Container & Pushing to ECR..." -ForegroundColor Yellow
+Write-Host "4. Building container image and pushing to ECR..." -ForegroundColor Yellow
 aws ecr get-login-password --region $targetRegion | docker login --username AWS --password-stdin $ecrRepo
 
 docker build -t "${ecrRepo}:latest" .
 docker push "${ecrRepo}:latest"
-Write-Host "  OK: Production image pushed to ECR: ${ecrRepo}:latest" -ForegroundColor Green
+Write-Host "  OK: Image pushed to ECR: ${ecrRepo}:latest" -ForegroundColor Green
 Write-Host ""
 
-# 5. Trigger ECS Rolling Deployment
-Write-Host "Phase 5: Restarting ECS Fargate Spot Tasks with New Container Image..." -ForegroundColor Yellow
+Write-Host "5. Updating ECS Fargate service..." -ForegroundColor Yellow
 aws ecs update-service `
   --cluster "customer-inquiry-manager-dev-cluster" `
   --service "customer-inquiry-manager-dev-service" `
   --force-new-deployment `
   --region $targetRegion > $null
-Write-Host "  OK: ECS Fargate rolling deployment triggered." -ForegroundColor Green
+Write-Host "  OK: ECS deployment triggered." -ForegroundColor Green
 Write-Host ""
 
-# 6. Automatic Enterprise Administrator Provisioning in AWS Cognito & Secrets Manager
-Write-Host "Phase 6: Provisioning Initial Break-Glass Operations Manager in AWS Cognito & Secrets Manager..." -ForegroundColor Yellow
-Write-Host "  Provisioning break-glass administrator: $activeAdminEmail ($activeAdminName) into AWS Cognito..." -ForegroundColor Cyan
+Write-Host "6. Setting up initial administrator in Cognito..." -ForegroundColor Yellow
+Write-Host "  Admin: $activeAdminEmail ($activeAdminName)" -ForegroundColor Cyan
 
 $pyExec = if (Test-Path ".\.venv\Scripts\python.exe") { ".\.venv\Scripts\python.exe" } else { "python" }
 try {
@@ -289,36 +245,22 @@ try {
         --cognito `
         --pool-id $cognitoPool `
         --region $targetRegion
-    Write-Host "  OK: Administrator provisioned and KMS-encrypted in AWS Secrets Manager." -ForegroundColor Green
+    Write-Host "  OK: Administrator account created and credentials stored in Secrets Manager." -ForegroundColor Green
 } catch {
-    Write-Host "  [Notice] Administrator provisioning completed or managed via existing identity: $_" -ForegroundColor Yellow
+    Write-Host "  [Notice] Administrator account managed via existing identity." -ForegroundColor Yellow
 }
 
 Write-Host ""
 Write-Host "==============================================================================" -ForegroundColor Green
-Write-Host "  $($companyName): Full Production Deployment Complete!" -ForegroundColor Green
-Write-Host "  Operations Console URL: http://$albDns" -ForegroundColor Green
-Write-Host "  Inbound emails to $activeEmail will route natively to Amazon SES!" -ForegroundColor Green
+Write-Host "  Deployment Complete" -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
-Write-Host ""
-Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "  AWS PRODUCTION ADMINISTRATOR ONBOARDING & ACCESS CREDENTIALS" -ForegroundColor Cyan
-Write-Host "==============================================================================" -ForegroundColor Cyan
-Write-Host "  Web Console URL:     http://$albDns" -ForegroundColor White
-Write-Host "  AWS Cognito Pool:    $cognitoPool" -ForegroundColor Gray
-Write-Host "  Secrets Manager:     customer-inquiry-manager/dev/operator-credentials" -ForegroundColor Gray
-Write-Host "  Administrator Name:  $activeAdminName" -ForegroundColor Yellow
-Write-Host "  Username / Email:    $activeAdminEmail" -ForegroundColor Yellow
-Write-Host "  Assigned RBAC Group: Operations_Managers (Full Supervisory Authority)" -ForegroundColor Yellow
+Write-Host "  Console URL:     http://$albDns" -ForegroundColor White
+Write-Host "  Admin Username:  $activeAdminEmail" -ForegroundColor Yellow
+Write-Host "  Admin Role:      Operations_Manager" -ForegroundColor White
+Write-Host "  Cognito Pool:    $cognitoPool" -ForegroundColor Gray
+Write-Host "  Secrets Manager: customer-inquiry-manager/dev/operator-credentials" -ForegroundColor Gray
 Write-Host "------------------------------------------------------------------------------" -ForegroundColor DarkGray
-Write-Host "  AUTHENTICATION INSTRUCTIONS FOR REPOSITORY CLONERS:" -ForegroundColor White
-Write-Host "  1. Open the Operations Console URL in your browser." -ForegroundColor White
-Write-Host "  2. Click 'Sign In' and enter your Administrator Email and the temporary password" -ForegroundColor White
-Write-Host "     printed above (or retrieved from AWS Secrets Manager)." -ForegroundColor White
-Write-Host "  3. Enter your new permanent password (mandatory enterprise password rotation)." -ForegroundColor White
-Write-Host "  4. Scan the dynamic QR code using your mobile device Authenticator app" -ForegroundColor White
-Write-Host "     (Google Authenticator, Microsoft Authenticator, Apple Passwords, etc.)." -ForegroundColor White
-Write-Host "  5. Enter the 6-digit TOTP code to complete enrollment and access the console." -ForegroundColor White
-Write-Host "  6. Once signed in, use the '+ Invite Agent' modal in the header to invite operators." -ForegroundColor Cyan
-Write-Host "==============================================================================" -ForegroundColor Cyan
+Write-Host "  Sign in at http://$albDns with $activeAdminEmail and the temporary password" -ForegroundColor White
+Write-Host "  printed above. First login will prompt for a permanent password and TOTP MFA." -ForegroundColor White
+Write-Host "==============================================================================" -ForegroundColor Green
 Write-Host ""

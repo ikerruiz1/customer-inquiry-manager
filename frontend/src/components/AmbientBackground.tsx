@@ -9,7 +9,6 @@ export const AmbientBackground: React.FC<AmbientBackgroundProps> = ({ themeId })
   const currentTheme =
     THEMES.find((t) => t.id === themeId || (themeId === 'aura' && t.id === 'cobalt')) || THEMES[0];
 
-  // Preload all theme wallpapers on mount for instant zero-lag switching
   useEffect(() => {
     THEMES.forEach((theme) => {
       if (theme.imageUrl) {
