@@ -1,4 +1,14 @@
 # ==============================================================================
+# Multi-Stage Build: Stage 1 - Frontend Client Compilation
+# ==============================================================================
+FROM node:20-slim AS frontend-builder
+WORKDIR /frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# ==============================================================================
 # Production Python Runtime Stage
 # ==============================================================================
 FROM python:3.12-slim AS runner
@@ -29,6 +39,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application source code and runtime configuration
 COPY company_profile.json .
 COPY app/ ./app/
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
 # Ensure correct file permissions for non-root execution
 RUN chown -R appuser:appgroup /app /home/appuser

@@ -69,7 +69,7 @@ class EmailService:
             "",
             f"How to reply:",
             f"- Reply directly to this email ({self.support_email}), or",
-            f"- Open your ticket online at: http://localhost:5173",
+            f"- View online at: https://{self.company_domain}",
             "",
             f"Warm regards,",
             f"{self.company_name} Support Team",

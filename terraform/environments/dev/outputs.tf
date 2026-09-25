@@ -58,4 +58,9 @@ output "route53_name_servers" {
   value       = module.route53.name_servers
 }
 
+output "pipeline_artifacts_bucket_name" {
+  description = "S3 bucket for CodePipeline source code and build artifacts"
+  value       = module.s3.pipeline_artifacts_bucket_name
+}
+
 

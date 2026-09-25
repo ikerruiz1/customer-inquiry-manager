@@ -57,9 +57,7 @@ echo -e "${C_BOLD}${C_CYAN}=====================================================
 echo -e "${C_BOLD}1. Checking AWS credentials and tools...${C_RESET}"
 command -v aws >/dev/null 2>&1 || { echo -e "${C_RED}Error: AWS CLI is not installed.${C_RESET}"; exit 1; }
 command -v terraform >/dev/null 2>&1 || { echo -e "${C_RED}Error: Terraform is not installed.${C_RESET}"; exit 1; }
-if [ "$DNS_ONLY" = false ]; then
-  command -v docker >/dev/null 2>&1 || { echo -e "${C_RED}Error: Docker is not installed.${C_RESET}"; exit 1; }
-fi
+
 
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
 AWS_REGION=${AWS_DEFAULT_REGION:-"eu-west-1"}
@@ -178,6 +176,8 @@ terraform apply -auto-approve -var="domain_name=${ACTIVE_DOMAIN}" -var="support_
 ALB_DNS=$(terraform output -raw alb_dns_name)
 ECR_REPO=$(terraform output -raw ecr_repository_url)
 COGNITO_POOL=$(terraform output -raw cognito_user_pool_id)
+PIPELINE_BUCKET=$(terraform output -raw pipeline_artifacts_bucket_name)
+PIPELINE_NAME=$(terraform output -raw codepipeline_name)
 RAW_NS=$(terraform output -json route53_name_servers)
 
 cd ../../../
@@ -185,24 +185,25 @@ cd ../../../
 echo -e "\n${C_GREEN}✓ Infrastructure provisioned successfully.${C_RESET}"
 echo -e "  - ALB Public DNS:  ${C_CYAN}http://${ALB_DNS}${C_RESET}"
 echo -e "  - ECR Repository:  ${C_CYAN}${ECR_REPO}${C_RESET}"
-echo -e "  - Cognito Pool ID: ${C_CYAN}${COGNITO_POOL}${C_RESET}\n"
+echo -e "  - Cognito Pool ID: ${C_CYAN}${COGNITO_POOL}${C_RESET}"
+echo -e "  - CodePipeline:    ${C_CYAN}${PIPELINE_NAME}${C_RESET}"
+echo -e "  - Pipeline Bucket: ${C_CYAN}s3://${PIPELINE_BUCKET}${C_RESET}\n"
 
-echo -e "${C_BOLD}4. Building container image and pushing to ECR...${C_RESET}"
-aws ecr get-login-password --region "${AWS_REGION}" | docker login --username AWS --password-stdin "${ECR_REPO}"
+echo -e "${C_BOLD}4. Packaging source code and triggering AWS CodePipeline...${C_RESET}"
+PY_EXEC="python3"
+if [ -f ".venv/bin/python" ]; then
+  PY_EXEC=".venv/bin/python"
+elif command -v python &>/dev/null; then
+  PY_EXEC="python"
+fi
 
-docker build -t "${ECR_REPO}:latest" .
-docker push "${ECR_REPO}:latest"
-echo -e "${C_GREEN}  OK: Image pushed to ECR: ${ECR_REPO}:latest${C_RESET}\n"
+$PY_EXEC scripts/package_source.py source.zip
+aws s3 cp source.zip "s3://${PIPELINE_BUCKET}/source.zip" --region "${AWS_REGION}"
+rm -f source.zip
+echo -e "${C_GREEN}  OK: Source archive uploaded to s3://${PIPELINE_BUCKET}/source.zip${C_RESET}"
+echo -e "${C_GREEN}  OK: AWS CodePipeline (${PIPELINE_NAME}) triggered for cloud build & DevSecOps.${C_RESET}\n"
 
-echo -e "${C_BOLD}5. Updating ECS Fargate service...${C_RESET}"
-aws ecs update-service \
-  --cluster "customer-inquiry-manager-dev-cluster" \
-  --service "customer-inquiry-manager-dev-service" \
-  --force-new-deployment \
-  --region "${AWS_REGION}" >/dev/null
-echo -e "${C_GREEN}  OK: ECS deployment triggered.${C_RESET}\n"
-
-echo -e "${C_BOLD}6. Setting up initial administrator in Cognito...${C_RESET}"
+echo -e "${C_BOLD}5. Setting up initial administrator in Cognito...${C_RESET}"
 echo -e "  ${C_CYAN}Admin: ${ACTIVE_ADMIN_EMAIL} (${ACTIVE_ADMIN_NAME})${C_RESET}"
 
 PY_EXEC="python3"

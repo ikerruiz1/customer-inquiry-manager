@@ -53,6 +53,24 @@ resource "aws_iam_policy" "codebuild_policy" {
           "s3:PutObject",
         ]
         Resource = ["${var.pipeline_artifacts_bucket_arn}/*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition"
+        ]
+        Resource = ["*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "codebuild:CreateReportGroup",
+          "codebuild:CreateReport",
+          "codebuild:UpdateReport",
+          "codebuild:BatchPutTestCases",
+          "codebuild:BatchPutCodeCoverages"
+        ]
+        Resource = ["*"]
       }
     ]
   })
@@ -186,6 +204,14 @@ resource "aws_codebuild_project" "build" {
       name  = "IMAGE_TAG"
       value = "latest"
     }
+    environment_variable {
+      name  = "ECR_REPOSITORY_URI"
+      value = var.ecr_repository_url
+    }
+    environment_variable {
+      name  = "TASK_DEFINITION_FAMILY"
+      value = "${var.project_name}-${var.environment}-task"
+    }
   }
 
   source {
@@ -307,7 +333,9 @@ resource "aws_codepipeline" "pipeline" {
         ApplicationName                = aws_codedeploy_app.ecs.name
         DeploymentGroupName            = aws_codedeploy_deployment_group.ecs.deployment_group_name
         TaskDefinitionTemplateArtifact = "build_output"
+        TaskDefinitionTemplatePath     = "taskdef.json"
         AppSpecTemplateArtifact        = "build_output"
+        AppSpecTemplatePath            = "appspec.yaml"
       }
     }
   }

@@ -84,7 +84,7 @@ customer-inquiry-manager/
 │   │   └── __init__.py               # Clean service re-exports
 │   ├── health.py                     # Container /health/live and /health/ready probes
 │   ├── main.py                       # FastAPI entrypoint, lifespan context & CORS
-│   └── tests/                        # Automated Pytest Suite (48 Tests, 100% Pass Rate)
+│   └── tests/                        # Automated Pytest Suite (51 Tests, 100% Pass Rate)
 │       ├── conftest.py               # In-memory SQLite async engine & service mocks
 │       ├── test_auth.py              # Cognito login & TOTP verification tests
 │       ├── test_bedrock_schema.py    # Extraction bounds & Pydantic validation tests
@@ -92,6 +92,7 @@ customer-inquiry-manager/
 │       ├── test_inquiries.py         # ITIL SLA calculation, claiming, conversation threads & SLA pause/resume
 │       ├── test_metrics.py           # Dashboard metrics & operator directory tests
 │       ├── test_sla_watcher.py       # Automated SLA breach watcher & executive escalation tests
+│       ├── test_sqs_pipeline.py      # SQS FIFO enqueue, consumer loop & fallback tests
 │       └── test_webhooks.py          # HMAC-SHA256 & omnichannel ingestion tests
 ├── frontend/                         # Operations Console (React 19, TypeScript, Vite)
 │   ├── src/                          # Application source code
@@ -112,12 +113,16 @@ customer-inquiry-manager/
 ├── appspec.yaml                      # AWS CodeDeploy spec (ECS Fargate Blue/Green Canary)
 ├── terraform/                        # Modular Infrastructure as Code
 │   ├── environments/dev/             # Root dev composition
-│   └── modules/                      # vpc, security_groups, cognito, rds, s3, iam, alb, ecs, monitoring, cicd
-├── scripts/                          # Automation & Test Harness Scripts
+│   ├── modules/                      # alb, cicd, cognito, ecs, iam, monitoring, rds, route53, s3, security_groups, ses, sqs, vpc
+│   └── policy/                       # Conftest OPA Rego governance policies (deny NAT, enforce least privilege)
+├── scripts/                          # Automation, CI/CD & Test Harness Scripts
 │   ├── setup-dev.ps1                 # 1-Click Windows PowerShell local developer bootstrap
 │   ├── setup-dev.sh                  # 1-Click Linux / macOS local developer bootstrap
+│   ├── provision_operator.py         # Automated Cognito & SQLite operator provisioning with Secrets Manager backup
+│   ├── package_source.py             # Packaging utility producing lightweight source.zip for AWS CodePipeline S3 ingestion
+│   ├── generate_taskdef.py           # ECS taskdef.json sanitizer for AWS CodeDeploy Blue/Green deployments
 │   ├── seed_inquiries.py             # Omnichannel inbound traffic generator
-│   ├── k6-load-test.js               # Load and auto-scaling validation script
+│   ├── k6-load-test.js               # Load and auto-scaling validation script (15-50 VUs)
 │   ├── deploy-infra.ps1              # 1-Click AWS deployment bootstrap with -DnsOnly support
 │   ├── deploy-infra.sh               # 1-Click AWS deployment bootstrap with --dns-only support
 │   ├── teardown-infra.ps1            # 1-Click clean cloud teardown
@@ -195,7 +200,7 @@ The platform implements a deterministic ITIL v4 Service Level Agreement (SLA) ca
                                            |
                                            v
                   +--------------------------------------------------+
-                  | Amazon Bedrock Converse API (Claude 3.5 Haiku)   |
+                  | Amazon Bedrock Converse API (Claude Haiku 4.5)   |
                   | Zero-Temperature (0.0) In-Context Grounding      |
                   +--------------------------------------------------+
                                            |
@@ -459,7 +464,7 @@ Follow this point-by-point, sequential runbook from `git clone` to a fully opera
 - **Node.js:** 18.0+ (LTS recommended) and **npm**
 - **Terraform:** 1.5+ (Required for AWS Cloud Deployment)
 - **AWS CLI (v2):** Configured with administrator credentials (`aws configure`)
-- **Docker:** Engine active for container compilation and ECR publishing
+- **Docker:** *(Optional)* Only needed for local offline container testing. Cloud deployment container compilation and security scans are executed 100% natively in AWS CodeBuild without requiring a local Docker daemon.
 - **Domain:** An apex domain registered at any registrar (e.g. `.TECH` via `get.tech`, Namecheap, GoDaddy, Route 53)
 
 ---
@@ -474,7 +479,7 @@ cd customer-inquiry-manager
 
 ### Step 2: Bootstrap Local Environment & Quality Gate
 
-Run the automated developer setup script. This validates toolchains, initializes the Python virtual environment (`.venv`), installs locked dependencies, creates your local `company_profile.json`, executes the 48-test Pytest quality gate (100% pass), and prepares the frontend:
+Run the automated developer setup script. This validates toolchains, initializes the Python virtual environment (`.venv`), installs locked dependencies, creates your local `company_profile.json`, executes the 51-test Pytest quality gate (100% pass), and prepares the frontend:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -529,7 +534,7 @@ The terminal prints your 4 authoritative AWS Route 53 Name Servers:
 
 ### Step 4: Deploy Full Production Infrastructure
 
-Execute the automated production deployment to provision all 12 Terraform modules (3-tier VPC with Zero-Internet Egress, PrivateLink, RDS PostgreSQL 16, SES, Cognito), compile the production Docker image, push to Amazon ECR, and deploy to Amazon ECS Fargate Spot:
+Execute the automated production deployment to provision all 12 Terraform modules (3-tier VPC with Zero-Internet Egress, PrivateLink, RDS PostgreSQL 16, SES, Cognito), package the source artifact, trigger AWS CodePipeline for cloud compilation & DevSecOps scans, and deploy to Amazon ECS Fargate Spot via AWS CodeDeploy:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -657,9 +662,9 @@ The platform strictly enforces enterprise credential hygiene: **zero credentials
      .\scripts\deploy-infra.ps1 -Domain "example-corp.tech" -AdminName "Iker Ruiz" -AdminEmail "admin@example-corp.tech"
      ```
    - *Automated Cloud Lifecycle:*
-     - Provisions 3-tier VPC, 9 AWS PrivateLink endpoints, RDS PostgreSQL 16, SQS FIFO, SES, and Cognito User Pool.
-     - Builds multi-stage production Docker container and pushes to Amazon ECR.
-     - Triggers ECS Fargate Spot rolling deployment behind the Application Load Balancer.
+     - Provisions 3-tier VPC, 9 AWS PrivateLink endpoints, RDS PostgreSQL 16, SQS FIFO, SES, and Cognito User Pool.      - Packages repository source code into source.zip (excluding local virtualenvs and dependencies) and uploads to S3 pipeline bucket.
+      - Triggers AWS CodePipeline: AWS CodeBuild executes DevSecOps gates (Pytest 51/51, Semgrep SAST, Conftest OPA, KICS Checkmarx, Trivy CVE, Syft SBOM), builds the container in AWS, pushes to Amazon ECR, and sanitizes taskdef.json.
+      - AWS CodeDeploy executes Canary Blue/Green deployment (Canary10Percent5Minutes) to ECS Fargate Spot.
      - **Phase 6 Root Administrator Provisioning:** Provisions the initial break-glass administrator into the live AWS Cognito User Pool with the supervisory **`Operations_Managers`** RBAC group. The user is placed in `FORCE_CHANGE_PASSWORD` status with temporary credentials encrypted into **AWS Secrets Manager** (`customer-inquiry-manager/dev/operator-credentials`) via AWS KMS.
      - Displays the public ALB URL, Administrator Email, and Temporary Password in the terminal completion banner.
 3. **First-Login Handshake (Zero-Trust Security Flow):**
@@ -823,12 +828,49 @@ All outbound communications and system alerts are dynamically routed based on de
 
 ---
 
-## 7. Security, Policy-as-Code & Quality Gates (CI/CD Pipeline)
+## 7. Security, Policy-as-Code & Quality Gates (100% AWS-Native CI/CD Pipeline)
 
-The CI/CD pipeline enforces automated security gates in AWS CodeBuild before any container image is pushed to ECR:
-- **Pytest:** 100% unit and integration test pass rate (48 automated tests) across database claiming, conversation threads, SLA pause/resume, proactive SLA warnings, SLA breach watcher daemon, operations scheduling endpoints, notification policies, and auth flows.
-- **Semgrep SAST:** Scans Python code for OWASP Top 10 vulnerabilities.
-- **Conftest (OPA):** Enforces Open Policy Agent guardrails prohibiting NAT Gateways and unencrypted storage.
-- **KICS (Checkmarx):** Scans Terraform HCL files for security misconfigurations.
-- **Trivy Scanner:** Evaluates base image packages and application libraries for CVEs.
-- **Syft SBOM:** Generates a Software Bill of Materials in SPDX format for supply chain security.
+The continuous integration and delivery lifecycle is engineered using **100% AWS-Native Developer Tools (AWS CodePipeline, AWS CodeBuild, and AWS CodeDeploy)**. Container image compilation, vulnerability scanning, and Canary deployments run entirely within ephemeral, managed AWS infrastructure, eliminating all dependencies on local Docker daemons or developer workstation virtualization.
+
+`
+[Developer / CLI Trigger]
+       │
+       ▼ (scripts/package_source.py -> source.zip)
+[S3 Pipeline Bucket (s3://customer-inquiry-manager-dev-pipeline-artifacts-*)]
+       │
+       ▼ (PollForSourceChanges / S3Source Action)
+[AWS CodePipeline (customer-inquiry-manager-dev-pipeline)]
+       │
+       ▼
+[AWS CodeBuild (Standard 7.0 Linux Container, privileged_mode = true)]
+       ├─ Phase 1: Pytest Unit & Integration Suite (51/51 Tests, JUNITXML report)
+       ├─ Phase 2: Semgrep Static Application Security Testing (OWASP Top 10 + Secrets)
+       ├─ Phase 3: Conftest Policy-as-Code (Open Policy Agent Rego guardrails)
+       ├─ Phase 4: KICS Checkmarx Infrastructure as Code CIS Benchmark Scan
+       ├─ Phase 5: Multi-Stage Docker Build & Trivy Container CVE Scan (--severity HIGH,CRITICAL)
+       ├─ Phase 6: Syft CycloneDX Software Bill of Materials (SBOM) Generation (sbom.json)
+       ├─ Phase 7: Authenticated Amazon ECR Push (Tagged :<commit-sha> and :latest)
+       └─ Phase 8: scripts/generate_taskdef.py (Strips AWS metadata & emits taskdef.json)
+       │
+       ▼ (Emits: imageDetail.json, appspec.yaml, taskdef.json, sbom.json)
+[AWS CodeDeploy (CodeDeployDefault.ECSCanary10Percent5Minutes)]
+       │
+       ▼ (Canary Traffic Shifting via ALB Target Groups Blue/Green)
+[Amazon ECS Fargate Spot Cluster (customer-inquiry-manager-dev-cluster)]
+`
+
+### 7.1 Automated Quality & Security Gates
+1. **Pytest Regression Suite (51 Tests, 100% Pass Rate):** Validates database claiming, conversation threads, SLA pause/resume, proactive SLA warnings, SLA breach watcher daemon, operations scheduling endpoints, notification policies, SQS FIFO decoupling, and Cognito authentication flows.
+2. **Semgrep SAST:** Scans Python and TypeScript code against curated packs (p/security-audit, p/secrets, p/owasp-top-ten).
+3. **Conftest (Open Policy Agent):** Enforces 6 Rego organizational policies prohibiting NAT Gateways (deny_nat_gateway.rego), enforcing 3-tier isolated database subnets (enforce_private_db.rego), S3 envelope encryption (enforce_s3_data_protection.rego), and IAM least privilege.
+4. **KICS (Checkmarx):** Evaluates all Terraform modules against 2,000+ CIS AWS Foundations Benchmarks and PCI-DSS compliance queries (--fail-on HIGH,CRITICAL).
+5. **Trivy Container Scanner:** Scans the compiled production container image (python:3.12-slim under non-root ppuser UID 10001) for operating system and library CVEs before image registry publication.
+6. **Syft SBOM:** Generates a CycloneDX Software Bill of Materials (sbom.json) establishing cryptographic supply-chain provenance.
+
+### 7.2 Zero-Workstation Docker Dependency (Enterprise Ingestion Architecture)
+In standard production engineering environments, container images are never compiled on local laptops to prevent environment drift, unverified dependencies, and architecture mismatches (e.g. arm64 macOS vs. x86_64 Linux). 
+- **Source Packaging:** scripts/package_source.py compresses the repository into a lightweight source.zip (~5 MB), excluding local .venv, 
+ode_modules, .terraform, and cache directories.
+- **Cloud Build Execution:** The archive is uploaded to the pipeline S3 bucket, triggering AWS CodePipeline. CodeBuild executes within AWS with Docker-in-Docker capabilities (privileged_mode = true), compiling and scanning the image natively in the cloud.
+- **CodeDeploy ECS Normalization:** scripts/generate_taskdef.py queries the active ECS task definition family, removes AWS internal read-only fields (	askDefinitionArn, 
+evision, status, compatibilities), injects the newly pushed ECR image tag, and produces a sanitized 	askdef.json for CodeDeploy to execute zero-downtime Blue/Green Canary traffic shifting.

@@ -5,9 +5,12 @@ Resources:
       Properties:
         TaskDefinition: <TASK_DEFINITION>
         LoadBalancerInfo:
-          ContainerName: "app"
+          ContainerName: "customer-inquiry-manager"
           ContainerPort: 8000
         CapacityProviderStrategy:
-          - CapacityProvider: "FARGATE_SPOT"
+          - CapacityProvider: "FARGATE"
             Weight: 1
+            Base: 1
+          - CapacityProvider: "FARGATE_SPOT"
+            Weight: 3
             Base: 0
