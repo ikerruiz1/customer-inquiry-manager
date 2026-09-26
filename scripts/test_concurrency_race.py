@@ -47,7 +47,7 @@ async def run_race_test(host: str, token1: str, token2: str) -> None:
             "customer_email": "concurrency.test@enterprise-client.com",
             "customer_name": "Race Condition Test Agent",
             "subject": "CONCURRENCY RACE VERIFICATION: Atomic Claim Test",
-            "body": "Simulating simultaneous operator claims on an unassigned ticket.",
+            "body": "Verifying concurrent operator claims on an unassigned ticket.",
         }
 
         seed_res = await client.post(f"{host}/api/v1/inquiries/", json=seed_payload)
