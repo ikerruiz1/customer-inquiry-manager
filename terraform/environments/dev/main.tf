@@ -65,6 +65,7 @@ module "iam" {
   environment            = var.environment
   attachments_bucket_arn = module.s3.attachments_bucket_arn
   db_secret_arn          = module.rds.secret_arn
+  ses_inbound_bucket_arn = module.ses.inbound_bucket_arn
 }
 
 module "alb" {
@@ -100,6 +101,7 @@ module "ecs" {
   target_group_blue_arn_suffix = module.alb.target_group_blue_arn_suffix
   sqs_inquiries_queue_url      = module.sqs.queue_url
   sqs_inquiries_dlq_url        = module.sqs.dlq_url
+  ses_inbound_bucket_name      = module.ses.inbound_bucket_name
 }
 
 module "monitoring" {

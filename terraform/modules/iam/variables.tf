@@ -19,3 +19,9 @@ variable "db_secret_arn" {
   type        = string
   description = "ARN of RDS database secret in Secrets Manager"
 }
+
+variable "ses_inbound_bucket_arn" {
+  type        = string
+  description = "ARN of Amazon SES inbound S3 bucket"
+  default     = ""
+}

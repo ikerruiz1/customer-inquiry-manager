@@ -76,8 +76,15 @@ resource "aws_iam_policy" "task_app_permissions" {
         Action = [
           "s3:GetObject",
           "s3:PutObject",
+          "s3:ListBucket",
+          "s3:DeleteObject",
         ]
-        Resource = ["${var.attachments_bucket_arn}/*"]
+        Resource = compact([
+          "${var.attachments_bucket_arn}/*",
+          var.attachments_bucket_arn,
+          var.ses_inbound_bucket_arn != "" ? "${var.ses_inbound_bucket_arn}/*" : "",
+          var.ses_inbound_bucket_arn != "" ? var.ses_inbound_bucket_arn : "",
+        ])
       },
       {
         Effect = "Allow"

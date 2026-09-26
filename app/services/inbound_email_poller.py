@@ -83,14 +83,18 @@ class InboundEmailPoller:
         self._running = False
 
     def start(self):
-        """Start the background polling task if enabled."""
-        if not self.is_enabled or not self.host or not self.user or not self.password:
-            logger.info("Inbound Email Poller is disabled or missing credentials (skipping background task).")
+        """Start the background polling task if enabled (via IMAP or S3 SES bucket)."""
+        has_imap = self.is_enabled and self.host and self.user and self.password
+        has_s3_ses = bool(settings.SES_INBOUND_BUCKET_NAME)
+
+        if not has_imap and not has_s3_ses:
+            logger.info("Inbound Email Poller is disabled (no IMAP or SES S3 bucket configured).")
             return
 
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
-        logger.info(f"Inbound Email Poller started: checking {self.user}@{self.host}:{self.port} every {self.poll_interval}s.")
+        mode = "S3 SES + IMAP" if (has_s3_ses and has_imap) else ("S3 SES" if has_s3_ses else "IMAP")
+        logger.info(f"Inbound Email Poller started in [{mode}] mode (polling every {self.poll_interval}s).")
 
     async def stop(self):
         """Gracefully stop the polling task."""
@@ -107,11 +111,52 @@ class InboundEmailPoller:
         """Continuous polling loop executing in the background."""
         while self._running:
             try:
-                # Run synchronous IMAP operations in threadpool executor to avoid blocking the event loop
-                await asyncio.to_thread(self._check_and_process_emails)
+                # 1. Process real inbound emails deposited by Amazon SES in S3
+                if settings.SES_INBOUND_BUCKET_NAME:
+                    await asyncio.to_thread(self._check_and_process_s3_ses_emails)
+
+                # 2. Process external IMAP inbox if configured
+                if self.is_enabled and self.host and self.user and self.password:
+                    await asyncio.to_thread(self._check_and_process_emails)
             except Exception as exc:
                 logger.warning(f"Error during inbound email polling: {exc}")
             await asyncio.sleep(self.poll_interval)
+
+    def _check_and_process_s3_ses_emails(self):
+        """Check Amazon SES S3 inbound bucket for raw customer emails and ingest them."""
+        bucket_name = settings.SES_INBOUND_BUCKET_NAME
+        if not bucket_name:
+            return
+
+        try:
+            import boto3
+            s3 = boto3.client("s3", region_name=settings.AWS_REGION)
+            res = s3.list_objects_v2(Bucket=bucket_name, MaxKeys=10)
+            contents = res.get("Contents", [])
+            for item in contents:
+                key = item["Key"]
+                if key.endswith("/") or item.get("Size", 0) == 0:
+                    continue
+                try:
+                    obj = s3.get_object(Bucket=bucket_name, Key=key)
+                    raw_bytes = obj["Body"].read()
+                    msg = email.message_from_bytes(raw_bytes)
+
+                    raw_from = _decode_mime_header(msg.get("From"))
+                    sender_name, sender_email = email.utils.parseaddr(raw_from)
+                    subject = _decode_mime_header(msg.get("Subject"))
+                    body = _extract_text_body(msg) or "(Empty email body)"
+
+                    logger.info(f"S3 SES inbound email received from {sender_email} subject: '{subject}'")
+
+                    asyncio.run(self._dispatch_parsed_email(sender_name or sender_email, sender_email, subject, body))
+
+                    s3.delete_object(Bucket=bucket_name, Key=key)
+                    logger.info(f"Processed and deleted S3 inbound email: {key}")
+                except Exception as item_exc:
+                    logger.error(f"Error processing S3 inbound email {key}: {item_exc}")
+        except Exception as exc:
+            logger.debug(f"S3 SES polling check deferred: {exc}")
 
     def _check_and_process_emails(self):
         """Synchronous IMAP fetch and parse logic executed inside worker thread."""

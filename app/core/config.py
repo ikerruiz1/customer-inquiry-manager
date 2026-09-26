@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     SQS_CONSUMER_BATCH_SIZE: int = 10
     SQS_CONSUMER_POLL_INTERVAL_SECONDS: float = 1.0
 
+    # Amazon S3 & SES Inbound Storage
+    S3_ATTACHMENTS_BUCKET: Optional[str] = None
+    SES_INBOUND_BUCKET_NAME: Optional[str] = None
+
     # Inbound Omnichannel Webhook Secrets
     TRUSTPILOT_WEBHOOK_SECRET: Optional[str] = "dev-trustpilot-webhook-secret"
     GOOGLE_REVIEWS_WEBHOOK_SECRET: Optional[str] = "dev-google-reviews-webhook-secret"
