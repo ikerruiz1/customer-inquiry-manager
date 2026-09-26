@@ -15,12 +15,15 @@ if (Test-Path "company_profile.json") {
     try {
         $p = Get-Content "company_profile.json" -Raw | ConvertFrom-Json
         if ($p.company_name) { $companyName = $p.company_name }
-    } catch {}
-} elseif (Test-Path "company_profile.example.json") {
+    }
+    catch {}
+}
+elseif (Test-Path "company_profile.example.json") {
     try {
         $p = Get-Content "company_profile.example.json" -Raw | ConvertFrom-Json
         if ($p.company_name) { $companyName = $p.company_name }
-    } catch {}
+    }
+    catch {}
 }
 
 Write-Host ""
@@ -43,7 +46,8 @@ $awsAccount = (aws sts get-caller-identity --query "Account" --output text).Trim
 $targetRegion = "eu-west-1"
 if ($AwsRegion) {
     $targetRegion = $AwsRegion
-} elseif ($env:AWS_DEFAULT_REGION) {
+}
+elseif ($env:AWS_DEFAULT_REGION) {
     $targetRegion = $env:AWS_DEFAULT_REGION
 }
 Write-Host "  OK: AWS account $awsAccount ($targetRegion)" -ForegroundColor Green
@@ -74,7 +78,8 @@ if ($Domain) {
     if ($SupportEmail) {
         $activeEmail = $SupportEmail.Trim()
     }
-} elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
+}
+elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
     Write-Host "  Configure Custom Domain (e.g. your-company-domain.tech or your own registrar domain):" -ForegroundColor Cyan
     $promptDomain = Read-Host "  Enter Domain [Press Enter to keep '$currentDomain']"
     if ($promptDomain -and $promptDomain.Trim() -ne "") {
@@ -98,10 +103,12 @@ $activeAdminPrefix = $defaultAdminPrefix
 if ($AdminEmail) {
     if ($AdminEmail -match "^([^@]+)@") {
         $activeAdminPrefix = $matches[1]
-    } else {
+    }
+    else {
         $activeAdminPrefix = $AdminEmail.Trim()
     }
-} elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
+}
+elseif (-not $NonInteractive -and [Environment]::UserInteractive) {
     Write-Host "  Administrator account configuration:" -ForegroundColor Cyan
     $promptAdminName = Read-Host "  Enter Admin Full Name [Press Enter for '$activeAdminName']"
     if ($promptAdminName -and $promptAdminName.Trim() -ne "") {
@@ -111,7 +118,8 @@ if ($AdminEmail) {
     if ($promptAdminPrefix -and $promptAdminPrefix.Trim() -ne "") {
         if ($promptAdminPrefix -match "^([^@]+)@") {
             $activeAdminPrefix = $matches[1]
-        } else {
+        }
+        else {
             $activeAdminPrefix = $promptAdminPrefix.Trim()
         }
     }
@@ -127,7 +135,8 @@ if ($profileJson.inbound_channels) {
     $profileJson.inbound_channels.email = $activeEmail
     if ($profileJson.inbound_channels.PSObject.Properties['webform_url'] -and $profileJson.inbound_channels.webform_url -ne "") {
         $profileJson.inbound_channels.webform_url = "https://portal.$activeDomain/contact"
-    } else {
+    }
+    else {
         $profileJson.inbound_channels.webform_url = ""
     }
     $profileJson.inbound_channels.trustpilot_profile = "https://www.trustpilot.com/review/$activeDomain"
@@ -157,8 +166,52 @@ if ($DnsOnly) {
     Push-Location "terraform/environments/dev"
     try {
         terraform init
-        terraform apply -target=module.route53 -auto-approve -var="domain_name=$activeDomain" -var="support_email=$activeEmail"
-        $rawNs = (terraform output -json route53_name_servers | ConvertFrom-Json)
+        if ($LASTEXITCODE -ne 0) {
+            throw "terraform init failed with exit code $LASTEXITCODE"
+        }
+
+        terraform apply "-target=module.route53" "-target=module.ses" -auto-approve -var="domain_name=$activeDomain" -var="support_email=$activeEmail"
+        if ($LASTEXITCODE -ne 0) {
+            throw "terraform apply for DNS & SES foundation failed with exit code $LASTEXITCODE"
+        }
+
+        $rawNsJson = terraform output -json route53_name_servers
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($rawNsJson)) {
+            throw "terraform output route53_name_servers failed or returned empty output"
+        }
+
+        $rawNs = ($rawNsJson | ConvertFrom-Json)
+        if (-not $rawNs -or $rawNs.Count -eq 0) {
+            throw "Route 53 name servers list is empty in Terraform state"
+        }
+    }
+    catch {
+        Write-Host ""
+        Write-Host "==============================================================================" -ForegroundColor Yellow
+        Write-Host "  Setup Notice: $_" -ForegroundColor Yellow
+        Write-Host "  Terraform state safely preserved all resources created prior to this error." -ForegroundColor Gray
+        Write-Host "==============================================================================" -ForegroundColor Yellow
+
+        try {
+            $fallbackNs = (terraform output -json route53_name_servers 2>$null | ConvertFrom-Json)
+            if ($fallbackNs -and $fallbackNs.Count -gt 0) {
+                Write-Host ""
+                Write-Host "  AWS Name Servers (available from existing state):" -ForegroundColor Yellow
+                $i = 1
+                foreach ($ns in $fallbackNs) {
+                    Write-Host "    $i. $ns" -ForegroundColor Cyan
+                    $i++
+                }
+            }
+        }
+        catch {}
+
+        Write-Host ""
+        Write-Host "  Automatic Recovery Options:" -ForegroundColor White
+        Write-Host "  [Option 1 - Retry]:    Re-run .\scripts\deploy-infra.ps1 -DnsOnly to complete remaining resources." -ForegroundColor Cyan
+        Write-Host "  [Option 2 - Teardown]: Run .\scripts\teardown-infra.ps1 to cleanly delete all provisioned resources." -ForegroundColor Red
+        Write-Host "==============================================================================" -ForegroundColor Yellow
+        exit 1
     }
     finally {
         Pop-Location
@@ -189,17 +242,26 @@ Write-Host "3. Provisioning AWS infrastructure with Terraform..." -ForegroundCol
 Push-Location "terraform/environments/dev"
 try {
     terraform init
+    if ($LASTEXITCODE -ne 0) { throw "terraform init failed with exit code $LASTEXITCODE" }
+
     terraform validate
+    if ($LASTEXITCODE -ne 0) { throw "terraform validate failed with exit code $LASTEXITCODE" }
+
     terraform apply -auto-approve -var="domain_name=$activeDomain" -var="support_email=$activeEmail"
+    if ($LASTEXITCODE -ne 0) { throw "terraform apply failed with exit code $LASTEXITCODE" }
 
     $albDns = (terraform output -raw alb_dns_name).Trim()
     $ecrRepo = (terraform output -raw ecr_repository_url).Trim()
     $cognitoPool = (terraform output -raw cognito_user_pool_id).Trim()
-    $sesVerif = (terraform output -raw ses_domain_verification_token).Trim()
-    $sesMx = (terraform output -raw ses_mx_record).Trim()
-    $nameServers = (terraform output -json route53_name_servers | ConvertFrom-Json)
     $pipelineBucket = (terraform output -raw pipeline_artifacts_bucket_name).Trim()
     $pipelineName = (terraform output -raw codepipeline_name).Trim()
+}
+catch {
+    Write-Host ""
+    Write-Host "==============================================================================" -ForegroundColor Red
+    Write-Host "  Error during infrastructure deployment: $_" -ForegroundColor Red
+    Write-Host "==============================================================================" -ForegroundColor Red
+    exit 1
 }
 finally {
     Pop-Location
@@ -236,7 +298,8 @@ try {
         --pool-id $cognitoPool `
         --region $targetRegion
     Write-Host "  OK: Administrator account created and credentials stored in Secrets Manager." -ForegroundColor Green
-} catch {
+}
+catch {
     Write-Host "  [Notice] Administrator account managed via existing identity." -ForegroundColor Yellow
 }
 
