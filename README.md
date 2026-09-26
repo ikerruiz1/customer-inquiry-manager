@@ -775,7 +775,7 @@ To achieve enterprise-grade security and cost efficiency, the platform decouples
   ├─► Amazon SES Inbound SMTP (MX: inbound-smtp.<region>.amazonaws.com)
   ├─► S3 Raw Encrypted MIME Ingestion (s3://<bucket>/ses_inbound/)
   ├─► SQS FIFO Decoupling & Ingestion Worker
-  ├─► Amazon Bedrock Converse API (Claude 3.5 Haiku Single-Pass Extraction)
+  ├─► Amazon Bedrock Converse API (Claude Haiku 4.5 Single-Pass Extraction)
   ├─► ITIL v4 Deterministic Priority Matrix (P1-P4 SLA Calculation)
   └─► Amazon RDS PostgreSQL 16 Persistence
   ▲

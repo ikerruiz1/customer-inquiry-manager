@@ -90,3 +90,10 @@ variable "sqs_inquiries_dlq_url" {
   default     = ""
 }
 
+variable "ses_inbound_bucket_name" {
+  type        = string
+  description = "S3 bucket name for inbound raw SES emails"
+  default     = ""
+}
+
+
