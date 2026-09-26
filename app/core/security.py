@@ -46,10 +46,12 @@ async def get_current_user(
 ) -> Dict[str, Any]:
     """Validate Cognito JWT access token and return parsed claims."""
     # Development bypass when running locally without active Cognito credentials
-    if settings.ENVIRONMENT == "dev" and (not credentials or credentials.credentials == "dev-token"):
+    if settings.ENVIRONMENT == "dev" and (not credentials or credentials.credentials.startswith("dev-token")):
+        worker_id = credentials.credentials.split(":")[-1] if (credentials and ":" in credentials.credentials) else "00000000-0000-0000-0000-000000000001"
         return {
-            "sub": "00000000-0000-0000-0000-000000000001",
-            "email": "lead.agent@company.internal",
+            "sub": worker_id,
+            "email": f"{worker_id}@company.internal",
+            "name": f"Agent {worker_id}",
             "cognito:groups": ["Operations_Managers", "Tier1_Agents"],
             "token_use": "access",
         }
