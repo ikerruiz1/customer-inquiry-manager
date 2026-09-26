@@ -309,6 +309,7 @@ Write-Host "  Deployment Complete" -ForegroundColor Green
 Write-Host "==============================================================================" -ForegroundColor Green
 Write-Host "  Console URL:     http://$albDns" -ForegroundColor White
 Write-Host "  Admin Username:  $activeAdminEmail" -ForegroundColor Yellow
+Write-Host "  Admin Name:      $activeAdminName" -ForegroundColor White
 Write-Host "  Admin Role:      Operations_Manager" -ForegroundColor White
 Write-Host "  Cognito Pool:    $cognitoPool" -ForegroundColor Gray
 Write-Host "  Secrets Manager: customer-inquiry-manager/dev/operator-credentials" -ForegroundColor Gray

@@ -104,8 +104,8 @@ def main():
     parser.add_argument("--token2", default="", help="JWT token for Worker 2")
     args = parser.parse_args()
 
-    t1 = args.token1 or generate_dev_token("agent-001", "agent1@enterprise.com")
-    t2 = args.token2 or generate_dev_token("agent-002", "agent2@enterprise.com")
+    t1 = args.token1 or "dev-token:worker-1"
+    t2 = args.token2 or "dev-token:worker-2"
 
     asyncio.run(run_race_test(args.host, t1, t2))
 
