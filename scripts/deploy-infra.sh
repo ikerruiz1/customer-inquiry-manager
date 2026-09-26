@@ -143,7 +143,7 @@ if [ "$DNS_ONLY" = true ]; then
     echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
     cd terraform/environments/dev
     terraform init
-    terraform apply -target=module.route53 -auto-approve -var="domain_name=${ACTIVE_DOMAIN}" -var="support_email=${ACTIVE_EMAIL}"
+    terraform apply "-target=module.route53" "-target=module.ses" -auto-approve -var="domain_name=${ACTIVE_DOMAIN}" -var="support_email=${ACTIVE_EMAIL}"
     RAW_NS=$(terraform output -json route53_name_servers)
     cd ../../../
 
