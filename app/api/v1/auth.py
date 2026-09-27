@@ -227,6 +227,7 @@ async def verify_mfa(
         tokens = await cognito.verify_software_token_mfa(
             session=mfa_payload.session,
             totp_code=mfa_payload.totp_code,
+            username=mfa_payload.username,
         )
         return TokenResponse(**tokens)
     except Exception as exc:
