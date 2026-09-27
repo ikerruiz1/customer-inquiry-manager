@@ -46,10 +46,11 @@ phases:
 
   build:
     commands:
-      - echo "Compiling multi-stage container image..."
-      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-8)
-      - IMAGE_TAG=${COMMIT_HASH:-latest}
-      - docker build -t customer-inquiry-manager:$IMAGE_TAG -t customer-inquiry-manager:latest .
+      - 'echo "Compiling multi-stage container image..."'
+      - 'RAW_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | sed "s/[^a-zA-Z0-9_-]//g" | cut -c 1-8)'
+      - 'IMAGE_TAG=${RAW_HASH:-latest}'
+      - 'echo "Using sanitized IMAGE_TAG: ${IMAGE_TAG}"'
+      - 'docker build -t customer-inquiry-manager:${IMAGE_TAG} -t customer-inquiry-manager:latest .'
 
   post_build:
     commands:
