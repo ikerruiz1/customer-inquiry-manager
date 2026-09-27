@@ -14,7 +14,7 @@ resource "aws_lb" "main" {
 }
 
 resource "aws_lb_target_group" "blue" {
-  name        = "${var.project_name}-${var.environment}-tg-blue"
+  name        = "cim-${var.environment}-tg-blue"
   port        = 8000
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -31,12 +31,12 @@ resource "aws_lb_target_group" "blue" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-tg-blue"
+    Name = "cim-${var.environment}-tg-blue"
   }
 }
 
 resource "aws_lb_target_group" "green" {
-  name        = "${var.project_name}-${var.environment}-tg-green"
+  name        = "cim-${var.environment}-tg-green"
   port        = 8000
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -53,7 +53,7 @@ resource "aws_lb_target_group" "green" {
   }
 
   tags = {
-    Name = "${var.project_name}-${var.environment}-tg-green"
+    Name = "cim-${var.environment}-tg-green"
   }
 }
 
