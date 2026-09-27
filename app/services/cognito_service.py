@@ -64,6 +64,9 @@ _OPERATOR_REGISTRY: Dict[str, Dict[str, Any]] = build_canonical_operator_registr
 # Ephemeral session map for MFA challenge verification
 _MFA_SESSIONS: Dict[str, Dict[str, Any]] = {}
 
+# Tracks first-time MFA enrollment sessions (associate_software_token session -> username)
+_MFA_SETUP_SESSIONS: Dict[str, str] = {}
+
 
 class CognitoService:
     """Service encapsulating Amazon Cognito User Pool authentication and TOTP MFA flows."""
@@ -298,10 +301,13 @@ class CognitoService:
             if next_challenge == "MFA_SETUP":
                 assoc = self.client.associate_software_token(Session=resp["Session"])
                 secret_code = assoc["SecretCode"]
+                assoc_session = assoc["Session"]
+                # Track this enrollment session so verify_software_token_mfa uses the correct flow
+                _MFA_SETUP_SESSIONS[assoc_session] = username
                 otpauth = f"otpauth://totp/SupportPortal:{username}?secret={secret_code}&issuer=SupportPortal"
                 return {
                     "challenge_name": "SOFTWARE_TOKEN_MFA",
-                    "session": assoc["Session"],
+                    "session": assoc_session,
                     "message": "Permanent password established. Scan QR code to enroll your mobile authenticator device.",
                     "totp_secret": secret_code,
                     "otpauth_url": otpauth,
@@ -370,7 +376,12 @@ class CognitoService:
             logger.warning(f"Cognito invite_operator error for {clean_email}: {exc}")
             raise
 
-    async def verify_software_token_mfa(self, session: str, totp_code: str) -> Dict[str, Any]:
+    async def verify_software_token_mfa(
+        self,
+        session: str,
+        totp_code: str,
+        username: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Verify 6-digit TOTP code and return signed JWT with authentic operator identity and RBAC role."""
         if not self.client_id or session.startswith("mfa-session-") or session.startswith("mock-session-"):
             session_data = _MFA_SESSIONS.get(session)
@@ -427,12 +438,40 @@ class CognitoService:
             }
 
         try:
-            response = self.client.respond_to_auth_challenge(
-                ClientId=self.client_id,
-                ChallengeName="SOFTWARE_TOKEN_MFA",
-                Session=session,
-                ChallengeResponses={"SOFTWARE_TOKEN_MFA_CODE": totp_code},
-            )
+            # Check if this is a first-time MFA enrollment session (from associate_software_token)
+            setup_username = _MFA_SETUP_SESSIONS.pop(session, None) or (username.strip().lower() if username else None)
+            
+            # First attempt: If we have an enrollment session, verify_software_token registers the device
+            try:
+                verify_resp = self.client.verify_software_token(
+                    Session=session,
+                    UserCode=totp_code,
+                )
+                logger.info(f"verify_software_token succeeded for session: Status={verify_resp.get('Status')}")
+                challenge_responses = {}
+                if setup_username:
+                    challenge_responses["USERNAME"] = setup_username
+                response = self.client.respond_to_auth_challenge(
+                    ClientId=self.client_id,
+                    ChallengeName="MFA_SETUP",
+                    Session=verify_resp.get("Session") or session,
+                    ChallengeResponses=challenge_responses,
+                )
+            except ClientError as verify_err:
+                code = verify_err.response.get("Error", {}).get("Code")
+                # If not an enrollment challenge or verify_software_token is invalid for this session, fallback to SOFTWARE_TOKEN_MFA
+                if code in ("InvalidParameterException", "ResourceNotFoundException", "NotAuthorizedException"):
+                    challenge_responses = {"SOFTWARE_TOKEN_MFA_CODE": totp_code}
+                    if setup_username:
+                        challenge_responses["USERNAME"] = setup_username
+                    response = self.client.respond_to_auth_challenge(
+                        ClientId=self.client_id,
+                        ChallengeName="SOFTWARE_TOKEN_MFA",
+                        Session=session,
+                        ChallengeResponses=challenge_responses,
+                    )
+                else:
+                    raise
             auth_result = response.get("AuthenticationResult", {})
             return {
                 "access_token": auth_result.get("AccessToken"),

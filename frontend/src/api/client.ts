@@ -155,12 +155,17 @@ export async function inviteOperator(payload: {
 
 export async function verifyMfaCode(
   session: string,
-  totpCode: string
+  totpCode: string,
+  username?: string
 ): Promise<TokenAuthResponse> {
   const res = await fetch('/api/v1/auth/mfa/verify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ session, totp_code: totpCode }),
+    body: JSON.stringify({
+      session,
+      totp_code: totpCode,
+      ...(username ? { username: username.trim().toLowerCase() } : {}),
+    }),
   });
   if (!res.ok) {
     if (res.status >= 500) {

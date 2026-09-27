@@ -141,7 +141,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
 
     try {
-      const response = await verifyMfaCode(mfaChallenge.session, totpCode.trim());
+      const userEmail = mfaChallenge.email || email.trim().toLowerCase();
+      const response = await verifyMfaCode(mfaChallenge.session, totpCode.trim(), userEmail);
       if (response.user) {
         onSuccess(response.user);
       } else {
