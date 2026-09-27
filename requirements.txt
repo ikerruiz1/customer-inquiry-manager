@@ -29,3 +29,8 @@ httpx>=0.27.0
 pytest>=8.3.0
 pytest-asyncio>=0.24.0
 pytest-mock>=3.14.0
+
+# Security Vulnerability Remediations
+msgpack>=1.2.1
+setuptools>=78.1.1
+

@@ -1,3 +1,9 @@
+data "aws_region" "current" {}
+
+data "aws_prefix_list" "s3" {
+  name = "com.amazonaws.${data.aws_region.current.name}.s3"
+}
+
 resource "aws_security_group" "alb" {
   name        = "${var.project_name}-${var.environment}-alb-sg"
   description = "Controls public HTTPS/HTTP ingress into the Application Load Balancer"
@@ -59,6 +65,14 @@ resource "aws_security_group" "ecs_tasks" {
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    description     = "Outbound HTTPS connections to AWS S3 Gateway Endpoint"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    prefix_list_ids = [data.aws_prefix_list.s3.id]
   }
 
   tags = {

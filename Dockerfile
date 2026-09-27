@@ -33,7 +33,7 @@ RUN groupadd -g 10001 appgroup && \
 
 # Install Python application dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
+RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code and runtime configuration

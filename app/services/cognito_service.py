@@ -402,8 +402,9 @@ class CognitoService:
                 "iat": now,
                 "exp": now + 3600,
             }
-            access_token = jwt.encode(claims, "dev-secret-signing-key", algorithm="HS256")
-            id_token = jwt.encode(claims, "dev-secret-signing-key", algorithm="HS256")
+            signing_key = os.environ.get("JWT_SIGNING_KEY") or secrets.token_hex(32)
+            access_token = jwt.encode(claims, signing_key, algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
+            id_token = jwt.encode(claims, signing_key, algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
             # Clean up session
             _MFA_SESSIONS.pop(session, None)
