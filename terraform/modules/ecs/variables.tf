@@ -66,6 +66,12 @@ variable "container_image" {
   default     = ""
 }
 
+variable "enable_alb_autoscaling" {
+  type        = bool
+  description = "Enable ALBRequestCountPerTarget target tracking scaling policy"
+  default     = true
+}
+
 variable "alb_arn_suffix" {
   type        = string
   description = "ALB ARN suffix for ALBRequestCountPerTarget scaling policy"
