@@ -44,7 +44,7 @@ resource "aws_db_parameter_group" "main" {
 resource "aws_db_instance" "main" {
   identifier            = "${var.project_name}-${var.environment}-db"
   engine                = "postgres"
-  engine_version        = "16.4"
+  engine_version        = "16.10"
   instance_class        = var.instance_class
   allocated_storage     = 20
   max_allocated_storage = 50
