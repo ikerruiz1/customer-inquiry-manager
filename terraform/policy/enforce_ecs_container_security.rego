@@ -10,7 +10,7 @@ deny[msg] {
 deny[msg] {
 	some name
 	task := input.resource.aws_ecs_task_definition[name]
-	not contains(task.requires_compatibilities[_], "FARGATE")
+	task.requires_compatibilities != ["FARGATE"]
 	msg := sprintf("Resource 'aws_ecs_task_definition.%v' must specify 'FARGATE' compatibility.", [name])
 }
 

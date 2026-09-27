@@ -17,6 +17,23 @@ resource "aws_ecr_repository" "app" {
   }
 }
 
+resource "aws_ecr_repository" "xray_daemon" {
+  name                 = "${var.project_name}-${var.environment}-xray-daemon"
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = false
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = {
+    Name = "${var.project_name}-${var.environment}-xray-daemon-ecr"
+  }
+}
+
 resource "aws_ecs_cluster" "main" {
   name = "${var.project_name}-${var.environment}-cluster"
 
@@ -124,7 +141,7 @@ resource "aws_ecs_task_definition" "main" {
     },
     {
       name      = "aws-xray-daemon"
-      image     = "public.ecr.aws/xray/aws-xray-daemon:latest"
+      image     = "${aws_ecr_repository.xray_daemon.repository_url}:latest"
       essential = false
 
       portMappings = [
