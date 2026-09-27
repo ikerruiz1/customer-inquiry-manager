@@ -202,6 +202,8 @@ resource "aws_ecs_service" "main" {
     type = "ECS"
   }
 
+  health_check_grace_period_seconds = 60
+
   lifecycle {
     ignore_changes = [
       task_definition,
