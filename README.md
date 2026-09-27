@@ -18,7 +18,7 @@ An enterprise-grade, cloud-native customer inquiry ingestion, AI triage, and Hum
 - **ECS Fargate Spot Dual-Container Topology:** High-availability container architecture utilizing Fargate Spot (`capacity_provider_strategy`) for ~70% compute cost reduction, coupled with an official `aws-xray-daemon` sidecar for distributed tracing.
 - **FinOps S3 Multi-Tier Lifecycle:** Automated transitions for customer attachments (`Standard` -> `Glacier Instant Retrieval` at Day 60) and ALB access logs (`Standard` -> `Glacier` at Day 30 -> Expiration at Day 90).
 - **1-Click Clean Teardown:** Built with `force_destroy = true` across all S3 buckets and `skip_final_snapshot = true` / `deletion_protection = false` on RDS to ensure immediate, clean destruction without orphaned cloud resources.
-- **100% Native AWS Developer Tools CI/CD:** Unified under **AWS CodePipeline, AWS CodeBuild, and AWS CodeDeploy** with Canary traffic shifting (`Canary10Percent5Minutes`) for zero-downtime Blue/Green deployments.
+- **100% Native AWS Developer Tools CI/CD:** Unified under **AWS CodePipeline, AWS CodeBuild, and Amazon ECS Native Zero-Downtime Rolling Deployments**, featuring full DevSecOps automation (Pytest, Semgrep SAST, Trivy SCA, Syft SBOM) within private VPC Endpoints.
 
 ---
 
@@ -29,7 +29,7 @@ The complete lifecycle of the platform is formally orchestrated into **48 chrono
 | Block | Functional Domain | Unified Color | Excalidraw Hex | Flow Range | Key Architectural Milestones |
 | :--- | :--- | :--- | :---: | :---: | :--- |
 | **Block 1** | IaC, Policy-as-Code Governance & Remote State | **Brown / Copper** | #9A3412 | 1 – 5 | Conftest OPA Rego, KICS Checkmarx, Terraform CLI, S3 Remote State & KMS CMK Encryption |
-| **Block 2** | CI/CD & DevSecOps 100% AWS Native | **Orange** | #EA580C | 6 – 15 | CodePipeline, CodeBuild, Pytest (48 tests), Semgrep SAST, Trivy SCA, Syft SBOM, ECR, CodeDeploy Canary Blue/Green, ECS Fargate Spot |
+| **Block 2** | CI/CD & DevSecOps 100% AWS Native | **Orange** | #EA580C | 6 – 15 | CodePipeline, CodeBuild, Pytest (51 tests), Semgrep SAST, Trivy SCA, Syft SBOM, ECR, ECS Zero-Downtime Rolling Deploy, ECS Fargate Spot |
 | **Block 3** | Fargate Bootstrapping, PrivateLink & DB | **Purple** | #7C3AED | 16 – 20 | ECR PrivateLink layer pull, Secrets Manager, S3 Gateway company profile, RDS PostgreSQL 16 connection pool, RDS KMS CMK volume encryption |
 | **Block 4** | Perimeter Ingress, DNS, WAF & Authentication | **Royal Blue** | #2563EB | 21 – 29 | Route 53 DNS Alias, ACM TLS 1.3, AWS WAF inspection, React Console ingress, Cognito TOTP MFA redirect, FastAPI PrivateLink JWKS verification, Omnichannel Webhooks |
 | **Block 5** | SQS FIFO Decoupling, Bedrock & Attachments | **Emerald Green** | #059669 | 30 – 34 | SQS FIFO Enqueue (<15ms, HTTP 202), SQS FIFO Dequeue / Leaky-Bucket Rate Governor, Bedrock Converse API (Claude Haiku 4.5 / Nova 2 Lite + Guardrails), S3 Attachments, S3 Attachments KMS CMK Encryption |
@@ -110,7 +110,6 @@ customer-inquiry-manager/
 ├── company_profile.json              # Local active profile (Auto-generated from template or configured by operator)
 ├── Dockerfile                        # Production Python 3.12-slim runtime container (Non-root security)
 ├── buildspec.yml                     # AWS CodeBuild spec (Pytest, Semgrep SAST, KICS, Trivy, Syft)
-├── appspec.yaml                      # AWS CodeDeploy spec (ECS Fargate Blue/Green Canary)
 ├── terraform/                        # Modular Infrastructure as Code
 │   ├── environments/dev/             # Root dev composition
 │   ├── modules/                      # alb, cicd, cognito, ecs, iam, monitoring, rds, route53, s3, security_groups, ses, sqs, vpc
@@ -120,7 +119,6 @@ customer-inquiry-manager/
 │   ├── setup-dev.sh                  # 1-Click Linux / macOS local developer bootstrap
 │   ├── provision_operator.py         # Automated Cognito & SQLite operator provisioning with Secrets Manager backup
 │   ├── package_source.py             # Packaging utility producing lightweight source.zip for AWS CodePipeline S3 ingestion
-│   ├── generate_taskdef.py           # ECS taskdef.json sanitizer for AWS CodeDeploy Blue/Green deployments
 │   ├── seed_inquiries.py             # Omnichannel inbound traffic generator
 │   ├── k6-load-test.js               # Load and auto-scaling validation script (15-50 VUs)
 │   ├── deploy-infra.ps1              # 1-Click AWS deployment bootstrap with -DnsOnly support
@@ -534,7 +532,7 @@ The terminal prints your 4 authoritative AWS Route 53 Name Servers:
 
 ### Step 4: Deploy Full Production Infrastructure
 
-Execute the automated production deployment to provision all 12 Terraform modules (3-tier VPC with Zero-Internet Egress, PrivateLink, RDS PostgreSQL 16, SES, Cognito), package the source artifact, trigger AWS CodePipeline for cloud compilation & DevSecOps scans, and deploy to Amazon ECS Fargate Spot via AWS CodeDeploy:
+Execute the automated production deployment to provision all 12 Terraform modules (3-tier VPC with Zero-Internet Egress, PrivateLink, RDS PostgreSQL 16, SES, Cognito), package the source artifact, trigger AWS CodePipeline for cloud compilation & DevSecOps scans, and deploy zero-downtime rolling updates to Amazon ECS Fargate Spot:
 
 - **Windows (PowerShell):**
   ```powershell
@@ -829,7 +827,7 @@ All outbound communications and system alerts are dynamically routed based on de
 
 ## 7. Security, Policy-as-Code & Quality Gates (100% AWS-Native CI/CD Pipeline)
 
-The continuous integration and delivery lifecycle is engineered using **100% AWS-Native Developer Tools (AWS CodePipeline, AWS CodeBuild, and AWS CodeDeploy)**. Container image compilation, vulnerability scanning, and Canary deployments run entirely within ephemeral, managed AWS infrastructure, eliminating all dependencies on local Docker daemons or developer workstation virtualization.
+The continuous integration and delivery lifecycle is engineered using **100% AWS-Native Developer Tools (AWS CodePipeline, AWS CodeBuild, and Amazon ECS Native Zero-Downtime Deployments)** with dual-mode support for CodeDeploy Canary Blue/Green. Container image compilation, vulnerability scanning, and rolling task updates run entirely within ephemeral, managed AWS infrastructure, eliminating all dependencies on local Docker daemons or developer workstation virtualization.
 
 ```text
 [Developer / CLI Trigger]
@@ -849,12 +847,12 @@ The continuous integration and delivery lifecycle is engineered using **100% AWS
        ├─ Phase 5: Multi-Stage Docker Build & Trivy Container CVE Scan (--severity HIGH,CRITICAL)
        ├─ Phase 6: Syft CycloneDX Software Bill of Materials (SBOM) Generation (sbom.json)
        ├─ Phase 7: Authenticated Amazon ECR Push (Tagged :<commit-sha> and :latest)
-       └─ Phase 8: scripts/generate_taskdef.py (Strips AWS metadata & emits taskdef.json)
+       └─ Phase 8: Emit imagedefinitions.json & imageDetail.json for CodePipeline ECS deploy
        │
-       ▼ (Emits: imageDetail.json, appspec.yaml, taskdef.json, sbom.json)
-[AWS CodeDeploy (CodeDeployDefault.ECSCanary10Percent5Minutes)]
+       ▼ (Emits: imagedefinitions.json, imageDetail.json, sbom.json)
+[AWS CodePipeline Native ECS Deploy Action (provider = "ECS")]
        │
-       ▼ (Canary Traffic Shifting via ALB Target Groups Blue/Green)
+       ▼ (Zero-Downtime Rolling Update & ALB Health Check Verification)
 [Amazon ECS Fargate Spot Cluster (customer-inquiry-manager-dev-cluster)]
 ```
 
@@ -870,7 +868,7 @@ The continuous integration and delivery lifecycle is engineered using **100% AWS
 In standard production engineering environments, container images are never compiled on local laptops to prevent environment drift, unverified dependencies, and architecture mismatches (e.g. arm64 macOS vs. x86_64 Linux). 
 - **Source Packaging:** `scripts/package_source.py` compresses the repository into a lightweight `source.zip` (~5 MB), excluding local `.venv`, `node_modules`, `.terraform`, and cache directories.
 - **Cloud Build Execution:** The archive is uploaded to the pipeline S3 bucket, triggering AWS CodePipeline. CodeBuild executes within AWS with Docker-in-Docker capabilities (`privileged_mode = true`), compiling and scanning the image natively in the cloud.
-- **CodeDeploy ECS Normalization:** `scripts/generate_taskdef.py` queries the active ECS task definition family, removes AWS internal read-only fields (`taskDefinitionArn`, `revision`, `status`, `compatibilities`), injects the newly pushed ECR image tag, and produces a sanitized `taskdef.json` for CodeDeploy to execute zero-downtime Blue/Green Canary traffic shifting.
+- **Zero-Downtime Deployment Orchestration:** CodeBuild outputs `imagedefinitions.json` directing CodePipeline to invoke the native ECS deployment controller (`deployment_controller { type = "ECS" }`). ECS orchestrates zero-downtime rolling task replacements (`minimum_healthy_percent = 100`, `maximum_percent = 200`), verifying ALB health checks before draining obsolete tasks.
 
 ---
 
@@ -927,17 +925,17 @@ For engineers, recruiters, and reviewers evaluating the platform's claims, every
   ```
   *Output confirms `["app", "aws-xray-daemon"]` running in unified `awsvpc` network namespace.*
 
-### Metric 2: Zero-Downtime Blue/Green Canary Deployments (AWS CodeDeploy)
-- **Claim:** 100% Native AWS CI/CD pipeline using AWS CodePipeline and AWS CodeDeploy Canary traffic shifting (`Canary10Percent5Minutes`) with automated rollback.
+### Metric 2: Zero-Downtime Amazon ECS Rolling Deployments (AWS CodePipeline)
+- **Claim:** 100% Native AWS CI/CD pipeline using AWS CodePipeline and Amazon ECS native rolling deployments (`minimum_healthy_percent = 100`, `maximum_percent = 200`) with automated health check verification and instant rollback.
 - **Verification:**
   ```powershell
   # Check active CodePipeline execution status:
   aws codepipeline get-pipeline-state --name customer-inquiry-manager-dev-pipeline --query "stageStates[*].[stageName,latestExecution.status]"
   
-  # Inspect CodeDeploy Canary deployment:
-  aws deploy list-deployments --application-name AppECS-customer-inquiry-manager-dev-cluster-customer-inquiry-manager-dev-service
+  # Inspect ECS Service deployment status:
+  aws ecs describe-services --cluster customer-inquiry-manager-dev-cluster --services customer-inquiry-manager-dev-service --query "services[0].deployments[*].[status,desiredCount,runningCount,pendingCount]"
   ```
-  *Live deployment shifts 10% of traffic to the green target group for 5 minutes, monitors CloudWatch 5xx alarm threshold, and completes the remaining 90% shift seamlessly.*
+  *Live deployment orchestrates zero-downtime task replacement behind the ALB, verifies target health on `/health`, and safely drains previous tasks.*
 
 ### Metric 3: Sub-15ms SQS FIFO Decoupling & Distributed Tracing (~280ms P95 Latency)
 - **Claim:** Omnichannel machine webhooks enqueue payloads in `< 15ms` (`HTTP 202 Accepted`) into `inquiries.fifo` with deterministic SHA-256 deduplication, and distributed tracing records P95 API latency of ~280ms.

@@ -81,25 +81,7 @@ resource "aws_iam_role_policy_attachment" "codebuild_attach" {
   policy_arn = aws_iam_policy.codebuild_policy.arn
 }
 
-resource "aws_iam_role" "codedeploy_role" {
-  name = "${var.project_name}-${var.environment}-codedeploy-role"
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect    = "Allow"
-        Principal = { Service = "codedeploy.amazonaws.com" }
-        Action    = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "codedeploy_attach" {
-  role       = aws_iam_role.codedeploy_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
-}
 
 resource "aws_iam_role" "codepipeline_role" {
   name = "${var.project_name}-${var.environment}-codepipeline-role"
@@ -224,54 +206,6 @@ resource "aws_codebuild_project" "build" {
   }
 }
 
-resource "aws_codedeploy_app" "ecs" {
-  name             = "${var.project_name}-${var.environment}-app"
-  compute_platform = "ECS"
-}
-
-resource "aws_codedeploy_deployment_group" "ecs" {
-  app_name               = aws_codedeploy_app.ecs.name
-  deployment_group_name  = "${var.project_name}-${var.environment}-dg"
-  service_role_arn       = aws_iam_role.codedeploy_role.arn
-  deployment_config_name = "CodeDeployDefault.ECSCanary10Percent5Minutes"
-
-  blue_green_deployment_config {
-    deployment_ready_option {
-      action_on_timeout = "CONTINUE_DEPLOYMENT"
-    }
-
-    terminate_blue_instances_on_deployment_success {
-      action                           = "TERMINATE"
-      termination_wait_time_in_minutes = 5
-    }
-  }
-
-  ecs_service {
-    cluster_name = var.ecs_cluster_name
-    service_name = var.ecs_service_name
-  }
-
-  load_balancer_info {
-    target_group_pair_info {
-      prod_traffic_route {
-        listener_arns = [var.production_listener_arn]
-      }
-
-      test_traffic_route {
-        listener_arns = [var.test_listener_arn]
-      }
-
-      target_group {
-        name = var.target_group_blue_name
-      }
-
-      target_group {
-        name = var.target_group_green_name
-      }
-    }
-  }
-}
-
 resource "aws_codepipeline" "pipeline" {
   name     = "${var.project_name}-${var.environment}-pipeline"
   role_arn = aws_iam_role.codepipeline_role.arn
@@ -322,20 +256,17 @@ resource "aws_codepipeline" "pipeline" {
     name = "Deploy"
 
     action {
-      name            = "DeployBlueGreen"
+      name            = "DeployECS"
       category        = "Deploy"
       owner           = "AWS"
-      provider        = "CodeDeployToECS"
+      provider        = "ECS"
       input_artifacts = ["build_output"]
       version         = "1"
 
       configuration = {
-        ApplicationName                = aws_codedeploy_app.ecs.name
-        DeploymentGroupName            = aws_codedeploy_deployment_group.ecs.deployment_group_name
-        TaskDefinitionTemplateArtifact = "build_output"
-        TaskDefinitionTemplatePath     = "taskdef.json"
-        AppSpecTemplateArtifact        = "build_output"
-        AppSpecTemplatePath            = "appspec.yaml"
+        ClusterName = var.ecs_cluster_name
+        ServiceName = var.ecs_service_name
+        FileName    = "imagedefinitions.json"
       }
     }
   }

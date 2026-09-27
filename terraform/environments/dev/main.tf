@@ -124,10 +124,6 @@ module "cicd" {
   ecr_repository_url             = module.ecs.ecr_repository_url
   ecs_cluster_name               = module.ecs.cluster_name
   ecs_service_name               = module.ecs.service_name
-  target_group_blue_name         = module.alb.target_group_blue_name
-  target_group_green_name        = module.alb.target_group_green_name
-  production_listener_arn        = module.alb.production_listener_arn
-  test_listener_arn              = module.alb.test_listener_arn
 }
 
 module "route53" {
