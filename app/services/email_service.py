@@ -1,10 +1,12 @@
 """Agnostic Outbound Email Service supporting Amazon SES, standard SMTP, and mock dev delivery."""
+import asyncio
 import email.mime.multipart
 import email.mime.text
 import logging
 import smtplib
 from typing import Dict, Any, List, Optional
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError, NoCredentialsError
 
 from app.core.config import settings
@@ -37,7 +39,12 @@ class EmailService:
     def _get_ses_client(self):
         if self._ses_client is None:
             try:
-                self._ses_client = boto3.client("ses", region_name=settings.AWS_REGION)
+                ses_config = Config(
+                    connect_timeout=2,
+                    read_timeout=3,
+                    retries={"max_attempts": 1, "mode": "standard"},
+                )
+                self._ses_client = boto3.client("ses", region_name=settings.AWS_REGION, config=ses_config)
             except Exception as exc:
                 logger.debug(f"Unable to instantiate SES client: {exc}")
                 self._ses_client = None
@@ -88,42 +95,49 @@ class EmailService:
             "provider": "MOCK",
         }
 
-        # 1. Try Amazon SES (if in cloud or AWS credentials present)
+        # 1. Try Amazon SES (non-blocking thread execution with timeout guardrails)
         ses_client = self._get_ses_client()
         if ses_client:
             try:
-                ses_res = ses_client.send_email(
-                    Source=self.from_email,
-                    Destination={"ToAddresses": [customer_email]},
-                    Message={
-                        "Subject": {"Data": subject, "Charset": "UTF-8"},
-                        "Body": {"Text": {"Data": plain_text, "Charset": "UTF-8"}},
-                    },
+                loop = asyncio.get_running_loop()
+                ses_res = await loop.run_in_executor(
+                    None,
+                    lambda: ses_client.send_email(
+                        Source=self.from_email,
+                        Destination={"ToAddresses": [customer_email]},
+                        Message={
+                            "Subject": {"Data": subject, "Charset": "UTF-8"},
+                            "Body": {"Text": {"Data": plain_text, "Charset": "UTF-8"}},
+                        },
+                    ),
                 )
                 logger.info(f"Email dispatched via Amazon SES: MessageId={ses_res.get('MessageId')}")
                 delivery_result["provider"] = "AMAZON_SES"
                 delivery_result["message_id"] = ses_res.get("MessageId")
                 self.outbox.append(delivery_result)
                 return delivery_result
-            except (ClientError, NoCredentialsError) as exc:
+            except Exception as exc:
                 logger.warning(f"SES delivery bypassed/failed: {exc}. Attempting SMTP fallback.")
 
-        # 2. Try Standard SMTP (if SMTP_HOST is declared)
+        # 2. Try Standard SMTP (if SMTP_HOST is declared, offloaded to executor)
         if self.smtp_host and self.smtp_user and self.smtp_password:
             try:
-                msg = email.mime.multipart.MIMEMultipart("alternative")
-                msg["Subject"] = subject
-                msg["From"] = self.from_email
-                msg["To"] = customer_email
-                msg["Reply-To"] = self.support_email
-                msg.attach(email.mime.text.MIMEText(plain_text, "plain", "utf-8"))
+                def _send_smtp():
+                    msg = email.mime.multipart.MIMEMultipart("alternative")
+                    msg["Subject"] = subject
+                    msg["From"] = self.from_email
+                    msg["To"] = customer_email
+                    msg["Reply-To"] = self.support_email
+                    msg.attach(email.mime.text.MIMEText(plain_text, "plain", "utf-8"))
 
-                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
-                    if self.smtp_use_tls:
-                        server.starttls()
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.sendmail(self.from_email, [customer_email], msg.as_string())
+                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=5) as server:
+                        if self.smtp_use_tls:
+                            server.starttls()
+                        server.login(self.smtp_user, self.smtp_password)
+                        server.sendmail(self.from_email, [customer_email], msg.as_string())
 
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, _send_smtp)
                 logger.info(f"Email successfully delivered via SMTP ({self.smtp_host}) to {customer_email}")
                 delivery_result["provider"] = "SMTP"
                 self.outbox.append(delivery_result)
@@ -254,13 +268,17 @@ class EmailService:
         ses_client = self._get_ses_client()
         if ses_client:
             try:
-                ses_res = ses_client.send_email(
-                    Source=self.from_email,
-                    Destination={"ToAddresses": [recipient]},
-                    Message={
-                        "Subject": {"Data": subject, "Charset": "UTF-8"},
-                        "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
-                    },
+                loop = asyncio.get_running_loop()
+                ses_res = await loop.run_in_executor(
+                    None,
+                    lambda: ses_client.send_email(
+                        Source=self.from_email,
+                        Destination={"ToAddresses": [recipient]},
+                        Message={
+                            "Subject": {"Data": subject, "Charset": "UTF-8"},
+                            "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                        },
+                    ),
                 )
                 delivery_result["provider"] = "AMAZON_SES"
                 delivery_result["message_id"] = ses_res.get("MessageId")
@@ -271,18 +289,21 @@ class EmailService:
 
         if self.smtp_host and self.smtp_user and self.smtp_password:
             try:
-                msg = email.mime.multipart.MIMEMultipart("alternative")
-                msg["Subject"] = subject
-                msg["From"] = self.from_email
-                msg["To"] = recipient
-                msg.attach(email.mime.text.MIMEText(body, "plain", "utf-8"))
+                def _send_generic_smtp():
+                    msg = email.mime.multipart.MIMEMultipart("alternative")
+                    msg["Subject"] = subject
+                    msg["From"] = self.from_email
+                    msg["To"] = recipient
+                    msg.attach(email.mime.text.MIMEText(body, "plain", "utf-8"))
 
-                with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
-                    if self.smtp_use_tls:
-                        server.starttls()
-                    server.login(self.smtp_user, self.smtp_password)
-                    server.sendmail(self.from_email, [recipient], msg.as_string())
+                    with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=5) as server:
+                        if self.smtp_use_tls:
+                            server.starttls()
+                        server.login(self.smtp_user, self.smtp_password)
+                        server.sendmail(self.from_email, [recipient], msg.as_string())
 
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, _send_generic_smtp)
                 delivery_result["provider"] = "SMTP"
                 self.outbox.append(delivery_result)
                 return delivery_result
