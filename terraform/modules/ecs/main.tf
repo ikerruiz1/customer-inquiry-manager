@@ -206,7 +206,7 @@ resource "aws_appautoscaling_target" "ecs" {
 }
 
 resource "aws_appautoscaling_policy" "ecs_alb_requests" {
-  count              = var.alb_arn_suffix != "" && var.target_group_blue_arn_suffix != "" ? 1 : 0
+  count              = var.enable_alb_autoscaling ? 1 : 0
   name               = "${var.project_name}-${var.environment}-alb-requests-scaling"
   policy_type        = "TargetTrackingScaling"
   resource_id        = aws_appautoscaling_target.ecs.resource_id
