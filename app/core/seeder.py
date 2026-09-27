@@ -405,13 +405,15 @@ async def init_db_and_seed() -> None:
             await conn.run_sync(Base.metadata.create_all)
 
         async with AsyncSessionLocal() as session:
-            # Seed canonical customer inquiries if table is empty
-            count_res = await session.execute(select(func.count()).select_from(Inquiry))
-            if count_res.scalar_one() == 0:
-                sample_inquiries = build_canonical_sample_inquiries()
-                session.add_all(sample_inquiries)
+            # Purge mock/sample inquiries on startup so the operator queue starts 100% clean
+            from sqlalchemy import delete
+            from app.models.inquiry import AuditLog, InquiryMessage
+            del_msg = await session.execute(delete(InquiryMessage))
+            del_aud = await session.execute(delete(AuditLog))
+            del_inq = await session.execute(delete(Inquiry))
+            if del_inq.rowcount > 0:
                 await session.commit()
-                logger.info("Pre-seeded canonical dev inquiries into persistent database.")
+                logger.info(f"Cleaned {del_inq.rowcount} sample inquiries. Operational queue initialized to 0.")
 
             # Seed canonical enterprise operators if table is empty
             op_count_res = await session.execute(select(func.count()).select_from(Operator))

@@ -11,7 +11,6 @@ import {
   fetchCurrentOperator,
   fetchDashboardMetrics,
   fetchRegisteredOperators,
-  resetDemoInquiries,
 } from './api/client';
 import { LoadLogicTopHeader } from './components/LoadLogicTopHeader';
 import { DashboardWidgetGrid } from './components/DashboardWidgetGrid';
@@ -260,18 +259,6 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleResetData = async () => {
-    if (window.confirm('Reset all customer inquiries back to the initial dataset?')) {
-      try {
-        await resetDemoInquiries();
-        await loadData();
-        setSelectedTicket(null);
-      } catch (err: any) {
-        alert(err.message || 'Error resetting demo data');
-      }
-    }
-  };
-
   const handleExportAuditLogs = () => {
     const exportData = {
       exportTimestamp: new Date().toISOString(),
@@ -395,7 +382,6 @@ export const App: React.FC = () => {
           onExportAuditLogs={handleExportAuditLogs}
           onOpenNewInquiryModal={() => setIsNewInquiryModalOpen(true)}
           onResetLayout={() => setResetSignal((prev) => prev + 1)}
-          onResetData={import.meta.env.DEV ? handleResetData : undefined}
           isLayoutCustomized={isLayoutCustomized}
           currentThemeId={themeId}
           onSelectTheme={handleSelectTheme}

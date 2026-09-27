@@ -111,7 +111,7 @@ class MockCognitoService(CognitoService):
             "token_type": "Bearer",
         }
 
-    async def verify_software_token_mfa(self, session: str, totp_code: str) -> dict:
+    async def verify_software_token_mfa(self, session: str, totp_code: str, username: str = None, **kwargs) -> dict:
         if totp_code != "123456":
             from botocore.exceptions import ClientError
             raise ClientError({"Error": {"Code": "CodeMismatchException", "Message": "Invalid verification code provided."}}, "RespondToAuthChallenge")
