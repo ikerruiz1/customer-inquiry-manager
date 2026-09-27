@@ -17,7 +17,8 @@ def generate_secure_password(length: int = 14) -> str:
     lower = "abcdefghijkmnopqrstuvwxyz"
     upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
     digits = "23456789"
-    symbols = "!@#$%^&*()-_=+"
+    # Shell-safe symbols that do not trigger PowerShell variable expansions ($) or regex issues
+    symbols = "!@#%*-_=+"
     
     password = [
         secrets.choice(lower),

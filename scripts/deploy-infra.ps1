@@ -297,6 +297,14 @@ try {
         --cognito `
         --pool-id $cognitoPool `
         --region $targetRegion
+    $tempPwOut = ""
+    try {
+        $secJson = aws secretsmanager get-secret-value --secret-id "customer-inquiry-manager/dev/operator-credentials" --region $targetRegion --query SecretString --output text | ConvertFrom-Json
+        if ($secJson.temporary_password) {
+            $tempPwOut = $secJson.temporary_password
+        }
+    } catch {}
+
     Write-Host "  OK: Administrator account created and credentials stored in Secrets Manager." -ForegroundColor Green
 }
 catch {
@@ -311,10 +319,13 @@ Write-Host "  Console URL:     http://$albDns" -ForegroundColor White
 Write-Host "  Admin Username:  $activeAdminEmail" -ForegroundColor Yellow
 Write-Host "  Admin Name:      $activeAdminName" -ForegroundColor White
 Write-Host "  Admin Role:      Operations_Manager" -ForegroundColor White
+if ($tempPwOut) {
+    Write-Host "  Temporary Pass:  $tempPwOut" -ForegroundColor Yellow
+}
 Write-Host "  Cognito Pool:    $cognitoPool" -ForegroundColor Gray
 Write-Host "  Secrets Manager: customer-inquiry-manager/dev/operator-credentials" -ForegroundColor Gray
 Write-Host "------------------------------------------------------------------------------" -ForegroundColor DarkGray
-Write-Host "  Sign in at http://$albDns with $activeAdminEmail and the temporary password" -ForegroundColor White
-Write-Host "  printed above. First login will prompt for a permanent password and TOTP MFA." -ForegroundColor White
+Write-Host "  Sign in at http://$albDns with $activeAdminEmail and the temporary password." -ForegroundColor White
+Write-Host "  First login will prompt for a permanent password and TOTP MFA." -ForegroundColor White
 Write-Host "==============================================================================" -ForegroundColor Green
 Write-Host ""
