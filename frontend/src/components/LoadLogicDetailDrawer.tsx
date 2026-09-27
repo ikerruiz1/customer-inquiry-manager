@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Pause,
   Play,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   getAuditLogs,
@@ -1498,23 +1499,45 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
               </div>
             </div>
 
-            {ticket.churn_risk && (
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  padding: '4px 10px',
-                  borderRadius: '9999px',
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  color: '#dc2626',
-                  fontSize: '0.74rem',
-                  fontWeight: 700,
-                }}
-              >
-                <AlertTriangle size={12} /> Churn Risk Alert
-              </span>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {ticket.entities?.security_threat && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    backgroundColor: '#FEE2E2',
+                    border: '1px solid #FCA5A5',
+                    color: '#991B1B',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  <ShieldAlert size={13} color="#991B1B" /> PROMPT INJECTION DETECTED
+                </span>
+              )}
+
+              {ticket.churn_risk && (
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 10px',
+                    borderRadius: '9999px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    color: '#dc2626',
+                    fontSize: '0.74rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <AlertTriangle size={12} /> Churn Risk Alert
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Section: MLOps Override & Audit History */}

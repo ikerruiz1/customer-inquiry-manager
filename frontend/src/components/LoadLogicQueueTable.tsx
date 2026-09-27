@@ -11,6 +11,7 @@ import {
   Flame,
   User,
   SlidersHorizontal,
+  ShieldAlert,
 } from 'lucide-react';
 import {
   PriorityEnum,
@@ -1057,7 +1058,26 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                 </div>
 
                 
-                <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  {ticket.entities?.security_threat && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        fontSize: '0.72rem',
+                        color: '#991B1B',
+                        backgroundColor: '#FEE2E2',
+                        border: '1px solid #FCA5A5',
+                        borderRadius: '4px',
+                        padding: '1px 6px',
+                        fontWeight: 700,
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      <ShieldAlert size={12} color="#991B1B" /> PROMPT INJECTION
+                    </span>
+                  )}
                   {ticket.churn_risk ? (
                     <span
                       style={{
@@ -1071,11 +1091,11 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                     >
                       <AlertTriangle size={12} color="#DC2626" /> Churn Risk
                     </span>
-                  ) : (
+                  ) : !ticket.entities?.security_threat ? (
                     <span style={{ color: '#9CA3AF', fontSize: '0.74rem', fontWeight: 500 }}>
                       All Clear
                     </span>
-                  )}
+                  ) : null}
                 </div>
 
                 
