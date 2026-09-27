@@ -34,23 +34,3 @@ variable "ecs_service_name" {
   type        = string
   description = "ECS service name"
 }
-
-variable "target_group_blue_name" {
-  type        = string
-  description = "Blue target group name"
-}
-
-variable "target_group_green_name" {
-  type        = string
-  description = "Green target group name"
-}
-
-variable "production_listener_arn" {
-  type        = string
-  description = "ALB Production listener ARN"
-}
-
-variable "test_listener_arn" {
-  type        = string
-  description = "ALB Test listener ARN"
-}

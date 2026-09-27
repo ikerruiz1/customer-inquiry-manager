@@ -66,21 +66,13 @@ phases:
           docker push $ECR_REPOSITORY_URI:$IMAGE_TAG
           docker push $ECR_REPOSITORY_URI:latest
           printf '{"ImageURI":"%s"}' "$ECR_REPOSITORY_URI:$IMAGE_TAG" > imageDetail.json
+          printf '[{"name":"customer-inquiry-manager","imageUri":"%s"}]' "$ECR_REPOSITORY_URI:$IMAGE_TAG" > imagedefinitions.json
         else
           echo "ECR_REPOSITORY_URI not defined (local or mock run), creating placeholder imageDetail.json"
           printf '{"ImageURI":"%s"}' "customer-inquiry-manager:$IMAGE_TAG" > imageDetail.json
+          printf '[{"name":"customer-inquiry-manager","imageUri":"%s"}]' "customer-inquiry-manager:$IMAGE_TAG" > imagedefinitions.json
         fi
-      - echo "Phase 8: Generating ECS taskdef.json for CodeDeploy..."
-      - |
-        TASK_DEF_FAMILY="${TASK_DEFINITION_FAMILY:-customer-inquiry-manager-dev-task}"
-        export TARGET_IMAGE="${ECR_REPOSITORY_URI}:${IMAGE_TAG}"
-        if [ -n "$ECR_REPOSITORY_URI" ]; then
-          aws ecs describe-task-definition --task-definition "$TASK_DEF_FAMILY" --query taskDefinition > taskdef_raw.json
-          python scripts/generate_taskdef.py taskdef_raw.json taskdef.json
-        else
-          python scripts/generate_taskdef.py taskdef_raw.json taskdef.json
-        fi
-      - echo "Build and DevSecOps gates completed successfully."
+      - echo "Phase 8: Build and DevSecOps gates completed successfully."
 
 reports:
   pytest-reports:
@@ -90,7 +82,6 @@ reports:
 
 artifacts:
   files:
+    - imagedefinitions.json
     - imageDetail.json
-    - appspec.yaml
-    - taskdef.json
     - sbom.json
