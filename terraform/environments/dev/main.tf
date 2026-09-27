@@ -126,6 +126,7 @@ module "cicd" {
   ecs_service_name               = module.ecs.service_name
 }
 
+
 module "route53" {
   source       = "../../modules/route53"
   project_name = var.project_name
