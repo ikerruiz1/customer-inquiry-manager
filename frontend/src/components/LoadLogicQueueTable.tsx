@@ -1143,24 +1143,54 @@ export const LoadLogicQueueTable: React.FC<LoadLogicQueueTableProps> = ({
                       <CheckCircle2 size={12} /> Resolved
                     </span>
                   ) : ticket.status === InquiryStatusEnum.PENDING_CUSTOMER ? (
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '3px 10px',
-                        borderRadius: '9999px',
-                        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-                        color: '#B45309',
-                        border: '1px solid rgba(245, 158, 11, 0.3)',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        whiteSpace: 'nowrap',
-                      }}
-                      title="Ticket awaiting customer response. SLA countdown is paused."
-                    >
-                      <span>⏸</span> Waiting Info
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClaimTicket(ticket.id);
+                        }}
+                        disabled={isClaiming}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          padding: '4px 12px',
+                          borderRadius: '9999px',
+                          backgroundColor: '#FFFFFF',
+                          color: '#1F2937',
+                          border: '1px solid rgba(12, 13, 13, 0.16)',
+                          fontSize: '0.74rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                          boxShadow: '0 1px 2px rgba(12, 13, 13, 0.04)',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#F3F4F6')}
+                        onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#FFFFFF')}
+                        title="Claim ticket for current operator"
+                      >
+                        <span>Claim</span>
+                        <ChevronRight size={11} />
+                      </button>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '3px 10px',
+                          borderRadius: '9999px',
+                          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                          color: '#B45309',
+                          border: '1px solid rgba(245, 158, 11, 0.3)',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          whiteSpace: 'nowrap',
+                        }}
+                        title="Ticket awaiting customer response. SLA countdown is paused."
+                      >
+                        <span>⏸</span> Waiting Info
+                      </span>
+                    </div>
                   ) : (
                     <span
                       style={{
