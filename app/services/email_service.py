@@ -99,7 +99,7 @@ class EmailService:
         ses_client = self._get_ses_client()
         if ses_client:
             try:
-                # Use professional display name in Source field
+                # Use from_email loaded dynamically from environment variables
                 display_source = f"{self.company_name} Support <{self.from_email}>"
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
@@ -114,7 +114,7 @@ class EmailService:
                         },
                     ),
                 )
-                logger.info(f"Email dispatched via Amazon SES: MessageId={ses_res.get('MessageId')}")
+                logger.info(f"Email dispatched via Amazon SES to {customer_email}: MessageId={ses_res.get('MessageId')}")
                 delivery_result["provider"] = "AMAZON_SES"
                 delivery_result["message_id"] = ses_res.get("MessageId")
                 self.outbox.append(delivery_result)
