@@ -164,6 +164,7 @@ locals {
     "sns",
     "xray",
     "sqs",
+    "email",
   ]
 }
 
