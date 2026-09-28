@@ -146,13 +146,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (response.user) {
         onSuccess(response.user);
       } else {
+        const role = email.includes('admin') || email.includes('manager') || email.includes('alex')
+          ? 'Operations_Manager'
+          : 'Tier1_Agent';
         onSuccess({
           id: 'user-authenticated',
           name: email.split('@')[0].replace('.', ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
           email: email.trim().toLowerCase(),
-          role: email.includes('manager') || email.includes('alex') ? 'Operations_Manager' : 'Tier1_Agent',
+          role,
           initials: email.slice(0, 2).toUpperCase(),
-          color: email.includes('alex') ? '#8b5cf6' : '#3b82f6',
+          color: role === 'Operations_Manager' ? '#8b5cf6' : '#3b82f6',
         });
       }
     } catch (err: any) {

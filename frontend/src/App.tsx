@@ -3,6 +3,7 @@ import {
   checkBackendHealth,
   claimInquiry,
   createInquiry,
+  deleteInquiry,
   fetchInquiries,
   overrideInquiry,
   resolveInquiry,
@@ -211,6 +212,19 @@ export const App: React.FC = () => {
       alert(err.message || 'Error resolving ticket');
     } finally {
       setIsResolving(false);
+    }
+  };
+
+  const handleDeleteTicket = async (ticketId: string) => {
+    try {
+      await deleteInquiry(ticketId);
+      setInquiries((prev) => prev.filter((i) => i.id !== ticketId));
+      if (selectedTicket && selectedTicket.id === ticketId) {
+        setSelectedTicket(null);
+      }
+      await loadData();
+    } catch (err: any) {
+      alert(err.message || 'Error deleting ticket');
     }
   };
 
@@ -437,6 +451,7 @@ export const App: React.FC = () => {
             onResolveTicket={handleResolveTicket}
             onOpenOverrideModal={() => setIsOverrideModalOpen(true)}
             onClaimTicket={handleClaimTicket}
+            onDeleteTicket={handleDeleteTicket}
             isResolving={isResolving}
             operators={registeredOperators}
             onTicketUpdated={(updated) => {

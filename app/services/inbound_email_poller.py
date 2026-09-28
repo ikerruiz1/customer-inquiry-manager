@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.inquiry import Inquiry
 from app.schemas.inquiry import ChannelEnum, CustomerReplyCreate, InquiryCreate
+from app.services.email_filter import is_automated_delivery_failure_or_loop, extract_customer_name_from_body
 from app.services.bedrock_service import get_bedrock_service
 
 logger = logging.getLogger("app.services.inbound_email_poller")
@@ -147,9 +148,10 @@ class InboundEmailPoller:
                     subject = _decode_mime_header(msg.get("Subject"))
                     body = _extract_text_body(msg) or "(Empty email body)"
 
-                    logger.info(f"S3 SES inbound email received from {sender_email} subject: '{subject}'")
+                    resolved_name = extract_customer_name_from_body(body=body, fallback_name=sender_name, sender_email=sender_email)
+                    logger.info(f"S3 SES inbound email received from {sender_email} ({resolved_name}) subject: '{subject}'")
 
-                    asyncio.run(self._dispatch_parsed_email(sender_name or sender_email, sender_email, subject, body))
+                    asyncio.run(self._dispatch_parsed_email(resolved_name, sender_email, subject, body))
 
                     s3.delete_object(Bucket=bucket_name, Key=key)
                     logger.info(f"Processed and deleted S3 inbound email: {key}")
@@ -195,10 +197,11 @@ class InboundEmailPoller:
                 subject = _decode_mime_header(msg.get("Subject"))
                 body = _extract_text_body(msg) or "(Empty email body)"
 
-                logger.info(f"Inbound email received from {sender_email} with subject: '{subject}'")
+                resolved_name = extract_customer_name_from_body(body=body, fallback_name=sender_name, sender_email=sender_email)
+                logger.info(f"Inbound email received from {sender_email} ({resolved_name}) with subject: '{subject}'")
 
                 # Process email asynchronously via database
-                asyncio.run(self._dispatch_parsed_email(sender_name or sender_email, sender_email, subject, body))
+                asyncio.run(self._dispatch_parsed_email(resolved_name, sender_email, subject, body))
 
                 # Mark message as read
                 mail.store(eid, "+FLAGS", "\\Seen")
@@ -215,6 +218,12 @@ class InboundEmailPoller:
 
     async def _dispatch_parsed_email(self, customer_name: str, customer_email: str, subject: str, body: str):
         """Correlate to existing ticket or create new inquiry with Bedrock triage."""
+        # 0. Suppress automated bounce, NDR, or mailer-daemon failure loops
+        is_filtered, reason = is_automated_delivery_failure_or_loop(customer_email, subject, body)
+        if is_filtered:
+            logger.info(f"Silently dropped automated inbound email from {customer_email} - Reason: {reason}")
+            return
+
         match = TICKET_ID_REGEX.search(subject)
         async with AsyncSessionLocal() as db:
             if match:

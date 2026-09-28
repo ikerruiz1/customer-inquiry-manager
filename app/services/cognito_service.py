@@ -473,12 +473,37 @@ class CognitoService:
                 else:
                     raise
             auth_result = response.get("AuthenticationResult", {})
+            id_token = auth_result.get("IdToken", "")
+            user_info = None
+            groups = []
+            if id_token:
+                try:
+                    claims = jwt.get_unverified_claims(id_token)
+                    groups = claims.get("cognito:groups", [])
+                    role = "Operations_Manager" if "Operations_Managers" in groups else "Tier1_Agent"
+                    user_name = claims.get("name") or (setup_username.split("@")[0].title() if setup_username else "Operator")
+                    user_email = claims.get("email") or setup_username or ""
+                    initials = "".join([p[0].upper() for p in user_name.split()[:2]]) or "OP"
+                    user_info = {
+                        "id": claims.get("sub", ""),
+                        "name": user_name,
+                        "email": user_email,
+                        "role": role,
+                        "groups": groups,
+                        "initials": initials,
+                        "color": "#8b5cf6" if role == "Operations_Manager" else "#3b82f6",
+                    }
+                except Exception as parse_err:
+                    logger.warning(f"Could not parse ID token claims: {parse_err}")
+
             return {
                 "access_token": auth_result.get("AccessToken"),
-                "id_token": auth_result.get("IdToken"),
+                "id_token": id_token,
                 "refresh_token": auth_result.get("RefreshToken"),
                 "token_type": "Bearer",
                 "expires_in": auth_result.get("ExpiresIn", 3600),
+                "groups": groups,
+                "user": user_info,
             }
         except ClientError as exc:
             logger.warning(f"Cognito TOTP MFA verification failed: {exc}")

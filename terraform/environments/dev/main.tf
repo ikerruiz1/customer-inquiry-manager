@@ -66,6 +66,7 @@ module "iam" {
   attachments_bucket_arn = module.s3.attachments_bucket_arn
   db_secret_arn          = module.rds.secret_arn
   ses_inbound_bucket_arn = module.ses.inbound_bucket_arn
+  user_pool_arn          = module.cognito.user_pool_arn
 }
 
 module "alb" {

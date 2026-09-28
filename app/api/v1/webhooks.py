@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request, status
 from app.core.config import settings
 from app.schemas.inquiry import InquiryCreate, InquiryQueuedResponse, ChannelEnum
 from app.services.sqs_service import SQSService, get_sqs_service
+from app.services.email_filter import is_automated_delivery_failure_or_loop, extract_customer_name_from_body
 
 logger = logging.getLogger("app.api.v1.webhooks")
 router = APIRouter()
@@ -71,10 +72,26 @@ async def inbound_email_webhook(
     subject = payload.get("subject") or "Support Request via Email"
     body = payload.get("text") or payload.get("html") or payload.get("body") or ""
 
+    # Check for automated bounce, delivery failure, or loop notice
+    is_filtered, reason = is_automated_delivery_failure_or_loop(sender_email, subject, body)
+    if is_filtered:
+        logger.info(f"Silently dropped automated inbound email from {sender_email} - Reason: {reason}")
+        return InquiryQueuedResponse(
+            channel=ChannelEnum.EMAIL,
+            tracking_id="filtered-ndr-bounce",
+            message=f"Inbound email recognized as automated delivery failure/bounce and filtered out: {reason}",
+        )
+
+    resolved_customer_name = extract_customer_name_from_body(
+        body=body,
+        fallback_name=payload.get("name"),
+        sender_email=sender_email,
+    )
+
     inquiry_payload = {
         "channel": ChannelEnum.EMAIL.value,
         "customer_email": sender_email if "@" in sender_email else "user@customer.com",
-        "customer_name": payload.get("name") or sender_email.split("@")[0],
+        "customer_name": resolved_customer_name,
         "subject": subject,
         "body": body or "No message content provided in email body.",
     }

@@ -18,6 +18,7 @@ import {
   Pause,
   Play,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 import {
   getAuditLogs,
@@ -59,6 +60,7 @@ interface LoadLogicDetailDrawerProps {
   onResolveTicket: (id: string, resolutionText: string, notes?: string) => void;
   onOpenOverrideModal: () => void;
   onClaimTicket: (id: string) => void;
+  onDeleteTicket?: (id: string) => Promise<void>;
   isResolving: boolean;
   operators?: AgentProfile[];
   onTicketUpdated?: (updated: Inquiry) => void;
@@ -71,6 +73,7 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
   onResolveTicket,
   onOpenOverrideModal,
   onClaimTicket,
+  onDeleteTicket,
   isResolving,
   operators,
   onTicketUpdated,
@@ -390,24 +393,59 @@ export const LoadLogicDetailDrawer: React.FC<LoadLogicDetailDrawerProps> = ({
           )}
         </div>
 
-        <button
-          onClick={onClose}
-          style={{
-            padding: '7px',
-            borderRadius: '50%',
-            border: '1px solid rgba(12, 13, 13, 0.1)',
-            backgroundColor: '#FAFAFA',
-            color: '#0C0D0D',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'all 0.15s ease',
-          }}
-          title="Close Dialog"
-        >
-          <X size={17} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {onDeleteTicket && (
+            <button
+              onClick={async () => {
+                if (window.confirm(`Delete ticket #${ticket.id.slice(0, 8).toUpperCase()}? This will permanently remove the ticket, messages, and audit trail.`)) {
+                  try {
+                    await onDeleteTicket(ticket.id);
+                    onClose();
+                  } catch (err: any) {
+                    alert(err.message || 'Failed to delete ticket');
+                  }
+                }
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(220, 38, 38, 0.25)',
+                backgroundColor: '#FEF2F2',
+                color: '#DC2626',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                transition: 'all 0.15s ease',
+              }}
+              title="Delete Ticket"
+            >
+              <Trash2 size={13} />
+              <span>Delete Ticket</span>
+            </button>
+          )}
+
+          <button
+            onClick={onClose}
+            style={{
+              padding: '7px',
+              borderRadius: '50%',
+              border: '1px solid rgba(12, 13, 13, 0.1)',
+              backgroundColor: '#FAFAFA',
+              color: '#0C0D0D',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.15s ease',
+            }}
+            title="Close Dialog"
+          >
+            <X size={17} />
+          </button>
+        </div>
       </div>
 
       {/* Concurrency Warning Banner (Cognito Multi-Agent Collision Lock) */}

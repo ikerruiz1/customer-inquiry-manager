@@ -124,3 +124,25 @@ def require_roles(allowed_groups: List[str]):
 # RBAC Role Dependencies
 require_tier1_agent = require_roles(["Tier1_Agents", "Operations_Managers"])
 require_operations_manager = require_roles(["Operations_Managers"])
+
+
+def generate_secure_temporary_password(length: int = 14) -> str:
+    """Generate cryptographically strong, shell-safe temporary password complying with Cognito complexity rules."""
+    import secrets
+
+    lower = "abcdefghijkmnopqrstuvwxyz"
+    upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    digits = "23456789"
+    symbols = "!@#%*-_=+"
+
+    password = [
+        secrets.choice(lower),
+        secrets.choice(upper),
+        secrets.choice(digits),
+        secrets.choice(symbols),
+    ]
+    all_chars = lower + upper + digits + symbols
+    password += [secrets.choice(all_chars) for _ in range(length - 4)]
+    secrets.SystemRandom().shuffle(password)
+    return "".join(password)
+

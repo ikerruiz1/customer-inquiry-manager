@@ -25,3 +25,10 @@ variable "ses_inbound_bucket_arn" {
   description = "ARN of Amazon SES inbound S3 bucket"
   default     = ""
 }
+
+variable "user_pool_arn" {
+  type        = string
+  description = "ARN of Amazon Cognito User Pool"
+  default     = ""
+}
+

@@ -144,7 +144,7 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                 backgroundColor: '#FFFFFF',
                 cursor: 'pointer',
                 transition: 'border-color 0.15s ease',
-                boxShadow: '0 1px 3px rgba(12, 13, 13, 0.04)',
+                boxShadow: '0 1px 3px rgba(12, 13, 0, 0.04)',
               }}
               title="Authenticated Operator Profile (RFC 6238 TOTP Verified)"
             >
@@ -153,25 +153,25 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                   width: '24px',
                   height: '24px',
                   borderRadius: '50%',
-                  backgroundColor: currentAgent.color || '#0C0D0D',
+                  backgroundColor: '#3b82f6',
                   color: '#ffffff',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
+                  fontSize: '0.70rem',
+                  fontWeight: 800,
                   flexShrink: 0,
                 }}
               >
-                {currentAgent.initials}
+                AD
               </div>
 
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
                 <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-black)' }}>
-                  {currentAgent.name}
+                  Admin
                 </span>
                 <span style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                  ({currentAgent.role === 'Operations_Manager' ? 'Operations Manager' : 'Tier 1 Agent'})
+                  (Tier 1 Agent)
                 </span>
               </div>
 
@@ -252,33 +252,31 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
                     Single active session. To change operator credentials, you must explicitly sign out.
                   </div>
 
-                  {currentAgent.role === 'Operations_Manager' && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAgentMenuOpen(false);
-                        setShowInviteModal(true);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '9px 12px',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(12, 13, 13, 0.15)',
-                        backgroundColor: '#0C0D0D',
-                        color: '#FFFFFF',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        textAlign: 'left',
-                        transition: 'opacity 0.15s ease',
-                      }}
-                    >
-                      <UserPlus size={14} />
-                      <span>Invite Support Operator</span>
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAgentMenuOpen(false);
+                      setShowInviteModal(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '9px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid rgba(12, 13, 13, 0.15)',
+                      backgroundColor: '#0C0D0D',
+                      color: '#FFFFFF',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      transition: 'opacity 0.15s ease',
+                    }}
+                  >
+                    <UserPlus size={14} />
+                    <span>Invite Support Operator</span>
+                  </button>
 
                   <button
                     type="button"
@@ -309,31 +307,6 @@ export const LoadLogicTopHeader: React.FC<LoadLogicTopHeaderProps> = ({
               </div>
             )}
           </div>
-
-          {currentAgent.role === 'Operations_Manager' && (
-            <button
-              type="button"
-              onClick={() => setShowInviteModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '5px 12px',
-                borderRadius: '9999px',
-                border: '1px solid #7C3AED',
-                backgroundColor: '#EDE9FE',
-                color: '#6D28D9',
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-              title="Supervisor Action: Provision new support operator with temporary credentials"
-            >
-              <UserPlus size={13} />
-              <span>+ Invite Agent</span>
-            </button>
-          )}
         </div>
 
 

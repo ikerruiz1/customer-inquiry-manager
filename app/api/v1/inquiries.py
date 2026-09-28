@@ -32,6 +32,7 @@ from app.schemas.inquiry import (
 from app.services.bedrock_service import BedrockService, get_bedrock_service
 from app.services.sns_service import SNSService, get_sns_service
 from app.services.email_service import EmailService, get_email_service
+from app.services.email_filter import is_automated_delivery_failure_or_loop, extract_customer_name_from_body
 
 logger = logging.getLogger("app.api.v1.inquiries")
 router = APIRouter()
@@ -80,6 +81,21 @@ async def process_and_persist_inquiry(
     sns: SNSService,
 ) -> Inquiry:
     """Core domain pipeline: Bedrock triage, ITIL SLA calculation, PostgreSQL persistence, and SNS dispatch."""
+    # 0. Defensive Guardrail: Filter out automated bounce, NDR, or mailer-daemon loops
+    is_filtered, reason = is_automated_delivery_failure_or_loop(
+        sender_email=inquiry_in.customer_email,
+        subject=inquiry_in.subject,
+        body=inquiry_in.body,
+    )
+    if is_filtered:
+        logger.warning(
+            f"Inbound inquiry rejected by NDR/bounce filter: sender '{inquiry_in.customer_email}' - Reason: {reason}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Inbound inquiry suppressed: Automated delivery failure / NDR notification detected ({reason}).",
+        )
+
     # 1. Execute Bedrock single-pass triage
     triage_result = await bedrock.triage_inquiry(
         channel=inquiry_in.channel.value,
@@ -128,10 +144,17 @@ async def process_and_persist_inquiry(
         agent_notes = f"{policy_notice}\n\n{agent_notes}" if agent_notes else policy_notice
 
     # 4. Instantiate and persist ORM model
+    # Infer customer full name from email body sign-off if present, or fallback to inquiry_in.customer_name
+    resolved_customer_name = extract_customer_name_from_body(
+        body=inquiry_in.body,
+        fallback_name=inquiry_in.customer_name,
+        sender_email=inquiry_in.customer_email,
+    )
+
     inquiry = Inquiry(
         channel=inquiry_in.channel.value,
         customer_email=inquiry_in.customer_email,
-        customer_name=inquiry_in.customer_name,
+        customer_name=resolved_customer_name,
         subject=inquiry_in.subject,
         body=inquiry_in.body,
         status="UNASSIGNED",
@@ -669,6 +692,27 @@ async def get_inquiry_audit_logs(
     res = await db.execute(stmt)
     logs = res.scalars().all()
     return logs
+
+
+@router.delete("/{inquiry_id}", status_code=status.HTTP_200_OK)
+async def delete_inquiry(
+    inquiry_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(require_tier1_agent),
+):
+    """Delete a specific ticket, its conversation messages, and associated audit logs."""
+    from sqlalchemy import delete
+    stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
+    res = await db.execute(stmt)
+    inquiry = res.scalar_one_or_none()
+    if not inquiry:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
+
+    await db.execute(delete(AuditLog).where(AuditLog.inquiry_id == inquiry_id))
+    await db.execute(delete(InquiryMessage).where(InquiryMessage.inquiry_id == inquiry_id))
+    await db.execute(delete(Inquiry).where(Inquiry.id == inquiry_id))
+    await db.commit()
+    return {"message": f"Ticket #{str(inquiry_id)[:8].upper()} deleted successfully", "id": str(inquiry_id)}
 
 
 @router.post("/reset-demo-data", status_code=status.HTTP_200_OK)

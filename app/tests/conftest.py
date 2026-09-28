@@ -70,6 +70,45 @@ class MockBedrockService(BedrockService):
     async def triage_inquiry(self, channel: str, subject: str, body: str) -> BedrockTriageOutput:
         return TEST_TRIAGE_OUTPUT
 
+    async def generate_action_draft(
+        self,
+        customer_name: str,
+        subject: str,
+        body: str,
+        department: str,
+        action_type: str = "REPLY",
+        entities=None,
+        conversation_history=None,
+    ) -> str:
+        """Return deterministic mock draft for test isolation without Bedrock API calls."""
+        if action_type == "REQUEST_INFO":
+            return (
+                f"Hello {customer_name},\n\n"
+                f"Could you please share the following details regarding \"{subject}\"?\n\n"
+                "Best regards,\nSupport Team"
+            )
+        elif action_type == "INTERNAL_NOTE":
+            return (
+                f"CONFIDENTIAL COPILOT DIAGNOSIS:\n"
+                f"Inquiry \"{subject}\" assigned to {department}. Customer: {customer_name}. "
+                "Do NOT disclose internal details to customer."
+            )
+        
+        # If there is an existing AGENT message in conversation history, generate a follow-up draft
+        has_agent_reply = any(m.get("sender_type") == "AGENT" for m in (conversation_history or []))
+        if has_agent_reply:
+            return (
+                f"Hello {customer_name},\n\n"
+                f"Thank you for your response. To follow up on \"{subject}\", we have reviewed your inquiry.\n\n"
+                "Best regards,\nSupport Team"
+            )
+
+        return (
+            f"Hello {customer_name},\n\n"
+            f"Thank you for contacting us regarding \"{subject}\". We have reviewed your inquiry and are working on a resolution.\n\n"
+            "Best regards,\nSupport Team"
+        )
+
 
 class MockSNSService(SNSService):
     """Mock SNS service recording published events in memory."""
