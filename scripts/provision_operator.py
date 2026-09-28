@@ -129,13 +129,9 @@ def provision_cognito_operator(
             )
             print("  [Cognito] User created successfully with temporary password.")
         except client.exceptions.UsernameExistsException:
-            print("  [Cognito] Operator already exists. Rotating temporary password...")
-            client.admin_set_user_password(
-                UserPoolId=pool_id,
-                Username=email,
-                Password=temp_password,
-                Permanent=False,
-            )
+            print("  [Cognito] Operator already exists. Preserving active user credentials.")
+            temp_password = "(Existing Password Preserved)"
+
 
         group_name = "Operations_Managers" if role == "Operations_Manager" else "Tier1_Agents"
         try:
