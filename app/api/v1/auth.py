@@ -125,19 +125,34 @@ async def invite_operator(
             temp_password=temp_password,
         )
 
-        # Persist operator to relational database for durability
-        db_op = Operator(
-            id=operator["id"],
-            name=operator["name"],
-            email=operator["email"],
-            password_hash=temp_password,
-            role=operator["role"],
-            groups=operator.get("groups", ["Tier1_Agents"]),
-            totp_secret=operator.get("totp_secret", "JBSWY3DPEHPK3PXP"),
-            initials=operator.get("initials", "OP"),
-            color=operator.get("color", "#3b82f6"),
-        )
-        db.add(db_op)
+        # Upsert operator to relational database for durability
+        stmt = select(Operator).where(Operator.email == operator["email"])
+        existing_res = await db.execute(stmt)
+        existing_op = existing_res.scalar_one_or_none()
+
+        if existing_op:
+            existing_op.id = operator["id"]
+            existing_op.name = operator["name"]
+            existing_op.password_hash = temp_password
+            existing_op.role = operator["role"]
+            existing_op.groups = operator.get("groups", ["Tier1_Agents"])
+            existing_op.totp_secret = operator.get("totp_secret", "JBSWY3DPEHPK3PXP")
+            existing_op.initials = operator.get("initials", "OP")
+            existing_op.color = operator.get("color", "#3b82f6")
+        else:
+            db_op = Operator(
+                id=operator["id"],
+                name=operator["name"],
+                email=operator["email"],
+                password_hash=temp_password,
+                role=operator["role"],
+                groups=operator.get("groups", ["Tier1_Agents"]),
+                totp_secret=operator.get("totp_secret", "JBSWY3DPEHPK3PXP"),
+                initials=operator.get("initials", "OP"),
+                color=operator.get("color", "#3b82f6"),
+            )
+            db.add(db_op)
+
         await db.flush()
 
         return InviteOperatorResponse(
@@ -154,7 +169,7 @@ async def invite_operator(
         logger.warning(f"Invitation failed for {payload.email}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc) if "already exists" in str(exc) else "Failed to invite operator",
+            detail=f"Failed to invite operator: {exc}",
         )
 
 
