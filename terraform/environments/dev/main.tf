@@ -137,11 +137,13 @@ module "route53" {
 }
 
 module "ses" {
-  source          = "../../modules/ses"
-  project_name    = var.project_name
-  environment     = var.environment
-  domain_name     = var.domain_name
-  support_email   = var.support_email
-  aws_region      = var.aws_region
-  route53_zone_id = module.route53.zone_id
+  source                = "../../modules/ses"
+  project_name          = var.project_name
+  environment           = var.environment
+  domain_name           = var.domain_name
+  support_email         = var.support_email
+  aws_region            = var.aws_region
+  route53_zone_id       = module.route53.zone_id
+  verified_sender_email = var.ses_verified_sender_email != "" ? var.ses_verified_sender_email : var.support_email
 }
+

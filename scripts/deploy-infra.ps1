@@ -3,6 +3,7 @@ param(
     [string]$SupportEmail = "",
     [string]$AdminName = "",
     [string]$AdminEmail = "",
+    [string]$SesVerifiedSender = "",
     [string]$AwsRegion = "",
     [switch]$DnsOnly = $false,
     [switch]$NonInteractive = $false
@@ -144,14 +145,30 @@ if ($profileJson.inbound_channels) {
 $profileJson | ConvertTo-Json -Depth 10 | Set-Content "company_profile.json" -Encoding UTF8
 Write-Host "  OK: Synchronized company_profile.json with domain: $activeDomain and admin: $activeAdminEmail" -ForegroundColor Green
 
+$activeSesVerifiedSender = $activeEmail
+if ($SesVerifiedSender) {
+    $activeSesVerifiedSender = $SesVerifiedSender.Trim()
+}
+else {
+    try {
+        $sesIdentities = (aws ses list-identities --identity-type EmailAddress --region $targetRegion --query "Identities[0]" --output text 2>$null)
+        if ($sesIdentities -and $sesIdentities.Trim() -ne "" -and $sesIdentities -ne "None") {
+            $activeSesVerifiedSender = $sesIdentities.Trim()
+            Write-Host "  OK: Discovered Amazon SES verified email identity: $activeSesVerifiedSender" -ForegroundColor Green
+        }
+    }
+    catch {}
+}
+
 $tfvarsLines = @(
-    "aws_region         = `"$targetRegion`"",
-    "project_name       = `"customer-inquiry-manager`"",
-    "environment        = `"dev`"",
-    "vpc_cidr           = `"10.0.0.0/16`"",
-    "availability_zones = [`"${targetRegion}a`", `"${targetRegion}b`"]",
-    "domain_name        = `"$activeDomain`"",
-    "support_email      = `"$activeEmail`""
+    "aws_region                = `"$targetRegion`"",
+    "project_name              = `"customer-inquiry-manager`"",
+    "environment               = `"dev`"",
+    "vpc_cidr                  = `"10.0.0.0/16`"",
+    "availability_zones        = [`"${targetRegion}a`", `"${targetRegion}b`"]",
+    "domain_name               = `"$activeDomain`"",
+    "support_email             = `"$activeEmail`"",
+    "ses_verified_sender_email = `"$activeSesVerifiedSender`""
 )
 $tfvarsContent = $tfvarsLines -join "`r`n"
 Set-Content "terraform/environments/dev/terraform.tfvars" $tfvarsContent -Encoding UTF8
