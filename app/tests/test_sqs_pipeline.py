@@ -41,9 +41,11 @@ async def test_sqs_service_enqueue_and_receive():
 
 
 @pytest.mark.asyncio
-async def test_sqs_consumer_processes_and_persists_inquiry(db_session: AsyncSession):
+async def test_sqs_consumer_processes_and_persists_inquiry(db_session: AsyncSession, mock_bedrock, mock_sns):
     """Verify SQS consumer daemon deserializes queue message and commits ticket to PostgreSQL."""
     consumer = get_sqs_consumer()
+    consumer.bedrock = mock_bedrock
+    consumer.sns = mock_sns
     test_body = {
         "channel": "WEB_FORM",
         "customer_email": "async.customer@company.com",
@@ -62,15 +64,17 @@ async def test_sqs_consumer_processes_and_persists_inquiry(db_session: AsyncSess
 
     assert inquiry is not None
     assert inquiry.customer_name == "Async Customer"
-    assert inquiry.department == "BILLING"
+    assert inquiry.department == "TECH_SUPPORT"
     assert inquiry.priority in ["P1", "P2"]
     assert inquiry.sla_deadline_at is not None
 
 
 @pytest.mark.asyncio
-async def test_sqs_consumer_graceful_handling_on_fallback():
+async def test_sqs_consumer_graceful_handling_on_fallback(db_session: AsyncSession, mock_bedrock, mock_sns):
     """Verify consumer processes unusual payloads without throwing uncaught exceptions."""
     consumer = get_sqs_consumer()
+    consumer.bedrock = mock_bedrock
+    consumer.sns = mock_sns
     unusual_body = {
         "channel": "UNKNOWN_CHANNEL",
         "customer_email": "fallback.user@example.com",
@@ -80,4 +84,5 @@ async def test_sqs_consumer_graceful_handling_on_fallback():
     }
 
     # Should execute gracefully and fall back to WEB_FORM
-    await consumer._process_single_message(unusual_body, process_and_persist_inquiry)
+    await consumer._process_single_message(unusual_body, process_and_persist_inquiry, db=db_session)
+
