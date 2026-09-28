@@ -50,6 +50,25 @@ class EmailService:
                 self._ses_client = None
         return self._ses_client
 
+    def _resolve_verified_sender(self) -> str:
+        """Resolve an active verified Amazon SES email sender dynamically if configured from_email is unverified."""
+        candidate = self.from_email
+        if candidate and "@" in candidate and not candidate.endswith(".internal") and not candidate.endswith(".example99.tech"):
+            return candidate
+
+        ses_client = self._get_ses_client()
+        if ses_client:
+            try:
+                res = ses_client.list_identities(IdentityType="EmailAddress")
+                identities = res.get("Identities", [])
+                if identities:
+                    return identities[0]
+            except Exception as exc:
+                logger.debug(f"Unable to query SES verified identities: {exc}")
+
+        return candidate or self.support_email
+
+
     async def send_customer_notification(
         self,
         customer_email: str,
@@ -99,8 +118,9 @@ class EmailService:
         ses_client = self._get_ses_client()
         if ses_client:
             try:
-                # Use from_email loaded dynamically from environment variables
-                display_source = f"{self.company_name} Support <{self.from_email}>"
+                # Use dynamically resolved verified identity for Amazon SES envelope sender
+                active_sender = self._resolve_verified_sender()
+                display_source = f"{self.company_name} Support <{active_sender}>"
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
                     None,
@@ -271,7 +291,8 @@ class EmailService:
         ses_client = self._get_ses_client()
         if ses_client:
             try:
-                display_source = f"{self.company_name} <{self.from_email}>"
+                active_sender = self._resolve_verified_sender()
+                display_source = f"{self.company_name} <{active_sender}>"
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
                     None,
