@@ -39,3 +39,9 @@ variable "support_email" {
   description = "Support inbound email mailbox"
   default     = "support@your-company-domain.tech"
 }
+
+variable "ses_verified_sender_email" {
+  type        = string
+  description = "SES-verified email address or identity used for outbound customer notifications. Defaults to support_email if not overridden."
+  default     = ""
+}
