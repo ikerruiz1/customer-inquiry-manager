@@ -99,12 +99,15 @@ class EmailService:
         ses_client = self._get_ses_client()
         if ses_client:
             try:
+                # Use professional display name in Source field
+                display_source = f"{self.company_name} Support <{self.from_email}>"
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
                     None,
                     lambda: ses_client.send_email(
-                        Source=self.from_email,
+                        Source=display_source,
                         Destination={"ToAddresses": [customer_email]},
+                        ReplyToAddresses=[self.support_email],
                         Message={
                             "Subject": {"Data": subject, "Charset": "UTF-8"},
                             "Body": {"Text": {"Data": plain_text, "Charset": "UTF-8"}},
@@ -268,12 +271,14 @@ class EmailService:
         ses_client = self._get_ses_client()
         if ses_client:
             try:
+                display_source = f"{self.company_name} <{self.from_email}>"
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
                     None,
                     lambda: ses_client.send_email(
-                        Source=self.from_email,
+                        Source=display_source,
                         Destination={"ToAddresses": [recipient]},
+                        ReplyToAddresses=[self.support_email],
                         Message={
                             "Subject": {"Data": subject, "Charset": "UTF-8"},
                             "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},

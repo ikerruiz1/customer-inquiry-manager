@@ -103,6 +103,7 @@ module "ecs" {
   sqs_inquiries_queue_url      = module.sqs.queue_url
   sqs_inquiries_dlq_url        = module.sqs.dlq_url
   ses_inbound_bucket_name      = module.ses.inbound_bucket_name
+  ses_verified_sender_email    = module.ses.verified_sender_email
 }
 
 module "monitoring" {

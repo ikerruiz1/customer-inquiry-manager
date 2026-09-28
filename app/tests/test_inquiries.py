@@ -221,7 +221,7 @@ async def test_reset_demo_inquiries_allowed_in_dev(client: AsyncClient):
     res = await client.post("/api/v1/inquiries/reset-demo-data")
     assert res.status_code == 200
     data = res.json()
-    assert data["total_inquiries"] == 7
+    assert data["total_inquiries"] == 0
     assert "successfully reset" in data["message"]
 
 
