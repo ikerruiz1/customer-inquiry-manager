@@ -27,3 +27,8 @@ output "inbound_bucket_arn" {
   description = "ARN of S3 bucket storing raw inbound email MIME messages"
   value       = aws_s3_bucket.ses_inbound.arn
 }
+
+output "verified_sender_email" {
+  description = "SES-verified email identity used as the outbound From address"
+  value       = var.verified_sender_email
+}

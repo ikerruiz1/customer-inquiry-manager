@@ -102,4 +102,10 @@ variable "ses_inbound_bucket_name" {
   default     = ""
 }
 
+variable "ses_verified_sender_email" {
+  type        = string
+  description = "Verified SES email identity used as the outbound From address for customer notifications"
+  default     = ""
+}
+
 

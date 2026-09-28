@@ -33,3 +33,9 @@ variable "route53_zone_id" {
   description = "Optional Route 53 Hosted Zone ID for automated DNS record creation"
   default     = null
 }
+
+variable "verified_sender_email" {
+  type        = string
+  description = "SES-verified email identity used as the outbound From address for customer notifications"
+  default     = ""
+}
