@@ -51,22 +51,30 @@ class EmailService:
         return self._ses_client
 
     def _resolve_verified_sender(self) -> str:
-        """Resolve an active verified Amazon SES email sender dynamically if configured from_email is unverified."""
-        candidate = self.from_email
-        if candidate and "@" in candidate and not candidate.endswith(".internal") and not candidate.endswith(".example99.tech"):
+        """Resolve an active verified Amazon SES email sender dynamically."""
+        candidate = self.from_email or self.support_email
+        ses_client = self._get_ses_client()
+        if not ses_client:
             return candidate
 
-        ses_client = self._get_ses_client()
-        if ses_client:
-            try:
-                res = ses_client.list_identities(IdentityType="EmailAddress")
-                identities = res.get("Identities", [])
-                if identities:
-                    return identities[0]
-            except Exception as exc:
-                logger.debug(f"Unable to query SES verified identities: {exc}")
+        try:
+            res = ses_client.list_identities()
+            identities = res.get("Identities", [])
+            # If candidate email or candidate domain is verified in SES, use candidate
+            if candidate and "@" in candidate:
+                domain = candidate.split("@")[1]
+                if candidate in identities or domain in identities:
+                    return candidate
+            # Fallback to first available verified identity if configured sender is not verified
+            for ident in identities:
+                if "@" in ident:
+                    return ident
+                else:
+                    return f"support@{ident}"
+        except Exception as exc:
+            logger.debug(f"Unable to query SES verified identities: {exc}")
 
-        return candidate or self.support_email
+        return candidate
 
 
     async def send_customer_notification(
