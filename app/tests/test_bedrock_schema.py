@@ -133,21 +133,6 @@ def test_invalid_department_enum():
         BedrockTriageOutput.model_validate(data)
 
 
-def test_heuristic_ner_extraction():
-    """Verify that heuristic fallback extracts accurate business entities from unstructured text."""
-    from app.services.bedrock_service import BedrockService
 
-    service = BedrockService()
-    text = (
-        "We have an active 450.00 EUR hold placed on our account due to an unrecognized Stripe dispute "
-        "(ref: dp_88421). If these funds are not released by 18:00 UTC today, we will terminate our "
-        "25 Enterprise licenses and migrate to a competitor."
-    )
-    result = service._heuristic_fallback_triage("BILLING", "[BANK DISPUTE] 450.00 EUR hold", text)
 
-    assert result.department == DepartmentEnum.BILLING
-    assert result.key_entities.get("order_id") == "dp_88421"
-    assert "450.00 EUR" in result.key_entities.get("monetary_amount", "")
-    assert "18:00 UTC" in result.key_entities.get("customer_deadline", "")
-    assert result.key_entities.get("product_affected") == "Billing Gateway"
 

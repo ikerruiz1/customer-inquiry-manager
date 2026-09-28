@@ -318,7 +318,7 @@ export const InviteOperatorModal: React.FC<InviteOperatorModalProps> = ({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. Elena Ramos"
+                    placeholder=""
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     style={{
@@ -348,7 +348,7 @@ export const InviteOperatorModal: React.FC<InviteOperatorModalProps> = ({
                   <input
                     type="email"
                     required
-                    placeholder="e.g. elena.r@<company-domain>"
+                    placeholder=""
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     style={{
@@ -414,7 +414,7 @@ export const InviteOperatorModal: React.FC<InviteOperatorModalProps> = ({
                   opacity: loading || !name.trim() || !email.trim() ? 0.6 : 1,
                 }}
               >
-                <span>{loading ? 'Provisioning in AWS Cognito...' : 'Send Invitation & Generate Credentials'}</span>
+                <span>{loading ? 'Provisioning in AWS Cognito...' : 'Send Invitation & Provision in Cognito'}</span>
                 <ArrowRight size={15} />
               </button>
             </form>

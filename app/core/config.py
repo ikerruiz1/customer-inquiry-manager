@@ -180,7 +180,7 @@ class Settings(BaseSettings):
 
         if os.path.exists(profile_path):
             try:
-                with open(profile_path, "r", encoding="utf-8") as f:
+                with open(profile_path, "r", encoding="utf-8-sig") as f:
                     profile_data = json.load(f)
                     if "company_name" in profile_data:
                         self.COMPANY_NAME = profile_data["company_name"]
@@ -243,9 +243,9 @@ class Settings(BaseSettings):
             except Exception:
                 pass
 
-        # Environment-aware offline mode: default to True in local 'dev' (zero spend), False in cloud ('prod' / 'staging')
+        # Bedrock offline mode: always defaults to False (live inference). Override explicitly with BEDROCK_OFFLINE_MODE=true for local-only testing.
         if self.BEDROCK_OFFLINE_MODE is None:
-            self.BEDROCK_OFFLINE_MODE = (self.ENVIRONMENT.lower() == "dev")
+            self.BEDROCK_OFFLINE_MODE = False
 
         return self
 

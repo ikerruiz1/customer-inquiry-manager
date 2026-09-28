@@ -68,6 +68,7 @@ resource "aws_iam_policy" "task_app_permissions" {
         ]
         Resource = [
           "arn:aws:bedrock:*::foundation-model/*",
+          "arn:aws:bedrock:*:*:inference-profile/*",
           "arn:aws:bedrock:*:*:guardrail/*",
         ]
       },
@@ -128,6 +129,16 @@ resource "aws_iam_policy" "task_app_permissions" {
           "sqs:ChangeMessageVisibility",
         ]
         Resource = ["arn:aws:sqs:*:*:${var.project_name}-${var.environment}-*"]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cognito-idp:AdminCreateUser",
+          "cognito-idp:AdminAddUserToGroup",
+          "cognito-idp:AdminGetUser",
+          "cognito-idp:AdminSetUserPassword",
+        ]
+        Resource = [var.user_pool_arn != "" ? var.user_pool_arn : "*"]
       }
     ]
   })

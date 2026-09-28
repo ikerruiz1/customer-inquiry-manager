@@ -441,5 +441,16 @@ export async function getCopilotDraft(
   return data.draft || '';
 }
 
+export async function deleteInquiry(id: string): Promise<void> {
+  const res = await fetch(`/api/v1/inquiries/${id}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `HTTP error ${res.status}: Failed to delete ticket`);
+  }
+}
+
 
 

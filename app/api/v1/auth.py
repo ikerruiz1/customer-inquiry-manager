@@ -114,8 +114,8 @@ async def invite_operator(
             ),
         )
 
-    from scripts.provision_operator import generate_secure_password
-    temp_password = generate_secure_password(14)
+    from app.core.security import generate_secure_temporary_password
+    temp_password = generate_secure_temporary_password(14)
 
     try:
         operator = cognito.invite_operator(

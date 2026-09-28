@@ -9,6 +9,7 @@ from app.schemas.inquiry import InquiryCreate, ChannelEnum
 from app.services.bedrock_service import get_bedrock_service
 from app.services.sns_service import get_sns_service
 from app.services.sqs_service import get_sqs_service
+from app.services.email_filter import is_automated_delivery_failure_or_loop, extract_customer_name_from_body
 
 logger = logging.getLogger("app.services.sqs_consumer")
 
@@ -106,6 +107,14 @@ class SQSConsumerDaemon:
         from app.api.v1.inquiries import post_customer_reply
 
         subject = body.get("subject", "")
+        customer_email = body.get("customer_email", "")
+        msg_body = body.get("body", "")
+
+        # 0. Drop automated delivery failures, NDRs, or bounce loops
+        is_filtered, reason = is_automated_delivery_failure_or_loop(customer_email, subject, msg_body)
+        if is_filtered:
+            logger.info(f"SQS Consumer dropped automated bounce/NDR from {customer_email}: {reason}")
+            return
 
         async def _execute_with_session(session):
             # 1. Thread Correlation: Check if inbound message is a customer reply to an existing ticket
@@ -121,9 +130,14 @@ class SQSConsumerDaemon:
                 existing_inquiry = res.scalar_one_or_none()
                 if existing_inquiry:
                     logger.info(f"SQS Consumer matched existing ticket {existing_inquiry.id}. Routing as customer reply.")
+                    reply_name = extract_customer_name_from_body(
+                        body=body.get("body", ""),
+                        fallback_name=body.get("customer_name"),
+                        sender_email=body.get("customer_email"),
+                    )
                     reply_create = CustomerReplyCreate(
                         body=body.get("body", "Customer replied via email."),
-                        customer_name=body.get("customer_name") or body.get("customer_email", "").split("@")[0],
+                        customer_name=reply_name,
                         customer_email=body.get("customer_email"),
                     )
                     await post_customer_reply(inquiry_id=existing_inquiry.id, payload=reply_create, db=session)
@@ -137,12 +151,20 @@ class SQSConsumerDaemon:
             except ValueError:
                 channel = ChannelEnum.WEB_FORM
 
+            customer_email = body.get("customer_email", "user@customer.com")
+            msg_body = body.get("body", "No inquiry text supplied.")
+            resolved_customer_name = extract_customer_name_from_body(
+                body=msg_body,
+                fallback_name=body.get("customer_name"),
+                sender_email=customer_email,
+            )
+
             inquiry_in = InquiryCreate(
                 channel=channel,
-                customer_email=body.get("customer_email", "user@customer.com"),
-                customer_name=body.get("customer_name", "Anonymous Customer"),
+                customer_email=customer_email,
+                customer_name=resolved_customer_name,
                 subject=body.get("subject", "Inquiry via SQS Ingress Buffer"),
-                body=body.get("body", "No inquiry text supplied."),
+                body=msg_body,
             )
 
             await process_fn(
