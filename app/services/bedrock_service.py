@@ -10,6 +10,7 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from app.core.config import settings
+from app.core.telemetry import trace_subsegment
 from app.schemas.bedrock import BedrockTriageOutput, DepartmentEnum, ResponseStrategyEnum
 
 logger = logging.getLogger("app.services.bedrock_service")
@@ -107,7 +108,18 @@ Schema:
             }
         ]
 
-        system_prompts = [{"text": self._build_system_prompt()}]
+        # Measure the in-context policy retrieval overhead: how long the grounding context and
+        # routing precedence rules take to assemble into the system prompt for this request.
+        with trace_subsegment("bedrock.system_prompt_assembly") as subsegment:
+            system_prompt = self._build_system_prompt()
+            subsegment.put_metadata(
+                policy={
+                    "grounding_context_bytes": len(self.grounding_context),
+                    "system_prompt_bytes": len(system_prompt),
+                },
+                key="value",
+            )
+        system_prompts = [{"text": system_prompt}]
 
         # Prepare parameters for Converse API
         converse_params: Dict[str, Any] = {
