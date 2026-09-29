@@ -4,6 +4,7 @@ import email.mime.multipart
 import email.mime.text
 import logging
 import smtplib
+import uuid
 from typing import Dict, Any, List, Optional
 import boto3
 from botocore.config import Config
@@ -12,6 +13,27 @@ from botocore.exceptions import ClientError, NoCredentialsError
 from app.core.config import settings
 
 logger = logging.getLogger("app.services.email_service")
+
+
+def _plain_text_to_html(plain_text: str) -> str:
+    """Render the plain text notification body as a minimal HTML alternative.
+
+    Mail clients that render HTML only would otherwise flatten the body without any
+    paragraph structure, degrading readability of the AI-authored message.
+    """
+    escaped = (
+        (plain_text or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+    paragraphs = [block.replace("\n", "<br />") for block in escaped.split("\n\n")]
+    body_html = "".join(f"<p>{block}</p>" for block in paragraphs if block.strip())
+    return (
+        '<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;'
+        'font-size:14px;color:#111827;line-height:1.5;">'
+        f"{body_html}</body></html>"
+    )
 
 
 class EmailService:
@@ -44,38 +66,78 @@ class EmailService:
                     read_timeout=3,
                     retries={"max_attempts": 1, "mode": "standard"},
                 )
-                self._ses_client = boto3.client("ses", region_name=settings.AWS_REGION, config=ses_config)
+                self._ses_client = boto3.client("sesv2", region_name=settings.AWS_REGION, config=ses_config)
             except Exception as exc:
                 logger.debug(f"Unable to instantiate SES client: {exc}")
                 self._ses_client = None
         return self._ses_client
 
     def _resolve_verified_sender(self) -> str:
-        """Resolve an active verified Amazon SES email sender dynamically."""
-        candidate = self.from_email or self.support_email
+        """Resolve an active verified Amazon SES email sender, preferring the support mailbox.
+
+        The envelope sender must be a verified SES identity and must terminate on the inbound
+        receipt rule domain, otherwise customer replies are never deposited for ingestion.
+        """
         ses_client = self._get_ses_client()
         if not ses_client:
-            return candidate
+            return self.from_email or self.support_email
 
         try:
-            res = ses_client.list_identities()
-            identities = res.get("Identities", [])
-            # If candidate email or candidate domain is verified in SES, use candidate
-            if candidate and "@" in candidate:
-                domain = candidate.split("@")[1]
-                if candidate in identities or domain in identities:
+            response = ses_client.list_email_identities()
+            identities = [
+                entry.get("IdentityName", "")
+                for entry in response.get("EmailIdentities", [])
+                if entry.get("IdentityType") != "EMAIL_ADDRESS"
+            ] + [
+                entry.get("IdentityName", "")
+                for entry in response.get("EmailIdentities", [])
+                if entry.get("IdentityType") == "EMAIL_ADDRESS"
+            ]
+            verified_emails = [ident for ident in identities if "@" in ident]
+            verified_domains = [ident for ident in identities if "@" not in ident]
+
+            candidates = [self.support_email, self.from_email]
+            for candidate in candidates:
+                if not candidate or "@" not in candidate:
+                    continue
+                if candidate in identities or candidate.split("@")[1] in identities:
                     return candidate
-            # Fallback to first available verified identity if configured sender is not verified
-            for ident in identities:
-                if "@" in ident:
-                    return ident
-                else:
-                    return f"support@{ident}"
+
+            for identity in verified_emails:
+                if identity.split("@")[1] == self.company_domain:
+                    return identity
+            if verified_domains:
+                return f"support@{verified_domains[0]}"
+            if verified_emails:
+                return verified_emails[0]
         except Exception as exc:
             logger.debug(f"Unable to query SES verified identities: {exc}")
 
-        return candidate
+        return self.from_email or self.support_email
 
+    def _build_rfc5322_message_id(self, ticket_id: str) -> str:
+        """Generate a globally unique RFC 5322 Message-ID for thread correlation."""
+        return f"<{uuid.uuid4().hex}.{str(ticket_id).replace('-', '')[:12]}@{self.company_domain}>"
+
+    @staticmethod
+    def _thread_headers(
+        message_id: str,
+        ticket_id: str,
+        in_reply_to: Optional[str],
+        references: Optional[str],
+    ) -> List[Dict[str, str]]:
+        """Assemble threading headers accepted by the Amazon SES v2 SendEmail API.
+
+        Amazon SES owns the Message-ID header and rejects it as a custom header, so it is
+        only supplied through the SMTP transport. In-Reply-To and References are accepted and
+        drive native conversation threading in the customer's mail client.
+        """
+        headers: List[Dict[str, str]] = []
+        if in_reply_to:
+            headers.append({"Name": "In-Reply-To", "Value": in_reply_to})
+            headers.append({"Name": "References", "Value": references or in_reply_to})
+        headers.append({"Name": "X-Ticket-Id", "Value": str(ticket_id)})
+        return headers
 
     async def send_customer_notification(
         self,
@@ -86,32 +148,27 @@ class EmailService:
         message_body: str,
         action_type: str = "REPLY",
         agent_name: str = "Support Specialist",
+        in_reply_to: Optional[str] = None,
+        references: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Dispatch real outbound notification to customer's personal email inbox."""
+        """Dispatch real outbound notification to customer's personal email inbox.
+
+        The message body is transmitted verbatim. The AI-authored draft already contains its
+        own greeting, content and sign-off, so no wrapper envelope, header block, separator or
+        portal link is injected, which would duplicate content in the customer's inbox.
+        """
         short_id = ticket_id[:8].upper()
         subject = f"[Ticket #{short_id}] {ticket_subject}"
-        is_paused = action_type == "REQUEST_INFO"
+        rfc5322_message_id = self._build_rfc5322_message_id(ticket_id)
 
-        # Build clean plain text body
         text_lines = [
-            f"Hello {customer_name},",
+            (message_body or "").strip(),
             "",
-            f"You have received an update from {agent_name} at {self.company_name}:",
-            "--------------------------------------------------",
-            message_body,
-            "--------------------------------------------------",
-            "",
-            f"How to reply:",
-            f"- Reply directly to this email ({self.support_email}), or",
-            f"- View online at: https://{self.company_domain}",
-            "",
-            f"Warm regards,",
-            f"{self.company_name} Support Team",
-            f"{self.company_domain}",
+            "Reply directly to this email to continue this ticket.",
         ]
         plain_text = "\n".join(text_lines)
 
-        delivery_result = {
+        delivery_result: Dict[str, Any] = {
             "ticket_id": ticket_id,
             "recipient": customer_email,
             "sender": self.from_email,
@@ -120,31 +177,41 @@ class EmailService:
             "channel": "OUTBOUND_EMAIL",
             "status": "SENT",
             "provider": "MOCK",
+            "body": plain_text,
         }
 
-        # 1. Try Amazon SES (non-blocking thread execution with timeout guardrails)
+        # 1. Try Amazon SES v2 (non-blocking thread execution with timeout guardrails).
+        #    SES v2 is required because the SES v1 SendEmail API cannot emit custom RFC 5322 headers.
         ses_client = self._get_ses_client()
         if ses_client:
             try:
                 # Use dynamically resolved verified identity for Amazon SES envelope sender
                 active_sender = self._resolve_verified_sender()
-                display_source = f"{self.company_name} Support <{active_sender}>"
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
                     None,
                     lambda: ses_client.send_email(
-                        Source=display_source,
+                        FromEmailAddress=active_sender,
                         Destination={"ToAddresses": [customer_email]},
                         ReplyToAddresses=[self.support_email],
-                        Message={
-                            "Subject": {"Data": subject, "Charset": "UTF-8"},
-                            "Body": {"Text": {"Data": plain_text, "Charset": "UTF-8"}},
+                        Content={
+                            "Simple": {
+                                "Subject": {"Data": subject, "Charset": "UTF-8"},
+                                "Body": {
+                                    "Text": {"Data": plain_text, "Charset": "UTF-8"},
+                                    "Html": {"Data": _plain_text_to_html(plain_text), "Charset": "UTF-8"},
+                                },
+                                "Headers": self._thread_headers(rfc5322_message_id, ticket_id, in_reply_to, references),
+                            }
                         },
                     ),
                 )
                 logger.info(f"Email dispatched via Amazon SES to {customer_email}: MessageId={ses_res.get('MessageId')}")
                 delivery_result["provider"] = "AMAZON_SES"
-                delivery_result["message_id"] = ses_res.get("MessageId")
+                # Amazon SES owns the Message-ID header and overwrites it, so no correlatable
+                # RFC 5322 identifier is available for inbound reference correlation.
+                delivery_result["message_id"] = None
+                delivery_result["transport_message_id"] = ses_res.get("MessageId")
                 self.outbox.append(delivery_result)
                 return delivery_result
             except Exception as exc:
@@ -159,7 +226,13 @@ class EmailService:
                     msg["From"] = self.from_email
                     msg["To"] = customer_email
                     msg["Reply-To"] = self.support_email
+                    msg["Message-ID"] = rfc5322_message_id
+                    if in_reply_to:
+                        msg["In-Reply-To"] = in_reply_to
+                        msg["References"] = references or in_reply_to
+                    msg["X-Ticket-Id"] = str(ticket_id)
                     msg.attach(email.mime.text.MIMEText(plain_text, "plain", "utf-8"))
+                    msg.attach(email.mime.text.MIMEText(_plain_text_to_html(plain_text), "html", "utf-8"))
 
                     with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=5) as server:
                         if self.smtp_use_tls:
@@ -171,6 +244,7 @@ class EmailService:
                 await loop.run_in_executor(None, _send_smtp)
                 logger.info(f"Email successfully delivered via SMTP ({self.smtp_host}) to {customer_email}")
                 delivery_result["provider"] = "SMTP"
+                delivery_result["message_id"] = rfc5322_message_id
                 self.outbox.append(delivery_result)
                 return delivery_result
             except Exception as exc:
@@ -181,6 +255,7 @@ class EmailService:
             f"[OUTBOUND EMAIL DISPATCHED] To: {customer_email} | From: {self.from_email} | Action: {action_type} | Subject: {subject}"
         )
         delivery_result["provider"] = "LOCAL_OUTBOX"
+        delivery_result["message_id"] = rfc5322_message_id
         self.outbox.append(delivery_result)
         return delivery_result
 
@@ -300,22 +375,26 @@ class EmailService:
         if ses_client:
             try:
                 active_sender = self._resolve_verified_sender()
-                display_source = f"{self.company_name} <{active_sender}>"
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
                     None,
                     lambda: ses_client.send_email(
-                        Source=display_source,
+                        FromEmailAddress=active_sender,
                         Destination={"ToAddresses": [recipient]},
                         ReplyToAddresses=[self.support_email],
-                        Message={
-                            "Subject": {"Data": subject, "Charset": "UTF-8"},
-                            "Body": {"Text": {"Data": body, "Charset": "UTF-8"}},
+                        Content={
+                            "Simple": {
+                                "Subject": {"Data": subject, "Charset": "UTF-8"},
+                                "Body": {
+                                    "Text": {"Data": body, "Charset": "UTF-8"},
+                                    "Html": {"Data": _plain_text_to_html(body), "Charset": "UTF-8"},
+                                },
+                            }
                         },
                     ),
                 )
                 delivery_result["provider"] = "AMAZON_SES"
-                delivery_result["message_id"] = ses_res.get("MessageId")
+                delivery_result["transport_message_id"] = ses_res.get("MessageId")
                 self.outbox.append(delivery_result)
                 return delivery_result
             except Exception as exc:

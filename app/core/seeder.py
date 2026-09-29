@@ -49,6 +49,37 @@ def build_canonical_sample_inquiries(reference_time: Optional[datetime] = None) 
     return []
 
 
+async def ensure_schema_extensions() -> None:
+    """Idempotently add columns and indexes introduced after the initial schema release.
+
+    create_all() only provisions missing tables, so pre-existing deployments require an
+    explicit additive migration. Every statement is guarded and safe to run on each boot.
+    """
+    try:
+        from sqlalchemy import inspect, text
+
+        def _apply_extensions(sync_conn):
+            inspector = inspect(sync_conn)
+            if "inquiry_messages" not in set(inspector.get_table_names()):
+                return
+            existing_columns = {col["name"] for col in inspector.get_columns("inquiry_messages")}
+            if "provider_message_id" not in existing_columns:
+                sync_conn.execute(
+                    text("ALTER TABLE inquiry_messages ADD COLUMN provider_message_id VARCHAR(255)")
+                )
+            sync_conn.execute(
+                text(
+                    "CREATE INDEX IF NOT EXISTS ix_inquiry_messages_provider_message_id "
+                    "ON inquiry_messages (provider_message_id)"
+                )
+            )
+
+        async with engine.begin() as conn:
+            await conn.run_sync(_apply_extensions)
+    except Exception as exc:
+        logger.warning(f"Additive schema migration skipped or failed: {exc}")
+
+
 async def init_db_and_seed() -> None:
     """Initialize database tables and idempotently seed operator registry."""
     try:

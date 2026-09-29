@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.schemas.inquiry import InquiryCreate, InquiryQueuedResponse, ChannelEnum
 from app.services.sqs_service import SQSService, get_sqs_service
 from app.services.email_filter import is_automated_delivery_failure_or_loop, extract_customer_name_from_body
+from app.services.email_thread import extract_reference_message_ids, strip_quoted_history
 
 logger = logging.getLogger("app.api.v1.webhooks")
 router = APIRouter()
@@ -70,7 +71,22 @@ async def inbound_email_webhook(
     """
     sender_email = payload.get("from") or payload.get("envelope", {}).get("from") or "anonymous@customer.com"
     subject = payload.get("subject") or "Support Request via Email"
-    body = payload.get("text") or payload.get("html") or payload.get("body") or ""
+    raw_body = payload.get("text") or payload.get("html") or payload.get("body") or ""
+    body = strip_quoted_history(raw_body) or raw_body
+
+    # RFC 5322 threading headers forwarded by inbound parse providers
+    headers = payload.get("headers") or {}
+    if isinstance(headers, list):
+        headers = {
+            str(entry.get("key", entry.get("name", ""))).lower(): str(entry.get("value", ""))
+            for entry in headers
+            if isinstance(entry, dict)
+        }
+    reference_message_ids = extract_reference_message_ids(
+        headers.get("in-reply-to"),
+        headers.get("references"),
+    )
+    ticket_reference = headers.get("x-ticket-id") or None
 
     # Check for automated bounce, delivery failure, or loop notice
     is_filtered, reason = is_automated_delivery_failure_or_loop(sender_email, subject, body)
@@ -94,6 +110,8 @@ async def inbound_email_webhook(
         "customer_name": resolved_customer_name,
         "subject": subject,
         "body": body or "No message content provided in email body.",
+        "reference_message_ids": reference_message_ids,
+        "ticket_reference": ticket_reference,
     }
 
     tracking_id = await sqs.send_inquiry(inquiry_payload, group_id="email")

@@ -38,6 +38,26 @@ logger = logging.getLogger("app.api.v1.inquiries")
 router = APIRouter()
 
 
+async def _latest_outbound_message_id(db: AsyncSession, inquiry_id: UUID) -> Optional[str]:
+    """Return the RFC 5322 Message-ID of the most recent customer-facing email for this ticket.
+
+    Used to chain In-Reply-To / References headers so customer mail clients thread the
+    conversation natively and inbound replies can be correlated without subject parsing.
+    """
+    res = await db.execute(
+        select(InquiryMessage.provider_message_id)
+        .where(
+            InquiryMessage.inquiry_id == inquiry_id,
+            InquiryMessage.sender_type == "AGENT",
+            InquiryMessage.is_internal_note.is_(False),
+            InquiryMessage.provider_message_id.is_not(None),
+        )
+        .order_by(InquiryMessage.created_at.desc())
+        .limit(1)
+    )
+    return res.scalars().first()
+
+
 def calculate_sla(
     urgency: int, impact: int, churn_risk: bool, reference_time: Optional[datetime] = None
 ) -> tuple[str, datetime, datetime]:
@@ -413,15 +433,19 @@ async def resolve_inquiry(
     # Dispatch resolution email to customer
     try:
         email_svc = get_email_service()
-        await email_svc.send_customer_notification(
+        prior_message_id = await _latest_outbound_message_id(db, inquiry.id)
+        delivery = await email_svc.send_customer_notification(
             customer_email=inquiry.customer_email,
             customer_name=inquiry.customer_name,
             ticket_id=str(inquiry.id),
             ticket_subject=inquiry.subject,
-            message_body=f"Your ticket has been marked as RESOLVED.\n\nResolution Summary:\n{payload.resolution_text}",
+            message_body=f"Your support ticket has been resolved.\n\n{payload.resolution_text}",
             action_type="REPLY",
             agent_name=agent_name,
+            in_reply_to=prior_message_id,
+            references=prior_message_id,
         )
+        resolution_msg.provider_message_id = delivery.get("message_id")
     except Exception as exc:
         logger.warning(f"Failed to dispatch resolution email notification: {exc}")
 
@@ -569,7 +593,8 @@ async def post_inquiry_message(
     if not is_internal and payload.action in [MessageActionEnum.REPLY, MessageActionEnum.REQUEST_INFO]:
         try:
             email_svc = get_email_service()
-            await email_svc.send_customer_notification(
+            prior_message_id = await _latest_outbound_message_id(db, inquiry_id)
+            delivery = await email_svc.send_customer_notification(
                 customer_email=inquiry.customer_email,
                 customer_name=inquiry.customer_name,
                 ticket_id=str(inquiry.id),
@@ -577,7 +602,10 @@ async def post_inquiry_message(
                 message_body=payload.body,
                 action_type=payload.action.value,
                 agent_name=agent_name,
+                in_reply_to=prior_message_id,
+                references=prior_message_id,
             )
+            msg.provider_message_id = delivery.get("message_id")
         except Exception as exc:
             logger.warning(f"Failed to dispatch customer outbound email notification: {exc}")
 
