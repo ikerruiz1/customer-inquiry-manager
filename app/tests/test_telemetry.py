@@ -1,6 +1,7 @@
 """Tests for AWS X-Ray segment emission over the daemon UDP protocol."""
 import json
 import socket
+from contextlib import asynccontextmanager
 
 import pytest
 from fastapi import FastAPI
@@ -180,6 +181,41 @@ def test_setup_xray_captures_cause_when_exception_escapes(xray_daemon, monkeypat
     assert segment["fault"] is True
     assert segment["cause"]["exceptions"][0]["message"] == "simulated handler failure"
     assert segment["cause"]["exceptions"][0]["type"] == "RuntimeError"
+
+
+def test_setup_xray_is_wired_before_the_lifespan_starts(xray_daemon, monkeypatch):
+    """Verify tracing is wired at construction time, as app/main.py does.
+
+    Starlette builds the middleware stack while the lifespan starts, so registering the
+    middleware from inside the lifespan handler is rejected with "Cannot add middleware after
+    an application has started". This test mirrors the production layout: a lifespan that does
+    startup work, with the tracing middleware added when the application object is created.
+    """
+    import aws_xray_sdk.core
+
+    monkeypatch.setattr(telemetry.settings, "XRAY_ENABLED", True)
+    monkeypatch.setattr(aws_xray_sdk.core, "patch_all", lambda *a, **k: None)
+
+    @asynccontextmanager
+    async def lifespan(application):
+        application.state.started = True
+        yield
+
+    app = FastAPI(lifespan=lifespan)
+
+    @app.get("/api/v1/metrics/dashboard")
+    async def dashboard():
+        return {"kpis": {}}
+
+    telemetry.setup_xray(app)
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/metrics/dashboard", headers={"X-Amzn-Trace-Id": ALB_TRACE_HEADER})
+
+    assert response.status_code == 200
+    segment = _receive_segment(xray_daemon)
+    assert segment["name"] == "/api/v1/metrics/dashboard"
+    assert segment["http"]["response"]["status"] == 200
 
 
 def test_setup_xray_is_a_noop_when_disabled(monkeypatch):

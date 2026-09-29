@@ -24,9 +24,6 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager: handles pre-warming, schema initialization, and graceful shutdown."""
     logger.info(f"Initializing {settings.PROJECT_NAME} in environment '{settings.ENVIRONMENT}'...")
 
-    # Initialize distributed tracing if configured
-    setup_xray(app)
-
     # In local development mode, automatically initialize database schema and seed canonical data
     if settings.ENVIRONMENT == "dev":
         await init_db_and_seed()
@@ -71,6 +68,12 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
+
+# Initialize distributed tracing. This must run while the middleware stack is still unbuilt:
+# Starlette rejects add_middleware() once the application has started, so it cannot live in the
+# lifespan handler, and it must precede every other add_middleware() call to stay the innermost
+# layer and therefore observe the final response status.
+setup_xray(app)
 
 # Cross-Origin Resource Sharing (CORS)
 app.add_middleware(
