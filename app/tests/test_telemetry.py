@@ -253,9 +253,57 @@ def test_trace_subsegment_runs_untraced_when_no_segment_is_open():
     monkeypatch_target.XRAY_ENABLED = False
     try:
         with telemetry.trace_subsegment("bedrock.system_prompt_assembly") as subsegment:
-            subsegment.put_metadata(policy={"grounding_context_bytes": 10}, key="value")
+            subsegment.put_metadata("grounding_context_bytes", 1024, namespace="policy")
             computed = "ok"
     finally:
         monkeypatch_target.XRAY_ENABLED = original
     assert computed == "ok"
+
+
+def test_trace_subsegment_emits_metadata_through_the_real_sdk(xray_daemon, monkeypatch):
+    """Verify the helper reaches the recorder and records metadata with the SDK argument order.
+
+    A stand-in context manager accepts any signature, so this exercises the genuine
+    Subsegment entity over the daemon protocol to catch a misplaced argument.
+    """
+    import aws_xray_sdk.core
+
+    monkeypatch.setattr(telemetry.settings, "XRAY_ENABLED", True)
+    monkeypatch.setattr(telemetry.settings, "PROJECT_NAME", "customer-inquiry-manager")
+    monkeypatch.setattr(aws_xray_sdk.core, "patch_all", lambda *a, **k: None)
+
+    app = FastAPI()
+
+    @app.get("/api/v1/inquiries/triage-probe")
+    async def probe():
+        with telemetry.trace_subsegment("bedrock.system_prompt_assembly") as subsegment:
+            subsegment.put_metadata("grounding_context_bytes", 1024, namespace="policy")
+        return {"status": "ok"}
+
+    telemetry.setup_xray(app)
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/inquiries/triage-probe")
+
+    assert response.status_code == 200
+
+    documents = []
+    while True:
+        try:
+            payload, _ = xray_daemon.recvfrom(65535)
+        except OSError:
+            break
+        documents.extend(
+            json.loads(line) for line in payload.decode("utf-8").splitlines() if line.strip()
+        )
+        if any(d.get("subsegments") for d in documents):
+            break
+
+    # A subsegment is emitted inline within the segment document, not as a separate datagram.
+    segment = next(d for d in documents if d.get("subsegments"))
+    subsegment = segment["subsegments"][0]
+    assert subsegment["name"] == "bedrock.system_prompt_assembly"
+    assert subsegment["metadata"]["policy"]["grounding_context_bytes"] == 1024
+    assert subsegment["parent_id"] == segment["id"]
+
 

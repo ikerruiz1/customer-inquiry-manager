@@ -112,13 +112,13 @@ Schema:
         # routing precedence rules take to assemble into the system prompt for this request.
         with trace_subsegment("bedrock.system_prompt_assembly") as subsegment:
             system_prompt = self._build_system_prompt()
+            # Entity.put_metadata takes the key and value first, with the namespace as a keyword.
             subsegment.put_metadata(
-                policy={
-                    "grounding_context_bytes": len(self.grounding_context),
-                    "system_prompt_bytes": len(system_prompt),
-                },
-                key="value",
+                "grounding_context_bytes",
+                len(self.grounding_context),
+                namespace="policy",
             )
+            subsegment.put_metadata("system_prompt_bytes", len(system_prompt), namespace="policy")
         system_prompts = [{"text": system_prompt}]
 
         # Prepare parameters for Converse API
