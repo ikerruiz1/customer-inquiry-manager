@@ -83,6 +83,25 @@ resource "aws_cloudwatch_log_group" "ecs_xray" {
   }
 }
 
+# AWS provisions an implicit "Default" sampling rule at priority 10000 with a 5 percent fixed rate,
+# which discards 19 of every 20 requests and leaves the service map and trace views empty.
+# This rule is evaluated first (lower priority number wins) and records every request, so latency
+# evidence is always retrievable. X-Ray includes 10 million trace segments per month at no charge.
+resource "aws_xray_sampling_rule" "full_fidelity" {
+  rule_name      = "cim-${var.environment}-full-trace"
+  priority       = 5000
+  fixed_rate     = 1.0
+  reservoir_size = 100
+  resource_arn   = "*"
+
+  service_name = "*"
+  service_type = "*"
+  host         = "*"
+  http_method  = "*"
+  url_path     = "*"
+  version      = 1
+}
+
 resource "aws_ecs_task_definition" "main" {
   family                   = "${var.project_name}-${var.environment}-task"
   requires_compatibilities = ["FARGATE"]
@@ -119,6 +138,7 @@ resource "aws_ecs_task_definition" "main" {
         { name = "BEDROCK_MODEL_ID", value = "eu.anthropic.claude-haiku-4-5-20251001-v1:0" },
         { name = "BEDROCK_OFFLINE_MODE", value = "false" },
         { name = "AWS_XRAY_DAEMON_ADDRESS", value = "127.0.0.1:2000" },
+        { name = "XRAY_ENABLED", value = "true" },
         { name = "SQS_INQUIRIES_QUEUE_URL", value = var.sqs_inquiries_queue_url },
         { name = "SQS_INQUIRIES_DLQ_URL", value = var.sqs_inquiries_dlq_url },
         { name = "SES_INBOUND_BUCKET_NAME", value = var.ses_inbound_bucket_name },
