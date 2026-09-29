@@ -171,6 +171,7 @@ class InquiryMessage(Base):
     attachments: Mapped[List[Dict[str, Any]]] = mapped_column(
         JSON().with_variant(JSONB, "postgresql"), nullable=False, default=list
     )
+    provider_message_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, index=True)
 
     # Relationships

@@ -99,16 +99,14 @@ class SQSConsumerDaemon:
 
     async def _process_single_message(self, body: Dict[str, Any], process_fn, db: Optional[Any] = None):
         """Process an individual deserialized message payload."""
-        import re
-        from sqlalchemy import select, cast, String
-        from sqlalchemy.orm import selectinload
-        from app.models.inquiry import Inquiry
         from app.schemas.inquiry import CustomerReplyCreate
         from app.api.v1.inquiries import post_customer_reply
+        from app.services.email_thread import resolve_inbound_ticket, strip_quoted_history
 
         subject = body.get("subject", "")
         customer_email = body.get("customer_email", "")
-        msg_body = body.get("body", "")
+        raw_msg_body = body.get("body", "")
+        msg_body = strip_quoted_history(raw_msg_body) or raw_msg_body
 
         # 0. Drop automated delivery failures, NDRs, or bounce loops
         is_filtered, reason = is_automated_delivery_failure_or_loop(customer_email, subject, msg_body)
@@ -117,32 +115,32 @@ class SQSConsumerDaemon:
             return
 
         async def _execute_with_session(session):
-            # 1. Thread Correlation: Check if inbound message is a customer reply to an existing ticket
-            ticket_match = re.search(r"(?:\[Ticket #|Ticket #)([A-Fa-f0-9\-]{8,36})\]?", subject)
-            if ticket_match:
-                short_id = ticket_match.group(1).lower()
-                stmt = (
-                    select(Inquiry)
-                    .options(selectinload(Inquiry.messages))
-                    .where(cast(Inquiry.id, String).ilike(f"{short_id}%"))
+            # 1. Thread Correlation: append inbound messages to the originating ticket when determinable
+            existing_inquiry, strategy = await resolve_inbound_ticket(
+                session,
+                customer_email=customer_email,
+                subject=subject,
+                reference_message_ids=body.get("reference_message_ids") or [],
+                ticket_reference=body.get("ticket_reference"),
+            )
+            if existing_inquiry is not None:
+                logger.info(
+                    f"SQS Consumer matched existing ticket {existing_inquiry.id} via {strategy}. "
+                    "Routing as customer reply."
                 )
-                res = await session.execute(stmt)
-                existing_inquiry = res.scalar_one_or_none()
-                if existing_inquiry:
-                    logger.info(f"SQS Consumer matched existing ticket {existing_inquiry.id}. Routing as customer reply.")
-                    reply_name = extract_customer_name_from_body(
-                        body=body.get("body", ""),
-                        fallback_name=body.get("customer_name"),
-                        sender_email=body.get("customer_email"),
-                    )
-                    reply_create = CustomerReplyCreate(
-                        body=body.get("body", "Customer replied via email."),
-                        customer_name=reply_name,
-                        customer_email=body.get("customer_email"),
-                    )
-                    await post_customer_reply(inquiry_id=existing_inquiry.id, payload=reply_create, db=session)
-                    await session.commit()
-                    return
+                reply_name = extract_customer_name_from_body(
+                    body=msg_body,
+                    fallback_name=body.get("customer_name"),
+                    sender_email=customer_email,
+                )
+                reply_create = CustomerReplyCreate(
+                    body=msg_body,
+                    customer_name=reply_name,
+                    customer_email=customer_email,
+                )
+                await post_customer_reply(inquiry_id=existing_inquiry.id, payload=reply_create, db=session)
+                await session.commit()
+                return
 
             # 2. Ingest as new inquiry
             channel_str = body.get("channel", "WEB_FORM")
@@ -151,20 +149,19 @@ class SQSConsumerDaemon:
             except ValueError:
                 channel = ChannelEnum.WEB_FORM
 
-            customer_email = body.get("customer_email", "user@customer.com")
-            msg_body = body.get("body", "No inquiry text supplied.")
+            new_ticket_body = msg_body or "No inquiry text supplied."
             resolved_customer_name = extract_customer_name_from_body(
-                body=msg_body,
+                body=new_ticket_body,
                 fallback_name=body.get("customer_name"),
                 sender_email=customer_email,
             )
 
             inquiry_in = InquiryCreate(
                 channel=channel,
-                customer_email=customer_email,
+                customer_email=customer_email or "user@customer.com",
                 customer_name=resolved_customer_name,
-                subject=body.get("subject", "Inquiry via SQS Ingress Buffer"),
-                body=msg_body,
+                subject=subject or "Inquiry via SQS Ingress Buffer",
+                body=new_ticket_body,
             )
 
             await process_fn(

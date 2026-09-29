@@ -248,6 +248,15 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
         await session.rollback()
 
 
+@pytest.fixture(autouse=True)
+def disable_live_aws_transports(monkeypatch):
+    """Force EmailService onto its offline outbox so the suite never performs live AWS API calls."""
+    from app.services.email_service import EmailService
+
+    monkeypatch.setattr(EmailService, "_get_ses_client", lambda self: None)
+    monkeypatch.setattr(EmailService, "_resolve_verified_sender", lambda self: self.from_email)
+
+
 @pytest.fixture
 def mock_bedrock() -> MockBedrockService:
     return MockBedrockService()

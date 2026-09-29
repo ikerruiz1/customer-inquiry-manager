@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import engine
-from app.core.seeder import init_db_and_seed
+from app.core.seeder import ensure_schema_extensions, init_db_and_seed
 from app.core.telemetry import setup_xray
 from app.health import router as health_router
 
@@ -30,6 +30,9 @@ async def lifespan(app: FastAPI):
     # In local development mode, automatically initialize database schema and seed canonical data
     if settings.ENVIRONMENT == "dev":
         await init_db_and_seed()
+
+    # Apply additive schema migrations for columns introduced after the initial release
+    await ensure_schema_extensions()
 
     # Start inbound email poller background worker if enabled
     from app.services.inbound_email_poller import get_inbound_email_poller
