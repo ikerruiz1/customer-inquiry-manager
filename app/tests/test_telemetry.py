@@ -224,3 +224,38 @@ def test_setup_xray_is_a_noop_when_disabled(monkeypatch):
     app = FastAPI()
     telemetry.setup_xray(app)
     assert app.user_middleware == []
+
+
+def test_segment_name_substitutes_resolved_path_parameters():
+    """Verify a resource identifier is replaced by its parameter name to keep cardinality low."""
+    scope = {
+        "path": "/api/v1/inquiries/16c96d85-9dcc-4057-ba33-89f361ca1c4b",
+        "path_params": {"inquiry_id": "16c96d85-9dcc-4057-ba33-89f361ca1c4b"},
+    }
+    assert telemetry._segment_name(scope) == "/api/v1/inquiries/{inquiry_id}"
+
+
+def test_segment_name_preserves_the_full_path_of_included_routers():
+    """Verify a static endpoint keeps the prefixes applied when its router was included.
+
+    FastAPI holds included routers as _IncludedRouter wrappers, so the matched route exposes only
+    the path registered on the sub-router. Deriving the name from the request path is what keeps
+    the service map node distinct per endpoint instead of collapsing a router onto a bare "/".
+    """
+    assert telemetry._segment_name({"path": "/api/v1/webhooks/webform"}) == "/api/v1/webhooks/webform"
+    assert telemetry._segment_name({"path": "/api/v1/metrics/dashboard"}) == "/api/v1/metrics/dashboard"
+
+
+def test_trace_subsegment_runs_untraced_when_no_segment_is_open():
+    """Verify application code inside the helper still executes with tracing disabled or detached."""
+    monkeypatch_target = telemetry.settings
+    original = monkeypatch_target.XRAY_ENABLED
+    monkeypatch_target.XRAY_ENABLED = False
+    try:
+        with telemetry.trace_subsegment("bedrock.system_prompt_assembly") as subsegment:
+            subsegment.put_metadata(policy={"grounding_context_bytes": 10}, key="value")
+            computed = "ok"
+    finally:
+        monkeypatch_target.XRAY_ENABLED = original
+    assert computed == "ok"
+

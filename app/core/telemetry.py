@@ -35,6 +35,25 @@ def _parse_alb_trace_header(trace_header: Optional[str]) -> tuple:
     return trace_id, sampled
 
 
+def _segment_name(scope) -> str:
+    """Derive a low-cardinality segment name from the request path and its resolved path parameters.
+
+    The matched route object cannot be used for this. FastAPI keeps included routers as
+    _IncludedRouter wrappers, so APIRoute.path holds only the path registered on the sub-router
+    and omits the prefixes applied when the router was included, which would collapse every
+    endpoint of a router onto the same name. Re-substituting the resolved parameter values into
+    the request path yields the full route template instead.
+    """
+    path = scope.get("path") or "unknown"
+    params = scope.get("path_params") or {}
+    if not params:
+        return path
+    for name, value in params.items():
+        if value is not None and str(value) != "":
+            path = path.replace(str(value), "{" + name + "}")
+    return path
+
+
 def _request_url(scope) -> str:
     """Reconstruct the absolute request URL, preferring the public host forwarded by the ALB."""
     headers = {
@@ -80,7 +99,7 @@ def _build_asgi_middleware():
 
             trace_id, sampled = _parse_alb_trace_header(headers.get(XRAY_TRACE_HEADER))
             segment = xray_recorder.begin_segment(
-                name=scope.get("path", "unknown"),
+                name=_segment_name(scope),
                 traceid=trace_id,
                 sampling=sampled,
             )
@@ -111,15 +130,48 @@ def _build_asgi_middleware():
                 segment.add_fault_flag()
                 raise
             finally:
-                # Routing populates scope["route"] only after the request is dispatched, so the
-                # segment is renamed to the route template once it is known. Naming the segment
-                # with the raw path would give every resource identifier its own service map node.
-                route = scope.get("route")
-                if route:
-                    segment.name = str(getattr(route, "path", route))
+                # Routing populates scope["path_params"] only after the request is dispatched, so
+                # the provisional name is corrected to the full route template before closing the
+                # segment. Naming it with the raw path from the start would give every resource
+                # identifier its own service map node.
+                segment.name = _segment_name(scope)
                 xray_recorder.end_segment()
 
     return XRayASGIMiddleware
+
+
+def trace_subsegment(name: str, **metadata):
+    """Open a manual subsegment around a block of application work, if a segment is open.
+
+    Used to time work the SDK cannot patch automatically, such as assembling the grounding
+    context into the prompt sent to Amazon Bedrock. Outside a request, such as in a background
+    worker, the block runs untraced rather than emitting a context error.
+    """
+    if not settings.XRAY_ENABLED:
+        return _NullSubsegment()
+    try:
+        from aws_xray_sdk.core import xray_recorder
+    except Exception:
+        return _NullSubsegment()
+    if not xray_recorder.current_segment():
+        return _NullSubsegment()
+    return xray_recorder.in_subsegment(name)
+
+
+class _NullSubsegment:
+    """No-op stand-in used when tracing is disabled or no segment is currently open."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc_info):
+        return False
+
+    def put_metadata(self, *args, **kwargs):
+        return None
+
+    def put_annotation(self, *args, **kwargs):
+        return None
 
 
 def setup_xray(app=None):
