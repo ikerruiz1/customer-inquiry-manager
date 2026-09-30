@@ -27,6 +27,14 @@ if ($env:AWS_DEFAULT_REGION) {
 $projectTag = "customer-inquiry-manager"
 $failures = New-Object System.Collections.Generic.List[string]
 
+# Windows PowerShell 5.1 "Set-Content -Encoding UTF8" emits a UTF-8 BOM, which makes
+# the AWS CLI reject every --image-ids and --delete "file://..." payload with
+# "Expected: '=', received: BOM". Write BOM-less UTF-8 explicitly instead.
+function Write-Utf8NoBom {
+    param([string]$Path, [string]$Content)
+    [System.IO.File]::WriteAllText($Path, $Content, (New-Object System.Text.UTF8Encoding $false))
+}
+
 # Remove every image from a repository, tagged and untagged.
 # batch-delete-image requires imageDigest or imageTag keys, so the list must come from
 # describe-images; list-images emits an imageId key that the API rejects, and it accepts at
@@ -59,7 +67,7 @@ function Remove-ECRRepositoryImages {
             $batch = @($identifiers[$i..$end])
             $payload = "[" + (($batch | ForEach-Object { $_ | ConvertTo-Json -Compress }) -join ",") + "]"
             $tempFile = [System.IO.Path]::GetTempFileName()
-            Set-Content -LiteralPath $tempFile -Value $payload -Encoding UTF8 -NoNewline
+            Write-Utf8NoBom -Path $tempFile -Content $payload
             $response = aws ecr batch-delete-image --repository-name $RepositoryName --region $Region --image-ids "file://$tempFile" --output json 2>&1
             Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
             if ($LASTEXITCODE -ne 0) {
@@ -88,14 +96,14 @@ function Remove-BucketContents {
         if ($parsed.Versions) {
             $delete = @{ Objects = @($parsed.Versions | ForEach-Object { @{ Key = $_.Key; VersionId = $_.VersionId } }) }
             $tempFile = [System.IO.Path]::GetTempFileName()
-            Set-Content -LiteralPath $tempFile -Value ($delete | ConvertTo-Json -Depth 5 -Compress) -Encoding UTF8 -NoNewline
+            Write-Utf8NoBom -Path $tempFile -Content ($delete | ConvertTo-Json -Depth 5 -Compress)
             aws s3api delete-objects --bucket $Bucket --delete "file://$tempFile" --region $Region 2>$null | Out-Null
             Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
         }
         if ($parsed.DeleteMarkers) {
             $delete = @{ Objects = @($parsed.DeleteMarkers | ForEach-Object { @{ Key = $_.Key; VersionId = $_.VersionId } }) }
             $tempFile = [System.IO.Path]::GetTempFileName()
-            Set-Content -LiteralPath $tempFile -Value ($delete | ConvertTo-Json -Depth 5 -Compress) -Encoding UTF8 -NoNewline
+            Write-Utf8NoBom -Path $tempFile -Content ($delete | ConvertTo-Json -Depth 5 -Compress)
             aws s3api delete-objects --bucket $Bucket --delete "file://$tempFile" --region $Region 2>$null | Out-Null
             Remove-Item -LiteralPath $tempFile -Force -ErrorAction SilentlyContinue
         }

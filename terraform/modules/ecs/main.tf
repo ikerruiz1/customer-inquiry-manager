@@ -4,6 +4,11 @@ resource "aws_ecr_repository" "app" {
   name                 = "${var.project_name}-${var.environment}"
   image_tag_mutability = "MUTABLE"
 
+  # Mandatory for the zero-residual-cost teardown: without force_delete the
+  # repository cannot be destroyed while any image tag or digest remains,
+  # which leaves the ECR repository and all its image storage billing.
+  force_delete = true
+
   image_scanning_configuration {
     scan_on_push = true
   }
@@ -20,6 +25,10 @@ resource "aws_ecr_repository" "app" {
 resource "aws_ecr_repository" "xray_daemon" {
   name                 = "${var.project_name}-${var.environment}-xray-daemon"
   image_tag_mutability = "MUTABLE"
+
+  # Mandatory for the zero-residual-cost teardown: without force_delete the
+  # repository cannot be destroyed while any image tag or digest remains.
+  force_delete = true
 
   image_scanning_configuration {
     scan_on_push = false
