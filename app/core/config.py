@@ -169,7 +169,10 @@ class Settings(BaseSettings):
                 host = creds.get("host", "localhost")
                 port = creds.get("port", 5432)
                 db = creds.get("database", "inquirydb")
-                self.DATABASE_URL = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}"
+                # rds.force_ssl=1 on the parameter group rejects any plaintext
+                # connection with "no pg_hba.conf entry ... no encryption", so the
+                # ssl argument is mandatory here and not optional hardening.
+                self.DATABASE_URL = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}?ssl=require"
             except Exception:
                 pass
 
