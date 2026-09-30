@@ -169,10 +169,22 @@ class Settings(BaseSettings):
                 host = creds.get("host", "localhost")
                 port = creds.get("port", 5432)
                 db = creds.get("database", "inquirydb")
+                # The RDS master password is generated from a set that includes
+                # URL-reserved characters ("%", "<", ":", "=", ")"). Interpolating
+                # it raw makes SQLAlchemy unquote() the value when it re-parses the
+                # URL, so "%cB" silently becomes U+FFFD and authentication fails.
+                # Percent-encode both credentials so the round trip is lossless.
+                from urllib.parse import quote
+
+                encoded_user = quote(str(user), safe="")
+                encoded_password = quote(str(password), safe="")
                 # rds.force_ssl=1 on the parameter group rejects any plaintext
                 # connection with "no pg_hba.conf entry ... no encryption", so the
                 # ssl argument is mandatory here and not optional hardening.
-                self.DATABASE_URL = f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db}?ssl=require"
+                self.DATABASE_URL = (
+                    f"postgresql+asyncpg://{encoded_user}:{encoded_password}"
+                    f"@{host}:{port}/{db}?ssl=require"
+                )
             except Exception:
                 pass
 
