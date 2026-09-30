@@ -34,6 +34,12 @@ variable "route53_zone_id" {
   default     = null
 }
 
+variable "manage_dns_records" {
+  type        = bool
+  description = "Whether to manage the SES DNS records (SPF, MX, DKIM and verification). Must stay a plan-time-known boolean: the zone id itself comes from the route53 module output and is unknown on the first apply, so deriving count from it makes Terraform fail to plan."
+  default     = true
+}
+
 variable "verified_sender_email" {
   type        = string
   description = "SES-verified email identity used as the outbound From address for customer notifications"

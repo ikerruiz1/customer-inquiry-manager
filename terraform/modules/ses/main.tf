@@ -88,7 +88,7 @@ resource "aws_ses_receipt_rule" "support_inbound" {
 }
 
 resource "aws_route53_record" "ses_verification" {
-  count   = var.route53_zone_id != null ? 1 : 0
+  count   = var.manage_dns_records ? 1 : 0
   zone_id = var.route53_zone_id
   name    = "_amazonses.${var.domain_name}"
   type    = "TXT"
@@ -97,7 +97,7 @@ resource "aws_route53_record" "ses_verification" {
 }
 
 resource "aws_route53_record" "ses_dkim" {
-  count   = var.route53_zone_id != null ? 3 : 0
+  count   = var.manage_dns_records ? 3 : 0
   zone_id = var.route53_zone_id
   name    = "${aws_ses_domain_dkim.main.dkim_tokens[count.index]}._domainkey.${var.domain_name}"
   type    = "CNAME"
@@ -106,7 +106,7 @@ resource "aws_route53_record" "ses_dkim" {
 }
 
 resource "aws_route53_record" "ses_mx" {
-  count   = var.route53_zone_id != null ? 1 : 0
+  count   = var.manage_dns_records ? 1 : 0
   zone_id = var.route53_zone_id
   name    = var.domain_name
   type    = "MX"
@@ -115,7 +115,7 @@ resource "aws_route53_record" "ses_mx" {
 }
 
 resource "aws_route53_record" "ses_spf" {
-  count   = var.route53_zone_id != null ? 1 : 0
+  count   = var.manage_dns_records ? 1 : 0
   zone_id = var.route53_zone_id
   name    = var.domain_name
   type    = "TXT"
