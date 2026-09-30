@@ -22,3 +22,8 @@ output "ecr_repository_url" {
   description = "URL of the ECR Repository"
   value       = aws_ecr_repository.app.repository_url
 }
+
+output "xray_daemon_repository_url" {
+  description = "URL of the ECR Repository holding the AWS X-Ray Daemon sidecar image"
+  value       = aws_ecr_repository.xray_daemon.repository_url
+}

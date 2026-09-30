@@ -191,6 +191,10 @@ resource "aws_codebuild_project" "build" {
       value = var.ecr_repository_url
     }
     environment_variable {
+      name  = "ECR_XRAY_REPOSITORY_URI"
+      value = var.xray_daemon_repository_url
+    }
+    environment_variable {
       name  = "TASK_DEFINITION_FAMILY"
       value = "${var.project_name}-${var.environment}-task"
     }

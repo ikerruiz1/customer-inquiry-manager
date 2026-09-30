@@ -124,6 +124,7 @@ module "cicd" {
   pipeline_artifacts_bucket_name = module.s3.pipeline_artifacts_bucket_name
   pipeline_artifacts_bucket_arn  = module.s3.pipeline_artifacts_bucket_arn
   ecr_repository_url             = module.ecs.ecr_repository_url
+  xray_daemon_repository_url     = module.ecs.xray_daemon_repository_url
   ecs_cluster_name               = module.ecs.cluster_name
   ecs_service_name               = module.ecs.service_name
 }
