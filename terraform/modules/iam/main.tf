@@ -99,6 +99,12 @@ resource "aws_iam_policy" "task_app_permissions" {
         Action = [
           "ses:SendEmail",
           "ses:SendRawEmail",
+          # Required by email_service._resolve_verified_sender() to discover the
+          # verified domain identity. Without it the lookup raises AccessDenied,
+          # the resolver silently falls back to SMTP_FROM_EMAIL and outbound mail
+          # is sent from the personal address, signed by amazonses.com instead of
+          # the corporate domain, which Gmail treats as spam.
+          "ses:ListEmailIdentities",
         ]
         Resource = ["*"]
       },
