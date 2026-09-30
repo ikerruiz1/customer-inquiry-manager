@@ -576,6 +576,22 @@ When your evaluation or demonstration is complete, destroy all provisioned AWS c
   ./scripts/teardown-infra.sh
   ```
 
+The teardown empties all S3 buckets and ECR repositories, destroys the Terraform
+stack in dependency order, and leaves zero billable residue: no ECR
+repositories, VPCs, subnets, NAT gateways, RDS instances, S3 buckets, Cognito
+user pools or Lambda functions remain in the account, and the Terraform state is
+emptied.
+
+Verify the account is clean:
+
+```powershell
+aws ecr describe-repositories --region eu-west-1 --query "repositories[?starts_with(repositoryName,'customer-inquiry-manager')].repositoryName"
+aws ec2 describe-vpcs --filters "Name=tag:Project,Values=customer-inquiry-manager" --region eu-west-1 --query "Vpcs[].VpcId"
+aws s3api list-buckets --region eu-west-1 --query "Buckets[?starts_with(Name,'customer-inquiry-manager')].Name"
+aws rds describe-db-instances --region eu-west-1 --query "DBInstances[?contains(DBInstanceIdentifier,'customer-inquiry')].DBInstanceIdentifier"
+terraform -chdir=terraform/environments/dev state list
+```
+
 ---
 
 ### Appendix: Local Development Workflow (Offline / Zero-AWS Spend)
