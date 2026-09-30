@@ -144,6 +144,7 @@ module "ses" {
   support_email         = var.support_email
   aws_region            = var.aws_region
   route53_zone_id       = module.route53.zone_id
+  manage_dns_records    = true
   verified_sender_email = var.ses_verified_sender_email != "" ? var.ses_verified_sender_email : var.support_email
 }
 
