@@ -1,0 +1,13 @@
+# Shell scripts must keep LF endings or bash refuses to parse them
+# (core.autocrlf=true would otherwise rewrite them to CRLF on Windows checkouts).
+*.sh text eol=lf
+
+# PowerShell is conventionally CRLF on Windows and reads both fine.
+*.ps1 text eol=crlf
+
+# Source, config and data files stay LF so JSON/Terraform parsers never see a BOM.
+*.py text eol=lf
+*.json text eol=lf
+*.tfvars text eol=lf
+*.tf text eol=lf
+Dockerfile text eol=lf

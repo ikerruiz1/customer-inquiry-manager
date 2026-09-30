@@ -142,7 +142,9 @@ if ($profileJson.inbound_channels) {
     }
     $profileJson.inbound_channels.trustpilot_profile = "https://www.trustpilot.com/review/$activeDomain"
 }
-$profileJson | ConvertTo-Json -Depth 10 | Set-Content "company_profile.json" -Encoding UTF8
+# utf-8-sig is used by the application readers, but writing without a BOM keeps
+# the file valid for every JSON parser, including plain json.load.
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) "company_profile.json"), ($profileJson | ConvertTo-Json -Depth 10), (New-Object System.Text.UTF8Encoding $false))
 Write-Host "  OK: Synchronized company_profile.json with domain: $activeDomain and admin: $activeAdminEmail" -ForegroundColor Green
 
 $activeSesVerifiedSender = $activeEmail
@@ -171,7 +173,7 @@ $tfvarsLines = @(
     "ses_verified_sender_email = `"$activeSesVerifiedSender`""
 )
 $tfvarsContent = $tfvarsLines -join "`r`n"
-Set-Content "terraform/environments/dev/terraform.tfvars" $tfvarsContent -Encoding UTF8
+[System.IO.File]::WriteAllText((Join-Path (Get-Location) "terraform/environments/dev/terraform.tfvars"), $tfvarsContent, (New-Object System.Text.UTF8Encoding $false))
 Write-Host "  OK: Synchronized terraform/environments/dev/terraform.tfvars" -ForegroundColor Green
 Write-Host ""
 

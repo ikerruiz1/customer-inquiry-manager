@@ -42,7 +42,7 @@ class BedrockService:
             path = "company_profile.example.json"
         if os.path.exists(path):
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, "r", encoding="utf-8-sig") as f:
                     return f.read()
             except Exception as exc:
                 logger.error(f"Failed to read grounding context from {path}: {exc}")

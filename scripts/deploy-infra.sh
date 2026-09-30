@@ -45,9 +45,9 @@ done
 
 COMPANY_NAME="Customer Inquiry Manager"
 if [ -f "company_profile.json" ]; then
-    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.json', encoding='utf-8-sig')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
 elif [ -f "company_profile.example.json" ]; then
-    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.example.json')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
+    COMPANY_NAME=$(python -c "import json; print(json.load(open('company_profile.example.json', encoding='utf-8-sig')).get('company_name', 'Customer Inquiry Manager'))" 2>/dev/null || echo "Customer Inquiry Manager")
 fi
 
 echo -e "\n${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
@@ -107,7 +107,7 @@ ACTIVE_ADMIN_EMAIL="${ACTIVE_ADMIN_PREFIX}@${ACTIVE_DOMAIN}"
 
 python -c "
 import json
-with open('company_profile.json', 'r', encoding='utf-8') as f:
+with open('company_profile.json', 'r', encoding='utf-8-sig') as f:
     d = json.load(f)
 d['domain'] = '$ACTIVE_DOMAIN'
 d['support_email'] = '$ACTIVE_EMAIL'

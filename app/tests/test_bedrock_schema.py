@@ -1,4 +1,6 @@
 """Unit tests for Bedrock JSON extraction schema and Pydantic validation rules."""
+import json
+
 import pytest
 from pydantic import ValidationError
 from app.schemas.bedrock import BedrockTriageOutput, SuggestedStrategyEnum
@@ -131,6 +133,43 @@ def test_invalid_department_enum():
     }
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate(data)
+
+
+def test_grounding_context_is_bom_tolerant(tmp_path, monkeypatch):
+    """Verify a UTF-8 BOM on the profile file never leaks into the system prompt.
+
+    deploy-infra.ps1 previously wrote company_profile.json with a BOM. Read as
+    plain utf-8 the mark became a literal U+FEFF at the head of the grounding
+    context, so the first byte of every Bedrock system prompt was that mark.
+    """
+    from app.services.bedrock_service import BedrockService
+
+    profile = tmp_path / "company_profile.json"
+    payload = '{"company_name": "ExampleCorp Technologies", "departments": ["BILLING"]}'
+    profile.write_text(payload, encoding="utf-8-sig")
+
+    service = BedrockService.__new__(BedrockService)
+    monkeypatch.setattr("app.services.bedrock_service.settings.GROUNDING_CONTEXT_PATH", str(profile))
+
+    loaded = service._load_grounding_context()
+
+    assert "\ufeff" not in loaded
+    assert loaded.startswith("{")
+    assert json.loads(loaded)["company_name"] == "ExampleCorp Technologies"
+
+
+def test_grounding_context_without_bom_is_unchanged(tmp_path, monkeypatch):
+    """Verify BOM-free profiles keep loading identically, so the fix is not lossy."""
+    from app.services.bedrock_service import BedrockService
+
+    profile = tmp_path / "company_profile.json"
+    payload = '{"company_name": "ExampleCorp Technologies", "departments": ["BILLING"]}'
+    profile.write_text(payload, encoding="utf-8")
+
+    service = BedrockService.__new__(BedrockService)
+    monkeypatch.setattr("app.services.bedrock_service.settings.GROUNDING_CONTEXT_PATH", str(profile))
+
+    assert service._load_grounding_context() == payload
 
 
 
