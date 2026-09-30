@@ -73,7 +73,16 @@ phases:
           printf '{"ImageURI":"%s"}' "customer-inquiry-manager:$IMAGE_TAG" > imageDetail.json
           printf '[{"name":"customer-inquiry-manager","imageUri":"%s"}]' "customer-inquiry-manager:$IMAGE_TAG" > imagedefinitions.json
         fi
-      - echo "Phase 8 - Build and DevSecOps gates completed successfully."
+      - |
+        if [ -n "$ECR_XRAY_REPOSITORY_URI" ]; then
+          echo "Phase 8 - Mirroring the AWS X-Ray Daemon sidecar image into ECR..."
+          docker pull amazon/aws-xray-daemon:latest
+          docker tag amazon/aws-xray-daemon:latest $ECR_XRAY_REPOSITORY_URI:latest
+          docker push $ECR_XRAY_REPOSITORY_URI:latest
+        else
+          echo "ECR_XRAY_REPOSITORY_URI not defined, skipping sidecar image"
+        fi
+      - echo "Phase 9 - Build and DevSecOps gates completed successfully."
 
 reports:
   pytest-reports:

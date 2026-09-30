@@ -25,6 +25,11 @@ variable "ecr_repository_url" {
   description = "ECR Repository URL"
 }
 
+variable "xray_daemon_repository_url" {
+  type        = string
+  description = "ECR Repository URL for the AWS X-Ray Daemon sidecar image"
+}
+
 variable "ecs_cluster_name" {
   type        = string
   description = "ECS cluster name"
