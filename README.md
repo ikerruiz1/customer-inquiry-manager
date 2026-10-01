@@ -10,8 +10,6 @@ Customer inquiry ingestion, AI triage and human-in-the-loop ticket resolution on
 ### Dark Mode
 ![Customer Inquiry Manager Architecture - Dark Mode](assets/architecture-diagram-dark.svg)
 
-The full 48-flow execution map lives in `docs/PROJECT_CONTEXT.md`.
-
 ## What it does
 
 - Ingests inquiries by email (SES MX + IMAP poller), web form, Trustpilot and billing webhooks.
@@ -69,7 +67,6 @@ customer-inquiry-manager/
 ├── scripts/                     # setup-dev, deploy-infra, teardown-infra (.ps1/.sh),
 │                                # package_source, provision_operator, seed_inquiries,
 │                                # k6-load-test, test_concurrency_race, test_fargate_performance
-├── docs/                        # PROJECT_CONTEXT.md, ARCHITECTURE_DECISIONS_AND_QA.md
 ├── assets/                      # architecture-diagram-light.svg, architecture-diagram-dark.svg
 ├── company_profile.example.json # policy template: departments, hours, refunds
 ├── buildspec.yml                # CodeBuild quality gate pipeline

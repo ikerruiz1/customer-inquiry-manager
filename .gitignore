@@ -91,3 +91,7 @@ Thumbs.db
 # Temporary scratch & debug scripts
 scratch/
 .scratch/
+
+# Internal engineering documentation (private, not distributed)
+docs/
+AGENTS.md
