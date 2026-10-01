@@ -10,7 +10,7 @@ Customer inquiry ingestion, AI triage and human-in-the-loop ticket resolution on
 ### Dark Mode
 ![Customer Inquiry Manager Architecture - Dark Mode](assets/architecture-diagram-dark.svg)
 
-The full 48-flow execution map is documented in [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md).
+The full 48-flow execution map lives in `docs/PROJECT_CONTEXT.md`.
 
 ## What it does
 
@@ -79,45 +79,110 @@ customer-inquiry-manager/
 └── LICENSE
 ```
 
-## Local development
+## Getting started
 
-Requires Python 3.12, Node.js 20+, AWS CLI v2 and Terraform 1.5+. Docker is optional and only needed for local image builds; the cloud pipeline builds without it.
+### 1. Prerequisites
+
+Python 3.12, Node.js 20+, npm, AWS CLI v2 and Terraform 1.5+. Docker is optional and only used for local image builds; the cloud pipeline builds without a local daemon.
+
+### 2. Clone
 
 ```bash
 git clone https://github.com/ikerruiz1/customer-inquiry-manager.git
 cd customer-inquiry-manager
+```
 
+### 3. Configure `company_profile.json`
+
+This file is the single source of truth for the AI triage behaviour and for your public identity. `setup-dev` and `deploy-infra` both copy it from `company_profile.example.json` if it is missing, so edit it **before** you deploy.
+
+```bash
+cp company_profile.example.json company_profile.json
+```
+
+Fields you must change:
+
+| Field | Purpose |
+| :--- | :--- |
+| `company_name` | Displayed in the console and in customer emails. |
+| `domain` | Your apex domain. Read by `deploy-infra` to derive the support address and to sync `terraform.tfvars`. |
+| `support_email` | The address customers write to. Must match the SES-verified identity. |
+| `admin_name`, `admin_email` | The bootstrap administrator. `setup-dev` prompts for these and prints the password. |
+| `sla_proactive_warning_minutes` | How early the SLA watcher alerts before a deadline. |
+| `slack_webhook_url` | Leave empty to disable ChatOps. |
+| `slack_notification_policy` | `CRITICAL_AND_SLA_ONLY` or `ALL_INQUIRIES`. Any other value is ignored and the default applies. |
+| `inbound_channels.email` | Where SES should receive mail. |
+| `customer_access_policy` | Whether unregistered senders are accepted or quarantined. |
+
+The remaining blocks drive the model rather than the infrastructure, and are worth tuning if your support operation differs from the defaults:
+
+- `departments` — the six routing targets Bedrock can classify into. `precedence_rank` breaks ties, so financial disputes land in `BILLING` (rank 1) even when caused by a technical fault.
+- `precedence_rules` — natural-language overrides injected into the prompt.
+- `itil_sla_matrix_hours` — resolution targets per priority. The urgency and impact thresholds are fixed in code; only the hour targets are configurable.
+- `refund_and_dispute_policy` — the source the model cites when answering billing questions.
+- `churn_escalation_triggers` — conditions that promote a ticket to P2.
+
+Leaving the template untouched means the console is branded `Example Enterprises Inc.`, inbound mail arrives at `support@your-company-domain.tech`, and SES will reject outbound replies because no identity is verified for that domain.
+
+### 4. Run locally
+
+```bash
 # Windows
 .\scripts\setup-dev.ps1
 # Linux / macOS
 ./scripts/setup-dev.sh
 ```
 
-The setup script creates the virtualenv, installs dependencies, writes `company_profile.json` from the template, generates the local administrator, runs the test suite and installs frontend packages. Administrator credentials and the TOTP seed are printed to the terminal.
+This creates the virtualenv, installs dependencies, generates the local administrator, runs the test suite and installs frontend packages. It asks for the admin name and username prefix, then prints the credentials.
 
-Run the two services:
+Start the two services in separate terminals:
 
 ```bash
 # backend :8000
 .\.venv\Scripts\uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
-
-# frontend :5173
+# frontend :5173 (proxies /api to the backend)
 cd frontend && npm run dev
 ```
 
-Generate sample traffic:
+Optional:
 
 ```bash
-python scripts/seed_inquiries.py --scenario all
+python scripts/seed_inquiries.py --scenario all   # sample tickets
+pytest app/tests -q                                # 87 tests
 ```
 
-Run tests:
+Local mode uses SQLite and mock AWS adapters, so it needs no AWS credentials and costs nothing.
+
+## Accessing the console
+
+The console is the React frontend. In local development it is served by Vite on port 5173; in the cloud it is served by the ALB at the URL printed by `deploy-infra`.
+
+**Sign in.** The form requires an operator email and password, then a 6-digit TOTP code.
+
+Local mode uses the SQLite operator registry and the fixed development seed:
+
+| | |
+| :--- | :--- |
+| Email | whatever you entered at the `setup-dev` prompt |
+| Password | printed by `setup-dev` |
+| TOTP seed | `JBSWY3DPEHPK3PXP` |
+
+Enter the seed in Google Authenticator, 1Password or Authy, then type the 6-digit code it shows.
+
+Cloud mode uses Cognito. `deploy-infra` provisions the break-glass administrator in the user pool and stores a temporary password in Secrets Manager at `customer-inquiry-manager/dev/operator-credentials`. First login forces password rotation, then TOTP enrollment against an on-screen QR code.
+
+**Roles.** Two exist, and the difference is enforced server-side:
+
+- `Operations_Manager` — full access, including inviting operators and overriding AI classifications.
+- `Tier1_Agent` — works the queue: claim, draft, reply, request info, resolve.
+
+**Adding operators.** As a manager, use *Invite Support Operator* in the top header and the console returns a single-use temporary password to hand over out of band. From the CLI:
 
 ```bash
-pytest app/tests -q
+python scripts/provision_operator.py --name "Name" --email "user@domain" --role Tier1_Agent
 ```
 
-Local mode uses SQLite and mock AWS adapters, so it needs no credentials and costs nothing.
+Accepted roles are `Operations_Manager` and `Tier1_Agent`. In cloud mode this maps to the Cognito groups `Operations_Managers` and `Tier1_Agents`.
 
 ## Deploy to AWS
 
@@ -132,11 +197,9 @@ Resolve-DnsName -Name "your-company.tech" -Type NS -Server 8.8.8.8
 .\scripts\deploy-infra.ps1                 # ./scripts/deploy-infra.sh
 ```
 
-The deployment applies the 13 Terraform modules, packages the source into `source.zip`, uploads it to S3 and triggers CodePipeline. CodeBuild runs the quality gates, builds the image and pushes to ECR, then CodePipeline performs the ECS rolling update.
+The deployment reads `company_profile.json` for the domain and support address, so edit that file before running this step. It applies the 13 Terraform modules, packages the source into `source.zip`, uploads it to S3 and triggers CodePipeline. CodeBuild runs the quality gates, builds the image and pushes to ECR, then CodePipeline performs the ECS rolling update.
 
-ACM and SES both validate DNS records, so the pre-flight step must complete before step 3 or certificate issuance will time out.
-
-Open the printed ALB URL, sign in, rotate the temporary password and enroll TOTP MFA.
+ACM and SES both validate DNS records, so the pre-flight step must complete before the full deploy or certificate issuance will time out.
 
 ## Teardown
 
@@ -246,11 +309,7 @@ PrivateLink only proxies registries inside the account. Third-party sidecar imag
 | Backend | `.\.venv\Scripts\uvicorn app.main:app --reload` | `./.venv/bin/uvicorn app.main:app --reload` |
 | Frontend | `cd frontend && npm run dev` | same |
 | Seed data | `python scripts/seed_inquiries.py --scenario all` | same |
-
-## Documentation
-
-- [docs/PROJECT_CONTEXT.md](docs/PROJECT_CONTEXT.md) — topology blueprint and the 48-flow execution map.
-- [docs/ARCHITECTURE_DECISIONS_AND_QA.md](docs/ARCHITECTURE_DECISIONS_AND_QA.md) — engineering decision ledger.
+| Edit policy | open `company_profile.json` | same |
 
 ## License
 
