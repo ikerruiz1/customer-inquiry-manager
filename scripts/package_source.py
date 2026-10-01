@@ -25,6 +25,8 @@ EXCLUDE_DIRS = {
     "build",
     "reports",
     ".gemini",
+    "scratch",
+    ".scratch",
 }
 
 EXCLUDE_FILES = {
@@ -33,6 +35,9 @@ EXCLUDE_FILES = {
     "source.zip",
     "terraform.tfstate",
     "terraform.tfstate.backup",
+    ".env",
+    ".env.local",
+    ".env.production",
 }
 
 EXCLUDE_EXTENSIONS = {
@@ -41,6 +46,8 @@ EXCLUDE_EXTENSIONS = {
     ".pyd",
     ".tfstate",
     ".tfstate.backup",
+    ".db",
+    ".db-journal",
 }
 
 
@@ -57,6 +64,8 @@ def package_source(output_zip: str = "source.zip", root_dir: str = ".") -> int:
                 if file in EXCLUDE_FILES:
                     continue
                 if any(file.endswith(ext) for ext in EXCLUDE_EXTENSIONS):
+                    continue
+                if file.startswith(".env.") and not file.endswith(".example"):
                     continue
 
                 full_path = os.path.join(root, file)
