@@ -1,0 +1,48 @@
+# Local secrets and environment overrides
+.env
+.env.local
+.env.production
+
+# Virtual environments and dependency trees
+.venv
+venv
+env
+node_modules
+
+# Version control and build tooling state
+.git
+.github
+.terraform
+
+# Compiled and cached output
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+.mypy_cache
+.ruff_cache
+dist
+build
+reports
+
+# Local state
+*.db
+*.db-journal
+source.zip
+
+# Internal engineering documentation
+docs
+AGENTS.md
+
+# Editor and OS artifacts
+.vscode
+.idea
+*.swp
+*.swo
+Thumbs.db
+.DS_Store
+
+# Temporary working directories
+scratch
+.scratch

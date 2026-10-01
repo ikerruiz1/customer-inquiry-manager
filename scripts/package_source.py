@@ -27,6 +27,7 @@ EXCLUDE_DIRS = {
     ".gemini",
     "scratch",
     ".scratch",
+    "docs",
 }
 
 EXCLUDE_FILES = {
@@ -38,6 +39,7 @@ EXCLUDE_FILES = {
     ".env",
     ".env.local",
     ".env.production",
+    "AGENTS.md",
 }
 
 EXCLUDE_EXTENSIONS = {
