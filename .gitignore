@@ -95,3 +95,11 @@ scratch/
 # Internal engineering documentation (private, not distributed)
 docs/
 AGENTS.md
+
+# Local deployment profile (contains owner identity and real domain)
+# The committed company_profile.example.json is the public template.
+company_profile.json
+
+# Local Terraform variable values (contains owner identity and real domain)
+# The committed terraform.tfvars.example is the public template.
+terraform/environments/dev/terraform.tfvars

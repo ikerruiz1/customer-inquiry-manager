@@ -88,7 +88,7 @@ def test_extract_customer_name_from_body_sign_off():
     )
     inferred1 = extract_customer_name_from_body(
         body=body1,
-        fallback_name="Iker",
+        fallback_name="Fallback Name",
         sender_email="test.customer@example.com",
     )
     assert inferred1 == "Alexander Wright"
@@ -124,7 +124,7 @@ def test_extract_customer_name_from_body_sign_off():
     body5 = "...upcoming deployment next week? Best regards, Alexander Wright"
     inferred5 = extract_customer_name_from_body(
         body=body5,
-        fallback_name="Iker",
+        fallback_name="Fallback Name",
         sender_email="test.customer@example.com",
     )
     assert inferred5 == "Alexander Wright"
