@@ -37,7 +37,12 @@ RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code and runtime configuration
-COPY company_profile.json .
+# company_profile.json is local configuration and is not tracked in Git.
+# Fall back to the committed template so a clean checkout always builds.
+COPY company_profile*.json ./
+RUN if [ ! -f company_profile.json ] && [ -f company_profile.example.json ]; then \
+        cp company_profile.example.json company_profile.json; \
+    fi
 COPY app/ ./app/
 COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
