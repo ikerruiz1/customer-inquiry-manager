@@ -10,6 +10,12 @@ Customer inquiry ingestion, AI triage and human-in-the-loop ticket resolution on
 ### Dark Mode
 ![Customer Inquiry Manager Architecture - Dark Mode](assets/architecture-diagram-dark.svg)
 
+## Video Demo & Walkthrough
+
+Click on the image below to watch the full demonstration and technical explanation of the project on YouTube:
+
+[![Customer Inquiry Manager - Video Demonstration](https://img.youtube.com/vi/_ZljpEMZX30/maxresdefault.jpg)](https://youtu.be/_ZljpEMZX30)
+
 ## What it does
 
 - Ingests inquiries by email (SES MX + IMAP poller), web form, Trustpilot and billing webhooks.
@@ -35,6 +41,123 @@ Customer inquiry ingestion, AI triage and human-in-the-loop ticket resolution on
 | Network | 3-tier VPC, 10 Interface VPC Endpoints, 1 S3 Gateway Endpoint, no NAT |
 | CI/CD | CodePipeline, CodeBuild, ECS rolling deploy, Conftest, KICS, Semgrep, Trivy, Syft |
 
+## Execution map: 48 chronological flows
+
+The diagrams above trace the same system as **48 discrete flows grouped into 10 blocks**. Every flow connects exactly **two** technologies (`Origin → Destination`), numbered in the order they execute. This is the reading order for the architecture: governance first, then delivery, then runtime, then the request path, then what a human does, then telemetry and storage lifecycle.
+
+Dashed links in the diagrams are cryptographic and policy transitions (KMS, WAF, S3 lifecycle) rather than data-plane traffic.
+
+| Block | Domain | Flows |
+| :--- | :--- | :---: |
+| 1 | IaC, Policy-as-Code Governance & Remote State | 1 – 5 |
+| 2 | CI/CD & DevSecOps (SAST, SCA, SBOM) | 6 – 15 |
+| 3 | Fargate Bootstrapping, PrivateLink & Database | 16 – 20 |
+| 4 | Perimeter Ingress, DNS, WAF & Authentication | 21 – 29 |
+| 5 | SQS FIFO Decoupling, Bedrock Inference & Attachments | 30 – 34 |
+| 6 | Asynchronous Dispatch, ChatOps & Bi-directional Email | 35 – 37 |
+| 7 | Human-in-the-Loop Operations, Threads & SLA Clock | 38 – 39 |
+| 8 | Distributed Telemetry & Observability | 40 – 44 |
+| 9 | Storage FinOps & S3/Glacier Lifecycle | 45 – 47 |
+| 10 | Resilience, Auto-Scaling & Load Testing | 48 |
+
+### Block 1 — IaC, Policy-as-Code Governance & Remote State (1–5)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 1 | `Developer → Conftest (OPA Rego)` | `conftest test` evaluates HCL against Rego policies: 3-tier subnet isolation, no NAT Gateways, mandatory KMS CMK, FinOps tags. Fails fast before anything else runs. |
+| 2 | `Developer → KICS (Checkmarx)` | `kics scan -p terraform/` runs 2,000+ security queries against CIS AWS, SOC 2 and PCI-DSS misconfigurations. |
+| 3 | `Developer → Terraform` | `init/plan/apply` with federated IAM credentials provisions the VPC, ECS, RDS, SQS, Cognito and the 11 endpoints. |
+| 4 | `Terraform → S3 (Remote Backend)` | State is stored over HTTPS in S3 with DynamoDB distributed locking, eliminating concurrent-apply races. |
+| 5 | `Terraform → KMS` | *(dashed)* State is envelope-encrypted at rest with a Customer Managed Key on annual rotation. |
+
+### Block 2 — CI/CD & DevSecOps (6–15)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 6 | `Developer → GitHub` | `git push origin main` with GPG-signed commits as the single source of truth. |
+| 7 | `GitHub → CodePipeline` | Commit webhook starts the pipeline via CodeStar Connections. |
+| 8 | `CodePipeline → CodeBuild` | An ephemeral private-subnet CodeBuild instance receives `buildspec.yml`. |
+| 9 | `CodeBuild → Pytest` | `pytest app/tests/` runs the 108-test suite. First quality gate: a failure halts the pipeline. |
+| 10 | `CodeBuild → Semgrep` | SAST pass over Python and TypeScript for OWASP Top 10, SQLi and credential flaws. |
+| 11 | `CodeBuild → Trivy` | SCA pass on the built image blocks HIGH/CRITICAL CVEs in OS and dependencies. |
+| 12 | `CodeBuild → ECR` | Syft generates a CycloneDX SBOM, then the image is pushed to private ECR tagged `:latest` and by commit SHA. |
+| 13 | `CodeBuild → S3 (Artifacts)` | `imagedefinitions.json`, `imageDetail.json` and `sbom.json` are uploaded KMS-encrypted. |
+| 14 | `CodePipeline → ECS Scheduler` | The native ECS deployment provider runs the rolling update (`min 100%`, `max 200%`). |
+| 15 | `ECS Scheduler → ECS Tasks` | Replacement Fargate Spot tasks start with the X-Ray sidecar; ALB health checks gate the drain, with automatic rollback on failure. |
+
+### Block 3 — Fargate Bootstrapping, PrivateLink & Database (16–20)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 16 | `ECS Cluster → VPC Endpoint: ECR` | The agent pulls image manifests and layers over PrivateLink, with no public transit. |
+| 17 | `App (FastAPI) → VPC Endpoint: Secrets Manager` | At startup the task role fetches RDS credentials and webhook secrets. Zero plaintext credentials. |
+| 18 | `App (FastAPI) → VPC Endpoint: S3 (Gateway)` | `company_profile.json` is cached into RAM as grounding context before the readiness probe passes. |
+| 19 | `App (FastAPI) → RDS (PostgreSQL 16)` | SQLAlchemy `asyncpg` opens the connection pool on 5432 with `sslmode=require`. |
+| 20 | `RDS → KMS` | *(dashed)* Storage, WAL logs and snapshots are envelope-encrypted with the CMK. |
+
+### Block 4 — Perimeter Ingress, DNS, WAF & Authentication (21–29)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 21 | `Support Agent → Route 53` | DNS resolution of the application FQDN. |
+| 22 | `Route 53 → ALB` | Alias record maps to the load balancer, avoiding per-query DNS cost. |
+| 23 | `ALB → ACM` | TLS 1.3 termination with an ACM certificate, offloading crypto CPU from Fargate. |
+| 24 | `WAF → ALB` | *(dashed)* OWASP Core Rule Sets, SQLi/XSS rules and rate limits inspect every request at the edge. |
+| 25 | `Support Agent → ALB` | The authenticated operator session reaches the React console over 443. |
+| 26 | `ALB → Cognito` | Unauthenticated requests are redirected to the OAuth2/OIDC endpoint with enforced TOTP MFA. |
+| 27 | `ALB → App (FastAPI)` | Approved traffic is forwarded to private tasks on 8000 with `X-Forwarded-For` and `X-Amzn-Oidc-Data`. |
+| 28 | `App (FastAPI) → VPC Endpoint: Cognito` | JWT signatures are verified against the JWKS and RBAC groups (`Tier1_Agents`, `Operations_Managers`) extracted. |
+| 29 | `Webhooks (5 sources) → ALB` | SES email, web form, Trustpilot, Google Reviews and billing POST signed payloads into `/api/v1/webhooks/*`. |
+
+### Block 5 — SQS FIFO Decoupling, Bedrock Inference & Attachments (30–34)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 30 | `App (FastAPI) → VPC Endpoint: SQS` | Signatures are validated and the payload is enqueued into `inquiries.fifo` in under 15ms with SHA-256 deduplication. The client gets `202 Accepted`. Poison messages redrive to `inquiries-dlq.fifo` after 3 attempts and raise a P1 alarm. |
+| 31 | `VPC Endpoint: SQS → App (FastAPI)` | A long-polling consumer drains the queue in batches of 10 under a leaky-bucket governor metered to Bedrock TPM/RPM quotas. |
+| 32 | `App (FastAPI) → VPC Endpoint: Bedrock` | A single `Converse` call at temperature 0 runs classification, sentiment, urgency/impact, churn risk and entity extraction, wrapped in Bedrock Guardrails (prompt-attack filters and PII redaction). |
+| 33 | `App (FastAPI) → S3 (Attachments)` | PDFs and screenshots are uploaded straight to private S3 instead of bloating PostgreSQL. |
+| 34 | `S3 (Attachments) → KMS` | *(dashed)* Uploaded objects are envelope-encrypted with the CMK. |
+
+### Block 6 — Asynchronous Dispatch, ChatOps & Bi-directional Email (35–37)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 35 | `App (FastAPI) → RDS + VPC Endpoint: SNS` | The triaged ticket, JSONB entities and SLA deadline are committed atomically, the SQS message is deleted, and the `ticket.created` domain event is published. At-least-once processing with no lost inquiries. |
+| 36 | `SNS → Mail` | The customer receives an automated receipt and SLA deadline by email. |
+| 37 | `SNS → Slack` | Tickets rated `HIGH` or `CRITICAL` alert the `#ops-critical` ChatOps channel. |
+
+### Block 7 — Human-in-the-Loop Operations, Threads & SLA Clock (38–39)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 38 | `Support Agent → App (FastAPI)` | The operator works the queue: AI drafts in three modes (`REPLY`, `REQUEST_INFO`, `INTERNAL_NOTE`), claims, category overrides and resolution. Customer replies are correlated by `[Ticket #<ID>]` subject matching, which resumes the paused SLA clock and extends the deadline by the paused duration. |
+| 39 | `App (FastAPI) → RDS (PostgreSQL 16)` | Messages, `first_responded_at`, `total_paused_seconds` and immutable `inquiry_audit_logs` rows are persisted for SOC 2 and HIPAA auditability. |
+
+### Block 8 — Distributed Telemetry & Observability (40–44)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 40 | `App (FastAPI) → Sidecar (xray-daemon)` | Subsegment timings for SQL, Bedrock, S3 and SQS are emitted over local UDP, adding no latency to request threads. |
+| 41 | `Sidecar (xray-daemon) → VPC Endpoint: X-Ray` | Buffered trace segments are flushed in batches over PrivateLink. |
+| 42 | `App (FastAPI) → VPC Endpoint: CloudWatch` | The `awslogs` driver streams structured JSON and Embedded Metric Format metrics. |
+| 43 | `ALB → S3 (Access Logs)` | *(dashed)* Compressed access logs are written every 5 minutes for forensics and Athena queries. |
+| 44 | `RDS → VPC Endpoint: CloudWatch` | Enhanced Monitoring, Performance Insights, CPU and connection metrics feed saturation alarms. |
+
+### Block 9 — Storage FinOps & S3/Glacier Lifecycle (45–47)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 45 | `S3 (Attachments) → Glacier Instant Retrieval` | *(dashed)* Attachments older than 60 days move to `GLACIER_IR`, cutting cost ~68% while keeping millisecond retrieval. |
+| 46 | `S3 (Access Logs) → Glacier Flexible Retrieval` | *(dashed)* Logs older than 30 days archive to `GLACIER`. |
+| 47 | `Glacier → Purge` | *(dashed)* Logs older than 90 days are permanently deleted, enforcing GDPR data minimisation. |
+
+### Block 10 — Resilience, Auto-Scaling & Load Testing (48)
+
+| # | Flow | What happens |
+| :--- | :--- | :--- |
+| 48 | `Load Generator (k6) → ALB` | `scripts/k6-load-test.js` ramps 15 → 50 virtual users to prove target-tracking scaling from 2 to 6 tasks, p95 latency under 800ms, and that the FIFO buffer absorbs spikes without Bedrock 429s or 5xx dropouts. |
+
 ## Repository structure
 
 ```text
@@ -48,7 +171,7 @@ customer-inquiry-manager/
 │   ├── services/                # bedrock, cognito, email, email_filter, email_thread,
 │   │                            # inbound_email_poller, s3, sns, sqs_consumer, sqs_service,
 │   │                            # sla_breach_watcher
-│   ├── tests/                   # 87 pytest tests
+│   ├── tests/                   # 108 pytest tests
 │   ├── health.py                # /health/live and /health/ready
 │   └── main.py                  # FastAPI entrypoint
 ├── frontend/
@@ -57,7 +180,7 @@ customer-inquiry-manager/
 │   │                            # auth, invite, new inquiry, override modals
 │   ├── src/api/client.ts        # dual-mode API client
 │   ├── src/types/               # inquiry.ts, theme.ts
-│   ├── public/themes/           # 9 background themes
+│   ├── public/themes/           # 8 background themes
 │   └── package.json
 ├── terraform/
 │   ├── environments/dev/        # root composition
@@ -145,7 +268,7 @@ Optional:
 
 ```bash
 python scripts/seed_inquiries.py --scenario all   # sample tickets
-pytest app/tests -q                                # 87 tests
+pytest app/tests -q                                # 108 tests
 ```
 
 Local mode uses SQLite and mock AWS adapters, so it needs no AWS credentials and costs nothing.
