@@ -64,7 +64,6 @@ def calculate_sla(
     """Compute ITIL priority classification, resolution deadline, and First Response Time (FRT) deterministically."""
     now = reference_time or datetime.now(timezone.utc)
 
-    # 1. ITIL Matrix Calculation
     if urgency >= 4 and impact >= 3:
         priority = "P1"
         resolution_hours = 1
@@ -116,21 +115,18 @@ async def process_and_persist_inquiry(
             detail=f"Inbound inquiry suppressed: Automated delivery failure / NDR notification detected ({reason}).",
         )
 
-    # 1. Execute Bedrock single-pass triage
     triage_result = await bedrock.triage_inquiry(
         channel=inquiry_in.channel.value,
         subject=inquiry_in.subject,
         body=inquiry_in.body,
     )
 
-    # 2. Compute ITIL SLA deadline and First Response Time
     priority, sla_deadline, frt_deadline = calculate_sla(
         urgency=triage_result.urgency_rating,
         impact=triage_result.impact_rating,
         churn_risk=triage_result.churn_risk,
     )
 
-    # 3. Evaluate Inbound Customer Verification & Identity Policy
     policy = settings.CUSTOMER_ACCESS_POLICY or {}
     require_registered = policy.get("require_registered_account", False)
     verification_mode = policy.get("verification_mode", "FLAG_UNVERIFIED")
@@ -163,7 +159,6 @@ async def process_and_persist_inquiry(
         policy_notice = "[SECURITY POLICY WARNING] Inbound sender not found in verified account registry. Verify identity before releasing account telemetry."
         agent_notes = f"{policy_notice}\n\n{agent_notes}" if agent_notes else policy_notice
 
-    # 4. Instantiate and persist ORM model
     # Infer customer full name from email body sign-off if present, or fallback to inquiry_in.customer_name
     resolved_customer_name = extract_customer_name_from_body(
         body=inquiry_in.body,
@@ -212,7 +207,6 @@ async def process_and_persist_inquiry(
     fetch_res = await db.execute(fetch_stmt)
     inquiry = fetch_res.scalar_one()
 
-    # 4. Asynchronous Outbound SNS Dispatch
     inquiry_dict = {
         "id": str(inquiry.id),
         "customer_email": inquiry.customer_email,
@@ -228,7 +222,6 @@ async def process_and_persist_inquiry(
     if settings.SLACK_NOTIFICATION_POLICY == "ALL_INQUIRIES" or priority in ["P1", "P2"]:
         await sns.publish_ops_alert(inquiry_dict)
 
-    # 5. Emit CloudWatch EMF Metric
     emit_emf_metric(
         metric_name="TicketsTriaged",
         value=1.0,
@@ -430,7 +423,6 @@ async def resolve_inquiry(
     )
     db.add(resolution_msg)
 
-    # Dispatch resolution email to customer
     try:
         email_svc = get_email_service()
         prior_message_id = await _latest_outbound_message_id(db, inquiry.id)

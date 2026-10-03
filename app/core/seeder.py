@@ -15,7 +15,6 @@ from app.core.config import settings
 
 logger = logging.getLogger("app.core.seeder")
 
-# Authoritative enterprise operators (Single Source of Truth)
 CANONICAL_OPERATORS: List[Dict[str, Any]] = [
     {
         "id": "00000000-0000-0000-0000-000000000001",
@@ -89,7 +88,6 @@ async def init_db_and_seed() -> None:
             await conn.run_sync(Base.metadata.create_all)
 
         async with AsyncSessionLocal() as session:
-            # Seed canonical enterprise operators if table is empty
             op_count_res = await session.execute(select(func.count()).select_from(Operator))
             if op_count_res.scalar_one() == 0:
                 canonical_operators = [

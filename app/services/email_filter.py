@@ -17,7 +17,6 @@ AUTOMATED_SENDERS = (
     "bounces@",
 )
 
-# Common Non-Delivery Report / Delivery Status Notification subject patterns
 NDR_SUBJECT_PATTERNS = [
     re.compile(r"delivery status notification", re.IGNORECASE),
     re.compile(r"undelivered mail returned to sender", re.IGNORECASE),
@@ -33,7 +32,6 @@ NDR_SUBJECT_PATTERNS = [
     re.compile(r"\[AUTOMATED SLA ESCALATION\]", re.IGNORECASE),
 ]
 
-# Body signatures indicating bounce / delivery error messages
 NDR_BODY_PATTERNS = [
     re.compile(r"an error occurred while trying to deliver the mail", re.IGNORECASE),
     re.compile(r"the following recipient\(s\) could not be reached", re.IGNORECASE),
@@ -73,12 +71,10 @@ def is_automated_delivery_failure_or_loop(
         if clean_sender.startswith(daemon_prefix) or f"<{daemon_prefix}" in clean_sender:
             return True, f"Automated sender detected: {clean_sender}"
 
-    # 3. Check subject patterns
     for pat in NDR_SUBJECT_PATTERNS:
         if pat.search(clean_subject):
             return True, f"NDR subject matched: '{pat.pattern}'"
 
-    # 4. Check body patterns for bounce signatures
     for bpat in NDR_BODY_PATTERNS:
         if bpat.search(clean_body):
             return True, f"Delivery failure body matched: '{bpat.pattern}'"
@@ -86,7 +82,6 @@ def is_automated_delivery_failure_or_loop(
     return False, ""
 
 
-# Regex signatures for formal sign-offs in email bodies (supporting both newline and inline sign-offs)
 _SIGN_OFF_REGEX = re.compile(
     r"(?:best\s+regards|warm\s+regards|kind\s+regards|with\s+regards|regards|sincerely|thanks\s+and\s+regards|thanks|thank\s+you|cheers|atentamente|saludos|un\s+saludo)"
     r"[,:\s]+([A-Z][a-zA-Z'\-]+(?:\s+[A-Z][a-zA-Z'\-]+)+)",

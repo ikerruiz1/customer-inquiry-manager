@@ -30,46 +30,39 @@ class Inquiry(Base):
     __tablename__ = "inquiries"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    channel: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # EMAIL, WEB_FORM, TRUSTPILOT, GOOGLE_REVIEWS, BILLING
+    channel: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     customer_email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     customer_name: Mapped[str] = mapped_column(String(255), nullable=False)
     subject: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
 
-    # Operational status
-    status: Mapped[str] = mapped_column(String(32), nullable=False, default="UNASSIGNED", index=True)  # UNASSIGNED, CLAIMED, RESOLVED
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="UNASSIGNED", index=True)
 
-    # AI Triage outputs
-    department: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # BILLING, SECURITY, TECH_SUPPORT, ACCOUNTS, SALES, GENERAL
-    priority: Mapped[str] = mapped_column(String(8), nullable=False, index=True)  # P1, P2, P3, P4
-    urgency: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # 1 to 5
-    impact: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # 1 to 3
-    sentiment_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)  # -1.0 to 1.0
+    department: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    priority: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
+    urgency: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    impact: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    sentiment_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     churn_risk: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
 
-    # Key Entity Extraction (NER) stored in JSONB (PostgreSQL) / JSON (SQLite)
     entities: Mapped[Dict[str, Any]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False, default=dict)
 
-    # Copilot Suggested Response & Guidance
-    suggested_strategy: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)  # DIRECT_RESOLUTION, CLARIFICATION_REQUEST, ESCALATION, EMPATHETIC_DEFUSING
+    suggested_strategy: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     suggested_response: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     agent_copilot_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
-    # Temporal SLAs (ITIL v4 Compliant: Resolution SLA and First Response SLA)
     sla_deadline_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     first_response_deadline_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     first_responded_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     sla_paused_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     total_paused_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    # Human-in-the-Loop Ownership & Resolution
-    assigned_agent_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)  # Cognito Sub
+    assigned_agent_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True, index=True)
     claimed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     resolution_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     human_reviewed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, onupdate=utc_now)
 
@@ -128,7 +121,6 @@ class Inquiry(Base):
         return 0.00025
 
 
-    # Relationships
     audit_logs: Mapped[List["AuditLog"]] = relationship("AuditLog", back_populates="inquiry", cascade="all, delete-orphan")
     messages: Mapped[List["InquiryMessage"]] = relationship(
         "InquiryMessage",
@@ -138,7 +130,6 @@ class Inquiry(Base):
         lazy="selectin",
     )
 
-    # High-Performance Partial Composite B-Tree Index for active queue lookups
     __table_args__ = (
         Index(
             "idx_active_triage_queue",
@@ -163,7 +154,7 @@ class InquiryMessage(Base):
     inquiry_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("inquiries.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    sender_type: Mapped[str] = mapped_column(String(32), nullable=False)  # CUSTOMER, AGENT, SYSTEM, AI_COPILOT
+    sender_type: Mapped[str] = mapped_column(String(32), nullable=False)
     sender_name: Mapped[str] = mapped_column(String(255), nullable=False)
     sender_email: Mapped[str] = mapped_column(String(255), nullable=False)
     body: Mapped[str] = mapped_column(Text, nullable=False)
@@ -174,7 +165,6 @@ class InquiryMessage(Base):
     provider_message_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now, index=True)
 
-    # Relationships
     inquiry: Mapped["Inquiry"] = relationship("Inquiry", back_populates="messages")
 
 
@@ -186,14 +176,13 @@ class AuditLog(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     inquiry_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("inquiries.id", ondelete="CASCADE"), nullable=False, index=True)
-    agent_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)  # Cognito Sub
-    action: Mapped[str] = mapped_column(String(64), nullable=False)  # CLAIM, RESOLVE, OVERRIDE_CATEGORY, OVERRIDE_PRIORITY
+    agent_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
     previous_value: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     new_value: Mapped[Dict[str, Any]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False)
     reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 
-    # Relationships
     inquiry: Mapped["Inquiry"] = relationship("Inquiry", back_populates="audit_logs")
 
 
@@ -206,7 +195,7 @@ class Operator(Base):
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    role: Mapped[str] = mapped_column(String(32), nullable=False)  # Tier1_Agent, Operations_Manager
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
     groups: Mapped[List[str]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=False, default=list)
     totp_secret: Mapped[str] = mapped_column(String(64), nullable=False)
     initials: Mapped[str] = mapped_column(String(8), nullable=False)

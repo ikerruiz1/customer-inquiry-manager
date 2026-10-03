@@ -38,7 +38,6 @@ async def run_race_test(host: str, token1: str, token2: str) -> None:
     """Execute concurrent claim requests."""
     host = host.rstrip("/")
     async with httpx.AsyncClient(timeout=15.0) as client:
-        # 1. Seed or retrieve an UNASSIGNED inquiry
         print(f"\nTarget Host: {host}")
         print("1. Creating test inquiry for concurrency race verification...")
 
@@ -52,7 +51,6 @@ async def run_race_test(host: str, token1: str, token2: str) -> None:
 
         seed_res = await client.post(f"{host}/api/v1/inquiries/", json=seed_payload)
         if seed_res.status_code not in (200, 201):
-            # Fallback to query existing unassigned inquiry
             q_res = await client.get(
                 f"{host}/api/v1/inquiries/?status=UNASSIGNED",
                 headers={"Authorization": f"Bearer {token1}"},
@@ -80,7 +78,6 @@ async def run_race_test(host: str, token1: str, token2: str) -> None:
                 detail = res.text[:40]
             return name, res.status_code, detail
 
-        # Execute simultaneously using asyncio.gather
         results = await asyncio.gather(
             claim_worker("Worker 1", headers1),
             claim_worker("Worker 2", headers2),

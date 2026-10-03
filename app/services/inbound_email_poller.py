@@ -48,7 +48,6 @@ def _extract_text_body(msg: email.message.Message) -> str:
                     return payload.decode(charset, errors="replace").strip()
                 elif isinstance(payload, str):
                     return payload.strip()
-        # Fallback to text/html if no text/plain found
         for part in msg.walk():
             if part.get_content_type() == "text/html":
                 payload = part.get_payload(decode=True)
@@ -110,7 +109,6 @@ class InboundEmailPoller:
         """Continuous polling loop executing in the background."""
         while self._running:
             try:
-                # 1. Process real inbound emails deposited by Amazon SES in S3
                 if settings.SES_INBOUND_BUCKET_NAME:
                     for parsed in await asyncio.to_thread(self._collect_s3_ses_emails):
                         await self._consume_parsed_email(
@@ -119,7 +117,6 @@ class InboundEmailPoller:
                             delete_key=parsed.get("s3_key"),
                         )
 
-                # 2. Process external IMAP inbox if configured
                 if self.is_enabled and self.host and self.user and self.password:
                     for parsed in await asyncio.to_thread(self._collect_imap_emails):
                         await self._consume_parsed_email(parsed, source="IMAP")
@@ -255,7 +252,6 @@ class InboundEmailPoller:
             mail.login(self.user, self.password)
             mail.select("INBOX")
 
-            # Search for unread emails
             status, messages = mail.search(None, "UNSEEN")
             if status != "OK" or not messages or not messages[0]:
                 return results
@@ -282,7 +278,6 @@ class InboundEmailPoller:
                 )
                 results.append(parsed)
 
-                # Mark message as read
                 mail.store(eid, "+FLAGS", "\\Seen")
 
         except Exception as exc:
@@ -312,7 +307,6 @@ class InboundEmailPoller:
         # 0. Retain only newly authored text; quoted history is already stored in the ticket thread
         body = strip_quoted_history(body) or body
 
-        # 1. Suppress automated bounce, NDR, or mailer-daemon failure loops
         is_filtered, reason = is_automated_delivery_failure_or_loop(customer_email, subject, body)
         if is_filtered:
             logger.info(f"Silently dropped automated inbound email from {customer_email} - Reason: {reason}")
@@ -360,7 +354,6 @@ class InboundEmailPoller:
         return True
 
 
-# Singleton instance
 _inbound_poller_instance: Optional[InboundEmailPoller] = None
 
 

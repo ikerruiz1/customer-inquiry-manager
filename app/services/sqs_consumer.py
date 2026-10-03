@@ -63,7 +63,6 @@ class SQSConsumerDaemon:
 
         while self._running:
             try:
-                # 1. Pull batch from SQS FIFO buffer (long-polling)
                 messages = await self.sqs.receive_inquiries(
                     max_messages=self.batch_size,
                     wait_time_seconds=int(self.poll_interval),
@@ -108,14 +107,12 @@ class SQSConsumerDaemon:
         raw_msg_body = body.get("body", "")
         msg_body = strip_quoted_history(raw_msg_body) or raw_msg_body
 
-        # 0. Drop automated delivery failures, NDRs, or bounce loops
         is_filtered, reason = is_automated_delivery_failure_or_loop(customer_email, subject, msg_body)
         if is_filtered:
             logger.info(f"SQS Consumer dropped automated bounce/NDR from {customer_email}: {reason}")
             return
 
         async def _execute_with_session(session):
-            # 1. Thread Correlation: append inbound messages to the originating ticket when determinable
             existing_inquiry, strategy = await resolve_inbound_ticket(
                 session,
                 customer_email=customer_email,
@@ -142,7 +139,6 @@ class SQSConsumerDaemon:
                 await session.commit()
                 return
 
-            # 2. Ingest as new inquiry
             channel_str = body.get("channel", "WEB_FORM")
             try:
                 channel = ChannelEnum(channel_str)

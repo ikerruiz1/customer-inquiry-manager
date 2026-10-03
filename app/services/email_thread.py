@@ -37,16 +37,13 @@ REPLY_PREFIX_REGEX = re.compile(
 # Angle-bracket delimited RFC 5322 Message-ID token.
 MESSAGE_ID_TOKEN_REGEX = re.compile(r"<[^<>\s]{4,255}>")
 
-# Hexadecimal UUID shape accepted for ticket reference resolution.
 _UUID_PREFIX_REGEX = re.compile(r"^[0-9a-f]{8}[0-9a-f-]{0,31}$")
 
-# Window applied to the sender-based fallback correlation tier.
 SENDER_FALLBACK_WINDOW_DAYS = 30
 
 # Attribution header keys emitted by desktop mail clients in quoted blocks.
 _QUOTE_ATTRIBUTION_HEADERS = ("sent", "date", "to", "subject", "from", "reply-to")
 
-# Markers delimiting quoted conversation history in plain text bodies.
 _QUOTE_BOUNDARY_RES = (
     re.compile(r"^\s*>"),
     re.compile(r"^\s*-{2,}\s*original message\s*-{2,}\s*$", re.IGNORECASE),

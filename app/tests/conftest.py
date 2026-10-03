@@ -94,7 +94,6 @@ class MockBedrockService(BedrockService):
                 "Do NOT disclose internal details to customer."
             )
         
-        # If there is an existing AGENT message in conversation history, generate a follow-up draft
         has_agent_reply = any(m.get("sender_type") == "AGENT" for m in (conversation_history or []))
         if has_agent_reply:
             return (
@@ -227,7 +226,6 @@ class MockS3Service(S3Service):
         return f"https://{self.bucket_name}.s3.amazonaws.com/{object_key}?signature=mock"
 
 
-# Test database setup with in-memory SQLite
 test_engine = create_async_engine(
     "sqlite+aiosqlite:///:memory:",
     connect_args={"check_same_thread": False},

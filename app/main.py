@@ -24,24 +24,19 @@ async def lifespan(app: FastAPI):
     """Lifespan context manager: handles pre-warming, schema initialization, and graceful shutdown."""
     logger.info(f"Initializing {settings.PROJECT_NAME} in environment '{settings.ENVIRONMENT}'...")
 
-    # In local development mode, automatically initialize database schema and seed canonical data
     if settings.ENVIRONMENT == "dev":
         await init_db_and_seed()
 
-    # Apply additive schema migrations for columns introduced after the initial release
     await ensure_schema_extensions()
 
-    # Start inbound email poller background worker if enabled
     from app.services.inbound_email_poller import get_inbound_email_poller
     email_poller = get_inbound_email_poller()
     email_poller.start()
 
-    # Start automated background SLA breach watcher & executive escalation daemon
     from app.services.sla_breach_watcher import get_sla_breach_watcher
     sla_watcher = get_sla_breach_watcher()
     sla_watcher.start()
 
-    # Start enterprise SQS FIFO consumer worker daemon
     from app.services.sqs_consumer import get_sqs_consumer
     sqs_consumer = get_sqs_consumer()
     sqs_consumer.start()
@@ -56,7 +51,6 @@ async def lifespan(app: FastAPI):
     logger.info("Shutdown complete.")
 
 
-# Instantiate core FastAPI application
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -69,13 +63,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Initialize distributed tracing. This must run while the middleware stack is still unbuilt:
-# Starlette rejects add_middleware() once the application has started, so it cannot live in the
-# lifespan handler, and it must precede every other add_middleware() call to stay the innermost
-# layer and therefore observe the final response status.
 setup_xray(app)
 
-# Cross-Origin Resource Sharing (CORS)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
@@ -106,10 +95,8 @@ async def add_security_headers(request: Request, call_next):
     return response
 
 
-# Attach Health & Readiness probes
 app.include_router(health_router)
 
-# Attach Master API v1 Router
 app.include_router(api_router, prefix="/api/v1")
 
 
@@ -123,7 +110,6 @@ async def generic_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Mount static production frontend if compiled, otherwise serve service metadata
 import os
 from fastapi.staticfiles import StaticFiles
 

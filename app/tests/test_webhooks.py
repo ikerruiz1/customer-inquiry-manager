@@ -14,17 +14,13 @@ def test_verify_hmac_sha256_cryptographic_validation():
     payload = b'{"event":"review_created","stars":1}'
     correct_sig = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
-    # Valid signature check
     assert verify_hmac_sha256(secret, payload, correct_sig) is True
 
-    # Tampered payload check
     tampered_payload = b'{"event":"review_created","stars":5}'
     assert verify_hmac_sha256(secret, tampered_payload, correct_sig) is False
 
-    # Tampered signature check
     assert verify_hmac_sha256(secret, payload, "invalid-hex-digest") is False
 
-    # Missing signature check
     assert verify_hmac_sha256(secret, payload, None) is False
 
 
@@ -80,7 +76,6 @@ async def test_trustpilot_webhook_hmac_verification(client: AsyncClient, monkeyp
     raw_bytes = json.dumps(review_body).encode("utf-8")
     valid_signature = hmac.new(secret.encode("utf-8"), raw_bytes, hashlib.sha256).hexdigest()
 
-    # 1. Successful request with valid cryptographic signature returns HTTP 202 Accepted
     res_valid = await client.post(
         "/api/v1/webhooks/trustpilot",
         content=raw_bytes,
@@ -92,7 +87,6 @@ async def test_trustpilot_webhook_hmac_verification(client: AsyncClient, monkeyp
     assert data["channel"] == "TRUSTPILOT"
     assert "tracking_id" in data
 
-    # 2. Rejection with invalid cryptographic signature
     res_invalid = await client.post(
         "/api/v1/webhooks/trustpilot",
         content=raw_bytes,
@@ -115,7 +109,6 @@ async def test_google_reviews_webhook_secret_verification(client: AsyncClient, m
         "reviewer": {"displayName": "Anonymous Reviewer", "email": "reviewer@domain.com"},
     }
 
-    # 1. Successful request with valid secret header returns HTTP 202 Accepted
     res_valid = await client.post(
         "/api/v1/webhooks/google-reviews",
         json=review_body,
@@ -127,7 +120,6 @@ async def test_google_reviews_webhook_secret_verification(client: AsyncClient, m
     assert data["channel"] == "GOOGLE_REVIEWS"
     assert "tracking_id" in data
 
-    # 2. Rejection with invalid secret header
     res_invalid = await client.post(
         "/api/v1/webhooks/google-reviews",
         json=review_body,
@@ -175,11 +167,9 @@ async def test_stripe_billing_webhook_signature_rejection_in_prod(client: AsyncC
         payload = {"type": "charge.dispute.created", "data": {"object": {"id": "dp_test"}}}
         raw_body = json.dumps(payload).encode("utf-8")
 
-        # 1. Missing signature header
         res_missing = await client.post("/api/v1/webhooks/billing", content=raw_body, headers={"Content-Type": "application/json"})
         assert res_missing.status_code == 401
 
-        # 2. Invalid signature header
         res_invalid = await client.post(
             "/api/v1/webhooks/billing",
             content=raw_body,
@@ -187,7 +177,6 @@ async def test_stripe_billing_webhook_signature_rejection_in_prod(client: AsyncC
         )
         assert res_invalid.status_code == 401
 
-        # 3. Valid signature header
         timestamp = str(int(time.time()))
         signed_payload = f"{timestamp}.".encode("utf-8") + raw_body
         secret = settings.STRIPE_WEBHOOK_SECRET or "dev-stripe-webhook-secret"
@@ -202,7 +191,7 @@ async def test_stripe_billing_webhook_signature_rejection_in_prod(client: AsyncC
         assert res_valid.status_code == 202
 
         # 4. Webhook replay attack: valid signature but expired timestamp (> 300s old)
-        stale_timestamp = str(int(time.time()) - 600)  # 10 minutes old
+        stale_timestamp = str(int(time.time()) - 600)
         stale_payload = f"{stale_timestamp}.".encode("utf-8") + raw_body
         stale_sig = hmac.new(secret.encode("utf-8"), stale_payload, hashlib.sha256).hexdigest()
         stale_header = f"t={stale_timestamp},v1={stale_sig}"

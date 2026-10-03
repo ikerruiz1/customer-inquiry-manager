@@ -6,7 +6,6 @@ from httpx import AsyncClient
 @pytest.mark.asyncio
 async def test_get_dashboard_metrics_endpoint(client: AsyncClient, mock_sns):
     """Verify GET /api/v1/metrics/dashboard returns real SQL-aggregated KPIs and distributions."""
-    # Seed an inquiry
     payload = {
         "channel": "EMAIL",
         "customer_email": "metrics-test@company.internal",
@@ -17,7 +16,6 @@ async def test_get_dashboard_metrics_endpoint(client: AsyncClient, mock_sns):
     create_res = await client.post("/api/v1/inquiries/", json=payload)
     assert create_res.status_code == 201
 
-    # Fetch dashboard metrics
     response = await client.get("/api/v1/metrics/dashboard")
     assert response.status_code == 200
     data = response.json()

@@ -7,18 +7,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Immutable application settings container loaded from environment variables."""
 
-    # Project metadata
     PROJECT_NAME: str = "Customer Inquiry Manager"
     VERSION: str = "1.0.0"
     ENVIRONMENT: str = Field(default="dev", description="Runtime environment: dev, staging, prod")
     DEBUG: bool = False
 
-    # Server configuration
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     CORS_ORIGINS: List[str] = ["*"]
 
-    # Database connection (SQLite on-disk for local dev, PostgreSQL 16 via asyncpg in cloud/prod)
     DATABASE_URL: str = Field(
         default="sqlite+aiosqlite:///customer_inquiries.db",
         description="Async SQLAlchemy database connection string",
@@ -27,11 +24,9 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT: int = 30
 
-    # AWS Infrastructure & Region
     AWS_REGION: str = Field(default="eu-west-1", description="Target AWS region")
     AWS_DEFAULT_REGION: str = "eu-west-1"
 
-    # Amazon Bedrock Foundation Models (Verified Live 2026 Fleet)
     BEDROCK_MODEL_ID: str = Field(
         default="eu.anthropic.claude-haiku-4-5-20251001-v1:0",
         description="Primary fast Bedrock model ID for triage and classification",
@@ -49,12 +44,10 @@ class Settings(BaseSettings):
         description="When true, bypasses live AWS Bedrock API calls and executes local heuristic triage engine. Automatically defaults to True in 'dev' and False in 'prod'/'staging'.",
     )
 
-    # Amazon Cognito Identity & RBAC
     COGNITO_USER_POOL_ID: Optional[str] = None
     COGNITO_APP_CLIENT_ID: Optional[str] = None
     COGNITO_JWKS_URL: Optional[str] = None
 
-    # Operator Provisioning & Secrets Resolution (Decoupled from code)
     INITIAL_OPERATOR_NAME: str = Field(
         default="Cloud Administrator",
         description="Initial seed administrator full name",
@@ -68,37 +61,29 @@ class Settings(BaseSettings):
         description="Initial seed operator password loaded from environment variable or AWS Secrets Manager",
     )
 
-    # Amazon S3 Multi-Tier Storage
     S3_ATTACHMENTS_BUCKET: str = "customer-inquiry-attachments-dev"
-    S3_PRESIGNED_EXPIRATION_SECONDS: int = 900  # 15 minutes
+    S3_PRESIGNED_EXPIRATION_SECONDS: int = 900
 
-    # Amazon SNS Event Notification Topics
     SNS_ALERTS_TOPIC_ARN: Optional[str] = None
     SNS_CUSTOMER_RECEIPTS_TOPIC_ARN: Optional[str] = None
 
-    # Amazon SQS FIFO Decoupled Ingestion Buffer & Dead-Letter Queue
     SQS_INQUIRIES_QUEUE_URL: Optional[str] = None
     SQS_INQUIRIES_DLQ_URL: Optional[str] = None
     SQS_CONSUMER_ENABLED: bool = True
     SQS_CONSUMER_BATCH_SIZE: int = 10
     SQS_CONSUMER_POLL_INTERVAL_SECONDS: float = 1.0
 
-    # Amazon S3 & SES Inbound Storage
     S3_ATTACHMENTS_BUCKET: Optional[str] = None
     SES_INBOUND_BUCKET_NAME: Optional[str] = None
 
-    # Inbound Omnichannel Webhook Secrets
     TRUSTPILOT_WEBHOOK_SECRET: Optional[str] = "dev-trustpilot-webhook-secret"
     GOOGLE_REVIEWS_WEBHOOK_SECRET: Optional[str] = "dev-google-reviews-webhook-secret"
     STRIPE_WEBHOOK_SECRET: Optional[str] = "dev-stripe-webhook-secret"
 
-    # Telemetry & Distributed Tracing
     XRAY_ENABLED: bool = False
 
-    # Grounding Document Path
     GROUNDING_CONTEXT_PATH: str = "company_profile.json"
 
-    # Inbound Support Email & Company Metadata (Dynamically loaded from company_profile.json)
     SUPPORT_EMAIL: str = Field(
         default="support@company.internal",
         description="Authoritative customer support inbound email address parsed from company profile",
@@ -112,7 +97,6 @@ class Settings(BaseSettings):
         description="Authoritative company domain parsed from company profile",
     )
 
-    # Optional Outbound SMTP Settings (Can be set via env vars or company_profile.json)
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = None
@@ -120,7 +104,6 @@ class Settings(BaseSettings):
     SMTP_FROM_EMAIL: Optional[str] = None
     SMTP_USE_TLS: bool = True
 
-    # Optional Inbound IMAP Poller Settings (Can be set via env vars or company_profile.json)
     IMAP_HOST: Optional[str] = None
     IMAP_PORT: int = 993
     IMAP_USER: Optional[str] = None
@@ -129,7 +112,6 @@ class Settings(BaseSettings):
     INBOUND_EMAIL_POLL_ENABLED: bool = False
     INBOUND_EMAIL_POLL_INTERVAL_SECONDS: int = 5
 
-    # Automated Background SLA Breach Watcher & Executive Escalation Settings
     SLA_WATCHER_ENABLED: bool = True
     SLA_WATCHER_INTERVAL_SECONDS: int = 30
     SLA_TARGET_COMPLIANCE_THRESHOLD: float = 95.0
@@ -140,7 +122,6 @@ class Settings(BaseSettings):
     SLACK_WEBHOOK_URL: Optional[str] = None
     SLACK_NOTIFICATION_POLICY: Literal["CRITICAL_AND_SLA_ONLY", "ALL_INQUIRIES"] = "CRITICAL_AND_SLA_ONLY"
 
-    # Inbound Customer Verification & Identity Policy (Parsed from company_profile.json)
     CUSTOMER_ACCESS_POLICY: Dict[str, Any] = Field(
         default_factory=lambda: {
             "require_registered_account": False,
@@ -151,7 +132,6 @@ class Settings(BaseSettings):
         description="Declarative customer access policy governing whether inquiries must originate from registered accounts",
     )
 
-    # AWS Secrets Manager DB Credentials (Injected dynamically into ECS container)
     DB_CREDENTIALS: Optional[str] = Field(
         default=None,
         description="JSON string injected by AWS ECS from AWS Secrets Manager containing RDS master credentials",
@@ -226,7 +206,6 @@ class Settings(BaseSettings):
                     if "customer_access_policy" in profile_data:
                         self.CUSTOMER_ACCESS_POLICY = profile_data["customer_access_policy"]
                     
-                    # Optional SMTP config from company profile if not already set by env vars
                     smtp_conf = profile_data.get("outbound_email_delivery", {})
                     if not self.SMTP_HOST and smtp_conf.get("smtp_host"):
                         self.SMTP_HOST = smtp_conf["smtp_host"]
@@ -239,7 +218,6 @@ class Settings(BaseSettings):
                     if "use_tls" in smtp_conf:
                         self.SMTP_USE_TLS = bool(smtp_conf["use_tls"])
 
-                    # Optional IMAP config from company profile if not already set by env vars
                     imap_conf = profile_data.get("inbound_email_account", {})
                     if not self.IMAP_HOST and imap_conf.get("imap_host"):
                         self.IMAP_HOST = imap_conf["imap_host"]
@@ -272,5 +250,4 @@ class Settings(BaseSettings):
     )
 
 
-# Singleton settings instance
 settings = Settings()

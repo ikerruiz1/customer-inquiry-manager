@@ -105,17 +105,14 @@ def test_rfc6238_totp_mathematical_precision():
 
     # RFC 6238 test secret
     secret = "JBSWY3DPEHPK3PXP"
-    # Compute current code
     counter = int(time.time() // 30)
     current_code = compute_rfc6238_totp(secret, counter)
     assert len(current_code) == 6
     assert current_code.isdigit()
 
-    # Verify code matches with window
     assert verify_rfc6238_totp(secret, current_code) is True
     # Development bypass code "123456" must always succeed
     assert verify_rfc6238_totp(secret, "123456") is True
-    # Bogus code must fail
     assert verify_rfc6238_totp(secret, "000000") is False
 
 

@@ -26,7 +26,6 @@ class BedrockService:
         self.guardrail_version = settings.BEDROCK_GUARDRAIL_VERSION
         self.grounding_context = self._load_grounding_context()
 
-        # Build resilient Boto3 client configured with retries and adaptive timeouts
         boto_config = Config(
             region_name=self.region,
             retries={"max_attempts": 3, "mode": "adaptive"},
@@ -121,7 +120,6 @@ Schema:
             subsegment.put_metadata("system_prompt_bytes", len(system_prompt), namespace="policy")
         system_prompts = [{"text": system_prompt}]
 
-        # Prepare parameters for Converse API
         converse_params: Dict[str, Any] = {
             "modelId": self.model_id,
             "messages": messages,
@@ -132,7 +130,6 @@ Schema:
             },
         }
 
-        # Attach Amazon Bedrock Guardrail if configured
         if self.guardrail_id:
             converse_params["guardrailConfig"] = {
                 "guardrailIdentifier": self.guardrail_id,
@@ -152,12 +149,10 @@ Schema:
             cost_usd = (input_tokens * 0.0008 / 1000.0) + (output_tokens * 0.004 / 1000.0)
             cost_eur = round(cost_usd * 0.92, 6)
 
-            # Extract output text
             output_message = response.get("output", {}).get("message", {})
             content_blocks = output_message.get("content", [])
             raw_text = content_blocks[0].get("text", "") if content_blocks else ""
 
-            # Clean potential codeblock fences
             cleaned_json = raw_text.strip()
             if cleaned_json.startswith("```"):
                 cleaned_json = re.sub(r"^```(?:json)?\n?", "", cleaned_json)
@@ -248,7 +243,6 @@ Schema:
         raise RuntimeError("Bedrock returned empty content for action draft generation.")
 
 
-# Singleton instance provider
 _bedrock_service_instance: Optional[BedrockService] = None
 
 

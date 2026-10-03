@@ -73,7 +73,6 @@ def package_source(output_zip: str = "source.zip", root_dir: str = ".") -> int:
                 full_path = os.path.join(root, file)
                 rel_path = os.path.relpath(full_path, root_dir)
 
-                # Skip output zip itself
                 if os.path.abspath(full_path) == os.path.abspath(output_zip):
                     continue
 

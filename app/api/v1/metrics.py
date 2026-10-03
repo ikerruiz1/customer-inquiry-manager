@@ -85,20 +85,17 @@ async def get_dashboard_metrics(
         resolved = row.resolved_at
         entities = row.entities or {}
 
-        # 1. Active & P1 count
         if status != "RESOLVED":
             active_count += 1
             if prio == "P1":
                 p1_count += 1
 
-        # 2. SLA Compliance: resolved or deadline in the future
         if sla_deadline:
             if sla_deadline.tzinfo is None:
                 sla_deadline = sla_deadline.replace(tzinfo=timezone.utc)
             if status == "RESOLVED" or sla_deadline >= now:
                 in_bounds_count += 1
 
-        # 3. AI Resolution Acceptance & MTTR
         if status == "RESOLVED":
             resolved_count += 1
             sugg = (row.suggested_response or "").strip()
@@ -119,7 +116,6 @@ async def get_dashboard_metrics(
         cost = float(entities.get("cost_eur", 0.00025)) if isinstance(entities, dict) else 0.00025
         total_cost_eur += cost
 
-        # 5. Distributions
         if dept in dept_counts:
             dept_counts[dept] += 1
         elif dept:

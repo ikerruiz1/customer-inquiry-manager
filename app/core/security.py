@@ -9,7 +9,6 @@ from app.core.config import settings
 
 logger = logging.getLogger("app.core.security")
 
-# HTTP Bearer token scheme for OpenAPI docs
 security_scheme = HTTPBearer(auto_error=False)
 
 # In-memory JWKS cache to minimize network calls to Cognito
@@ -65,7 +64,6 @@ async def get_current_user(
 
     token = credentials.credentials
 
-    # Attempt to verify token with Cognito JWKS
     jwks = await get_cognito_jwks()
     if jwks and "keys" in jwks:
         try:
@@ -121,7 +119,6 @@ def require_roles(allowed_groups: List[str]):
     return role_checker
 
 
-# RBAC Role Dependencies
 require_tier1_agent = require_roles(["Tier1_Agents", "Operations_Managers"])
 require_operations_manager = require_roles(["Operations_Managers"])
 

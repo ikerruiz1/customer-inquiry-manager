@@ -21,7 +21,6 @@ logger = logging.getLogger("app.services.cognito_service")
 
 def compute_rfc6238_totp(secret_b32: str, counter: int) -> str:
     """Compute 6-digit TOTP code using standard RFC 6238 HMAC-SHA1 algorithm."""
-    # Clean secret and add padding if missing
     clean_secret = secret_b32.strip().replace(" ", "").upper()
     missing_padding = len(clean_secret) % 8
     if missing_padding:
@@ -58,13 +57,8 @@ def verify_rfc6238_totp(secret_b32: str, code: str, interval: int = 30, window: 
 
 from app.core.seeder import build_canonical_operator_registry
 
-# In-memory persistent operator registry populated from Single Source of Truth
 _OPERATOR_REGISTRY: Dict[str, Dict[str, Any]] = build_canonical_operator_registry()
-
-# Ephemeral session map for MFA challenge verification
 _MFA_SESSIONS: Dict[str, Dict[str, Any]] = {}
-
-# Tracks first-time MFA enrollment sessions (associate_software_token session -> username)
 _MFA_SETUP_SESSIONS: Dict[str, str] = {}
 
 
@@ -120,10 +114,8 @@ class CognitoService:
         clean_username = username.strip().lower()
 
         if not self.client_id:
-            # Local Dev & Test Registry Validation
             logger.info(f"[Dev Local] Authenticating operator: {clean_username}")
 
-            # Check if user exists in local registry
             operator = _OPERATOR_REGISTRY.get(clean_username)
             if not operator:
                 # Fallback for ad-hoc test usernames
@@ -140,14 +132,12 @@ class CognitoService:
                     role="Tier1_Agent",
                 )
 
-            # Check password
             if operator.get("password") and operator["password"] != password:
                 raise ClientError(
                     {"Error": {"Code": "NotAuthorizedException", "Message": "Incorrect username or password."}},
                     "InitiateAuth",
                 )
 
-            # Check if this is an initial login requiring mandatory password rotation
             if operator.get("must_change_password"):
                 session_id = f"pwd-session-{secrets.token_hex(16)}"
                 _MFA_SESSIONS[session_id] = {
@@ -162,7 +152,6 @@ class CognitoService:
                     "email": operator["email"],
                 }
 
-            # Use operator's established TOTP secret if present, or generate a fresh Base32 secret
             totp_secret = operator.get("totp_secret")
             if not totp_secret:
                 base32_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
@@ -242,11 +231,9 @@ class CognitoService:
                     "RespondToAuthChallenge",
                 )
 
-            # Update operator's password and clear must_change_password flag
             operator["password"] = new_password
             operator["must_change_password"] = False
 
-            # Update SQLite database if present
             try:
                 db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "customer_inquiries.db"))
                 if os.path.exists(db_path):
@@ -257,7 +244,6 @@ class CognitoService:
             except Exception as db_exc:
                 logger.warning(f"Could not persist updated password to SQLite: {db_exc}")
 
-            # Now issue the mandatory MFA challenge with QR code
             totp_secret = operator.get("totp_secret")
             if not totp_secret:
                 base32_alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
@@ -271,7 +257,6 @@ class CognitoService:
                 "totp_secret": totp_secret,
                 "created_at": time.time(),
             }
-            # Clean up password session
             _MFA_SESSIONS.pop(session, None)
 
             otpauth_url = f"otpauth://totp/SupportPortal:{operator['email']}?secret={totp_secret}&issuer=SupportPortal"
@@ -285,7 +270,6 @@ class CognitoService:
                 "email": operator["email"],
             }
 
-        # AWS Cognito Live path
         try:
             resp = self.client.respond_to_auth_challenge(
                 ClientId=self.client_id,
@@ -342,7 +326,6 @@ class CognitoService:
             operator["must_change_password"] = True
             return operator
 
-        # AWS Cognito Live path
         try:
             self.client.admin_create_user(
                 UserPoolId=self.user_pool_id,
@@ -401,7 +384,6 @@ class CognitoService:
                     "RespondToAuthChallenge",
                 )
 
-            # Build signed token containing user claims
             now = int(time.time())
             claims = {
                 "sub": operator["id"] if operator else "00000000-0000-0000-0000-000000000001",
@@ -417,7 +399,6 @@ class CognitoService:
             access_token = jwt.encode(claims, signing_key, algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
             id_token = jwt.encode(claims, signing_key, algorithm="HS256")  # nosemgrep: python.jwt.security.jwt-hardcode.jwt-python-hardcoded-secret
 
-            # Clean up session
             _MFA_SESSIONS.pop(session, None)
 
             return {
@@ -438,7 +419,6 @@ class CognitoService:
             }
 
         try:
-            # Check if this is a first-time MFA enrollment session (from associate_software_token)
             setup_username = _MFA_SETUP_SESSIONS.pop(session, None) or (username.strip().lower() if username else None)
             
             # First attempt: If we have an enrollment session, verify_software_token registers the device

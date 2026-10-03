@@ -130,7 +130,6 @@ class SLABreachWatcherDaemon:
             "compliance_rate": 100.0,
         }
 
-        # 1. Fetch all active inquiries
         stmt = (
             select(Inquiry)
             .options(selectinload(Inquiry.messages))
@@ -150,7 +149,6 @@ class SLABreachWatcherDaemon:
         overdue_inquiries: List[Inquiry] = []
         manager_recipients = await self._resolve_operations_manager_recipients(db)
 
-        # 2. Evaluate each ticket against its SLA deadline
         for inquiry in active_inquiries:
             # If the ticket is in PENDING_CUSTOMER, its SLA clock is frozen
             if inquiry.status == "PENDING_CUSTOMER":
@@ -166,7 +164,6 @@ class SLABreachWatcherDaemon:
                 remaining_seconds = (deadline - now).total_seconds()
                 warning_threshold_seconds = self._compute_warning_threshold_seconds(inquiry.priority)
 
-                # Proactive SLA Warning Check (Proportional 20-25% threshold or configured baseline)
                 if 0 < remaining_seconds <= warning_threshold_seconds:
                     entities = dict(inquiry.entities) if isinstance(inquiry.entities, dict) else {}
                     if not entities.get("sla_warning_alerted", False):
@@ -176,7 +173,6 @@ class SLABreachWatcherDaemon:
 
                         remaining_minutes = max(1, int(remaining_seconds / 60))
 
-                        # 2a. Publish Proactive Alert via SNS
                         warning_dict = {
                             "id": str(inquiry.id),
                             "customer_email": inquiry.customer_email,
@@ -192,7 +188,6 @@ class SLABreachWatcherDaemon:
                         }
                         await sns_service.publish_ops_alert(warning_dict)
 
-                        # 2b. Dispatch Proactive Warning Email to active Operations Managers
                         for mgr_email in manager_recipients:
                             await email_service.send_proactive_sla_warning(
                                 manager_email=mgr_email,
@@ -204,7 +199,6 @@ class SLABreachWatcherDaemon:
                                 department=inquiry.department,
                             )
 
-                        # 2c. Log Audit Entry
                         audit_log = AuditLog(
                             inquiry_id=inquiry.id,
                             agent_id="SYSTEM:SLA_WATCHER",
@@ -222,7 +216,6 @@ class SLABreachWatcherDaemon:
                         )
                         db.add(audit_log)
 
-                        # 2d. Add Internal Note to Conversation Feed
                         short_id = str(inquiry.id)[:8].upper()
                         warning_msg = InquiryMessage(
                             inquiry_id=inquiry.id,
@@ -265,7 +258,6 @@ class SLABreachWatcherDaemon:
                     deadline = deadline.replace(tzinfo=timezone.utc)
                 overdue_minutes = max(1, int((now - deadline).total_seconds() / 60))
 
-                # 3a. Publish Ops Alert via Amazon SNS
                 alert_dict = {
                     "id": str(inquiry.id),
                     "customer_email": inquiry.customer_email,
@@ -281,7 +273,6 @@ class SLABreachWatcherDaemon:
                 }
                 await sns_service.publish_ops_alert(alert_dict)
 
-                # 3b. Dispatch High-Priority Email Escalation to active Operations Managers
                 for mgr_email in manager_recipients:
                     await email_service.send_sla_breach_escalation(
                         manager_email=mgr_email,
@@ -293,7 +284,6 @@ class SLABreachWatcherDaemon:
                         department=inquiry.department,
                     )
 
-                # 3c. Append an immutable AuditLog entry
                 audit_log = AuditLog(
                     inquiry_id=inquiry.id,
                     agent_id="SYSTEM:SLA_WATCHER",
@@ -311,7 +301,6 @@ class SLABreachWatcherDaemon:
                 )
                 db.add(audit_log)
 
-                # 3d. Append Internal System Message to Conversation Thread
                 short_id = str(inquiry.id)[:8].upper()
                 system_msg = InquiryMessage(
                     inquiry_id=inquiry.id,
@@ -335,7 +324,6 @@ class SLABreachWatcherDaemon:
                     f"Overdue: {overdue_minutes}m, Customer: {inquiry.customer_name})"
                 )
 
-        # 4. Check Queue-Wide Compliance Against Target Threshold
         if compliance_rate < self.target_threshold and breached_count > 0:
             should_alert = False
             if self._last_executive_escalation_at is None:
@@ -364,7 +352,6 @@ class SLABreachWatcherDaemon:
                     f"Executive alert dispatched to {', '.join(manager_recipients)}."
                 )
 
-        # Commit all state updates, audit logs, and system notes
         await db.commit()
         return results
 

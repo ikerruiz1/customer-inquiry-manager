@@ -22,7 +22,6 @@ class ResponseStrategyEnum(str, Enum):
     EMPATHETIC_DEFUSING = "EMPATHETIC_DEFUSING"
 
 
-# Semantic alias
 SuggestedStrategyEnum = ResponseStrategyEnum
 
 

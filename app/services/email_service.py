@@ -45,17 +45,14 @@ class EmailService:
         self.support_email = settings.SUPPORT_EMAIL
         self.from_email = settings.SMTP_FROM_EMAIL or settings.SUPPORT_EMAIL
 
-        # SMTP settings
         self.smtp_host = settings.SMTP_HOST
         self.smtp_port = settings.SMTP_PORT
         self.smtp_user = settings.SMTP_USER
         self.smtp_password = settings.SMTP_PASSWORD
         self.smtp_use_tls = settings.SMTP_USE_TLS
 
-        # In-memory outbox for testing, audit inspection, and offline dev mode
         self.outbox: List[Dict[str, Any]] = []
 
-        # Lazy SES client
         self._ses_client = None
 
     def _get_ses_client(self):
@@ -217,7 +214,6 @@ class EmailService:
             except Exception as exc:
                 logger.warning(f"SES delivery bypassed/failed: {exc}. Attempting SMTP fallback.")
 
-        # 2. Try Standard SMTP (if SMTP_HOST is declared, offloaded to executor)
         if self.smtp_host and self.smtp_user and self.smtp_password:
             try:
                 def _send_smtp():
@@ -250,7 +246,6 @@ class EmailService:
             except Exception as exc:
                 logger.warning(f"SMTP delivery failed: {exc}. Falling back to dev logger outbox.")
 
-        # 3. Dev / Test / Offline Fallback (Logs formatted message, records in memory outbox)
         logger.info(
             f"[OUTBOUND EMAIL DISPATCHED] To: {customer_email} | From: {self.from_email} | Action: {action_type} | Subject: {subject}"
         )

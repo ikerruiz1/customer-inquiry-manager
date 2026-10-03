@@ -108,7 +108,6 @@ class SQSService:
                 logger.error(f"Error receiving messages from live SQS: {exc}")
                 return []
         else:
-            # Drain local in-memory queue
             results = []
             while not self._local_queue.empty() and len(results) < max_messages:
                 item = await self._local_queue.get()

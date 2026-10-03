@@ -20,7 +20,6 @@ async def test_sla_breach_watcher_escalates_overdue_p1_ticket(
     email_service = get_email_service()
     email_service.outbox.clear()
 
-    # Seed an open P1 ticket that expired 25 minutes ago
     inquiry = Inquiry(
         channel="EMAIL",
         customer_email="urgent-customer@enterprise.io",
@@ -41,24 +40,20 @@ async def test_sla_breach_watcher_escalates_overdue_p1_ticket(
     db_session.add(inquiry)
     await db_session.commit()
 
-    # Initialize daemon and run single audit cycle with isolated db_session
     daemon = SLABreachWatcherDaemon()
     daemon.manager_email = "ops-manager@company.internal"
     daemon.target_threshold = 95.0
 
     results = await daemon.audit_breaches_and_compliance(db=db_session)
 
-    # Verify audit cycle results
     assert results["breaches_escalated"] == 1
     assert results["compliance_rate"] == 0.0  # 1 ticket total, 1 breached -> 0.0%
     assert results["executive_alert_triggered"] is True  # 0.0% < 95.0%
 
-    # Verify ticket state updated in database
     await db_session.refresh(inquiry)
     assert inquiry.entities.get("sla_breach_alerted") is True
     assert "sla_breached_at" in inquiry.entities
 
-    # Verify AuditLog created
     audit_res = await db_session.execute(
         select(AuditLog).where(
             AuditLog.inquiry_id == inquiry.id,
@@ -71,7 +66,6 @@ async def test_sla_breach_watcher_escalates_overdue_p1_ticket(
     assert audit.reason is not None
     assert "25 minutes overdue" in audit.reason
 
-    # Verify system message added to ticket conversation thread
     msg_res = await db_session.execute(
         select(InquiryMessage).where(
             InquiryMessage.inquiry_id == inquiry.id,
@@ -83,7 +77,6 @@ async def test_sla_breach_watcher_escalates_overdue_p1_ticket(
     assert "AUTOMATED SLA ESCALATION" in system_msg.body
     assert "exceeded its resolution deadline by 25 minutes" in system_msg.body
 
-    # Verify emails dispatched to outbox
     categories = [m.get("category") for m in email_service.outbox]
     assert "SLA_BREACH_ESCALATION" in categories
     assert "COMPLIANCE_THRESHOLD_ALERT" in categories
@@ -99,7 +92,6 @@ async def test_sla_breach_watcher_ignores_paused_sla_tickets(
     email_service = get_email_service()
     email_service.outbox.clear()
 
-    # Seed ticket whose original deadline is in the past, but status is PENDING_CUSTOMER
     inquiry = Inquiry(
         channel="WEB_FORM",
         customer_email="waiting-client@saas.com",
@@ -181,19 +173,17 @@ async def test_sla_breach_watcher_enforces_executive_escalation_cooldown(
     await db_session.commit()
 
     daemon = SLABreachWatcherDaemon()
-    daemon.cooldown_seconds = 900  # 15 minutes
+    daemon.cooldown_seconds = 900
 
-    # First cycle: should trigger executive compliance alert
     res1 = await daemon.audit_breaches_and_compliance(db=db_session)
     assert res1["compliance_rate"] == 50.0
     assert res1["executive_alert_triggered"] is True
     assert len(email_service.outbox) == 1
 
-    # Second cycle immediately after: should be suppressed by cooldown
     res2 = await daemon.audit_breaches_and_compliance(db=db_session)
     assert res2["compliance_rate"] == 50.0
     assert res2["executive_alert_triggered"] is False
-    assert len(email_service.outbox) == 1  # No duplicate email sent
+    assert len(email_service.outbox) == 1
 
 
 @pytest.mark.asyncio
@@ -205,7 +195,6 @@ async def test_sla_watcher_triggers_proactive_warning_within_threshold(
     email_service = get_email_service()
     email_service.outbox.clear()
 
-    # Seed an open ticket expiring in 8 minutes (within 10m proactive warning threshold)
     inquiry = Inquiry(
         channel="EMAIL",
         customer_email="vip-partner@enterprise.io",
@@ -230,17 +219,14 @@ async def test_sla_watcher_triggers_proactive_warning_within_threshold(
     daemon.warning_minutes = 10
     results = await daemon.audit_breaches_and_compliance(db=db_session)
 
-    # 1. Verify audit results
     assert results["proactive_warnings_issued"] == 1
     assert results["breaches_escalated"] == 0
     assert results["compliance_rate"] == 100.0  # Still technically in-bounds
 
-    # 2. Verify ticket entities updated
     await db_session.refresh(inquiry)
     assert inquiry.entities.get("sla_warning_alerted") is True
     assert "sla_warning_alerted_at" in inquiry.entities
 
-    # 3. Verify AuditLog created
     audit_res = await db_session.execute(
         select(AuditLog).where(
             AuditLog.inquiry_id == inquiry.id,
@@ -253,7 +239,6 @@ async def test_sla_watcher_triggers_proactive_warning_within_threshold(
     assert audit.reason is not None
     assert "impending SLA deadline" in audit.reason
 
-    # 4. Verify system message in ticket thread
     msg_res = await db_session.execute(
         select(InquiryMessage).where(
             InquiryMessage.inquiry_id == inquiry.id,
@@ -264,15 +249,13 @@ async def test_sla_watcher_triggers_proactive_warning_within_threshold(
     assert msg is not None
     assert "PROACTIVE SLA WARNING" in msg.body
 
-    # 5. Verify email dispatched
     assert len(email_service.outbox) == 1
     assert email_service.outbox[0]["category"] == "PROACTIVE_SLA_WARNING"
     assert "SLA Breach Imminent" in email_service.outbox[0]["subject"]
 
-    # 6. Verify idempotency on second run
     results2 = await daemon.audit_breaches_and_compliance(db=db_session)
     assert results2["proactive_warnings_issued"] == 0
-    assert len(email_service.outbox) == 1  # No duplicate alert
+    assert len(email_service.outbox) == 1
 
 
 @pytest.mark.asyncio
@@ -281,7 +264,6 @@ async def test_operations_audit_sla_lifecycle_endpoint(
     db_session: AsyncSession,
 ):
     """Verify the decoupled POST /api/v1/operations/audit-sla-lifecycle endpoint."""
-    # 1. Test normal execution
     response = await client.post("/api/v1/operations/audit-sla-lifecycle")
     assert response.status_code == 200
     data = response.json()
@@ -291,7 +273,6 @@ async def test_operations_audit_sla_lifecycle_endpoint(
     assert "proactive_warnings_issued" in data
     assert "compliance_rate" in data
 
-    # 2. Test execution with invalid auth token
     invalid_auth_res = await client.post(
         "/api/v1/operations/audit-sla-lifecycle",
         headers={"X-Operational-Token": "bad-token-secret"},

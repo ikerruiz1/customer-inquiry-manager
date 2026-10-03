@@ -76,11 +76,9 @@ class SNSService:
             "remaining_minutes": inquiry_dict.get("remaining_minutes"),
         }
 
-        # 1. Dispatch to Slack Webhook if configured (Local / Hybrid / Direct ChatOps)
         if settings.SLACK_WEBHOOK_URL:
             await self._dispatch_slack_webhook(alert_payload)
 
-        # 2. Publish to Amazon SNS Topic (AWS Cloud-Native Fan-Out)
         if not self.alerts_topic_arn:
             logger.info(
                 f"[Mock SNS ChatOps] Critical Alert: {priority} Incident {inquiry_dict.get('id')} - {inquiry_dict.get('subject')}"

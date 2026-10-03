@@ -43,8 +43,8 @@ class MessageSenderEnum(str, Enum):
 class MessageActionEnum(str, Enum):
     """Dispatch action taken by support operator."""
     REPLY = "REPLY"
-    REQUEST_INFO = "REQUEST_INFO"  # Transitions ticket to PENDING_CUSTOMER & pauses SLA
-    INTERNAL_NOTE = "INTERNAL_NOTE"  # Private team note
+    REQUEST_INFO = "REQUEST_INFO"
+    INTERNAL_NOTE = "INTERNAL_NOTE"
 
 
 class InquiryMessageCreate(BaseModel):
@@ -150,7 +150,6 @@ class InquiryResponse(BaseModel):
     body: str
     status: InquiryStatusEnum
 
-    # Triage Attributes
     department: DepartmentEnum
     priority: PriorityEnum
     urgency: int
@@ -159,7 +158,6 @@ class InquiryResponse(BaseModel):
     churn_risk: bool
     entities: Dict[str, Any]
 
-    # Copilot Drafting & Explainable AI
     suggested_strategy: Optional[ResponseStrategyEnum] = None
     suggested_response: Optional[str] = None
     agent_copilot_notes: Optional[str] = None
@@ -170,7 +168,6 @@ class InquiryResponse(BaseModel):
     cost_eur: Optional[float] = None
 
 
-    # Temporal SLAs (ITIL v4 Compliant)
     sla_deadline_at: datetime
     sla_remaining_seconds: Optional[int] = None
     first_response_deadline_at: Optional[datetime] = None
@@ -178,14 +175,12 @@ class InquiryResponse(BaseModel):
     sla_paused_at: Optional[datetime] = None
     total_paused_seconds: int = 0
 
-    # Ownership
     assigned_agent_id: Optional[str] = None
     claimed_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
     resolution_text: Optional[str] = None
     human_reviewed: bool
 
-    # Conversation thread
     messages: Optional[List[InquiryMessageResponse]] = None
 
     created_at: datetime

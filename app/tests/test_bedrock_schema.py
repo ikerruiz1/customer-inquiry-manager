@@ -45,15 +45,12 @@ def test_bedrock_urgency_rating_bounds():
         "reasoning_summary": "Summary",
     }
 
-    # Test lower bound violation (< 1)
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate({**base_data, "urgency_rating": 0})
 
-    # Test upper bound violation (> 5)
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate({**base_data, "urgency_rating": 6})
 
-    # Test valid bounds (1 and 5)
     valid_low = BedrockTriageOutput.model_validate({**base_data, "urgency_rating": 1})
     valid_high = BedrockTriageOutput.model_validate({**base_data, "urgency_rating": 5})
     assert valid_low.urgency_rating == 1
@@ -74,15 +71,12 @@ def test_bedrock_impact_rating_bounds():
         "reasoning_summary": "Summary",
     }
 
-    # Test lower bound violation (< 1)
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate({**base_data, "impact_rating": 0})
 
-    # Test upper bound violation (> 3)
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate({**base_data, "impact_rating": 4})
 
-    # Test valid bounds (1 and 3)
     valid_low = BedrockTriageOutput.model_validate({**base_data, "impact_rating": 1})
     valid_high = BedrockTriageOutput.model_validate({**base_data, "impact_rating": 3})
     assert valid_low.impact_rating == 1
@@ -102,14 +96,12 @@ def test_bedrock_confidence_and_sentiment_ranges():
         "reasoning_summary": "Summary",
     }
 
-    # Confidence score violations
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate({**base_data, "confidence_score": -0.1, "sentiment_score": 0.0})
 
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate({**base_data, "confidence_score": 1.1, "sentiment_score": 0.0})
 
-    # Sentiment score violations
     with pytest.raises(ValidationError):
         BedrockTriageOutput.model_validate({**base_data, "confidence_score": 0.8, "sentiment_score": -1.1})
 

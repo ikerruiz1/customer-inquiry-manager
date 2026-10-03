@@ -1,6 +1,3 @@
-# ==============================================================================
-# Multi-Stage Build: Stage 1 - Frontend Client Compilation
-# ==============================================================================
 FROM node:20-slim AS frontend-builder
 WORKDIR /frontend
 COPY frontend/package*.json ./
@@ -8,9 +5,6 @@ RUN npm ci
 COPY frontend/ ./
 RUN npm run build
 
-# ==============================================================================
-# Production Python Runtime Stage
-# ==============================================================================
 FROM python:3.12-slim AS runner
 
 # Prevent Python from writing .pyc files and enable unbuffered logging
@@ -21,7 +15,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Install minimal OS dependencies for network & TLS verification
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
@@ -31,12 +24,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -g 10001 appgroup && \
     useradd -u 10001 -g appgroup -s /sbin/nologin -m -d /home/appuser appuser
 
-# Install Python application dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application source code and runtime configuration
 # company_profile.json is local configuration and is not tracked in Git.
 # Fall back to the committed template so a clean checkout always builds.
 COPY company_profile*.json ./
@@ -46,18 +37,13 @@ RUN if [ ! -f company_profile.json ] && [ -f company_profile.example.json ]; the
 COPY app/ ./app/
 COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
-# Ensure correct file permissions for non-root execution
 RUN chown -R appuser:appgroup /app /home/appuser
 
-# Switch to non-privileged user
 USER appuser
 
-# Expose internal ASGI listener port
 EXPOSE 8000
 
-# Native container health check targeting the liveness probe
 HEALTHCHECK --interval=20s --timeout=5s --start-period=15s --retries=3 \
     CMD curl -f http://127.0.0.1:8000/health/live || exit 1
 
-# Graceful ASGI startup with Uvicorn
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--timeout-graceful-shutdown", "10"]
