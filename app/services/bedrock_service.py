@@ -142,7 +142,6 @@ Schema:
             response = self.client.converse(**converse_params)
             latency_ms = max(1, int((time.perf_counter() - start_time) * 1000))
 
-            # Extract token usage and compute FinOps unit cost
             usage = response.get("usage", {})
             input_tokens = usage.get("inputTokens", 0)
             output_tokens = usage.get("outputTokens", 0)

@@ -27,7 +27,6 @@ async def get_dashboard_metrics(
     """Compute real-time KPI metrics and chart distributions from database records."""
     now = datetime.now(timezone.utc)
 
-    # Fetch inquiries with required telemetry fields
     stmt = select(
         Inquiry.id,
         Inquiry.status,
@@ -112,7 +111,6 @@ async def get_dashboard_metrics(
                 total_mttr_seconds += diff
                 resolved_with_time_count += 1
 
-        # 4. FinOps Cost
         cost = float(entities.get("cost_eur", 0.00025)) if isinstance(entities, dict) else 0.00025
         total_cost_eur += cost
 

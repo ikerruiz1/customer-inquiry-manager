@@ -55,7 +55,6 @@ class SNSService:
         event_type = inquiry_dict.get("event_type", "incident.escalated")
         priority = inquiry_dict.get("priority", "P3")
 
-        # Initial ingestion alerts:
         # If SLACK_NOTIFICATION_POLICY is "ALL_INQUIRIES", allow all priorities (P1, P2, P3, P4).
         # Otherwise (enterprise default "CRITICAL_AND_SLA_ONLY"), restrict initial ingestion to P1/P2.
         # SLA warning and breach lifecycle events are alerted across all priorities when deadlines approach or breach.

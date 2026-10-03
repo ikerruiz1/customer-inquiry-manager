@@ -67,19 +67,19 @@ def calculate_sla(
     if urgency >= 4 and impact >= 3:
         priority = "P1"
         resolution_hours = 1
-        frt_minutes = 15  # 15 minutes First Response Time for critical outages
+        frt_minutes = 15
     elif urgency >= 3 and impact >= 2:
         priority = "P2"
         resolution_hours = 4
-        frt_minutes = 60  # 1 hour First Response Time
+        frt_minutes = 60
     elif urgency >= 2 and impact >= 1:
         priority = "P3"
         resolution_hours = 12
-        frt_minutes = 240  # 4 hours First Response Time
+        frt_minutes = 240
     else:
         priority = "P4"
         resolution_hours = 24
-        frt_minutes = 480  # 8 hours First Response Time
+        frt_minutes = 480
 
     # 2. Churn Risk Priority Escalation Guardrail
     if churn_risk and priority in ["P3", "P4"]:
@@ -159,7 +159,6 @@ async def process_and_persist_inquiry(
         policy_notice = "[SECURITY POLICY WARNING] Inbound sender not found in verified account registry. Verify identity before releasing account telemetry."
         agent_notes = f"{policy_notice}\n\n{agent_notes}" if agent_notes else policy_notice
 
-    # Infer customer full name from email body sign-off if present, or fallback to inquiry_in.customer_name
     resolved_customer_name = extract_customer_name_from_body(
         body=inquiry_in.body,
         fallback_name=inquiry_in.customer_name,
@@ -190,7 +189,6 @@ async def process_and_persist_inquiry(
     db.add(inquiry)
     await db.flush()
 
-    # Automatically create initial opening InquiryMessage from customer
     opening_msg = InquiryMessage(
         inquiry_id=inquiry.id,
         sender_type="CUSTOMER",
@@ -263,7 +261,6 @@ async def list_inquiries(
     if priority:
         base_query = base_query.where(Inquiry.priority == priority.value)
 
-    # Count total
     count_stmt = select(func.count()).select_from(base_query.subquery())
     total_res = await db.execute(count_stmt)
     total = total_res.scalar_one()
@@ -331,7 +328,6 @@ async def claim_inquiry(
     updated_id = result.scalar_one_or_none()
 
     if not updated_id:
-        # Check if inquiry exists or was claimed by another agent
         check_stmt = select(Inquiry).where(Inquiry.id == inquiry_id)
         check_res = await db.execute(check_stmt)
         existing = check_res.scalar_one_or_none()
@@ -342,7 +338,6 @@ async def claim_inquiry(
             detail=f"Inquiry is already claimed by agent {existing.assigned_agent_id}",
         )
 
-    # Audit log creation
     audit = AuditLog(
         inquiry_id=inquiry_id,
         agent_id=agent_id,
@@ -399,7 +394,6 @@ async def resolve_inquiry(
     inquiry.resolved_at = now
     inquiry.human_reviewed = True
 
-    # Audit log
     audit = AuditLog(
         inquiry_id=inquiry_id,
         agent_id=agent_id,
@@ -410,7 +404,6 @@ async def resolve_inquiry(
     )
     db.add(audit)
 
-    # Append resolution message to thread
     resolution_msg = InquiryMessage(
         inquiry_id=inquiry.id,
         sender_type="AGENT",
@@ -527,11 +520,9 @@ async def post_inquiry_message(
 
     is_internal = payload.action == MessageActionEnum.INTERNAL_NOTE
 
-    # If first external response from human agent, record first_responded_at
     if not is_internal and inquiry.first_responded_at is None:
         inquiry.first_responded_at = now
 
-    # Handle REQUEST_INFO: Pause SLA and switch status to PENDING_CUSTOMER
     if payload.action == MessageActionEnum.REQUEST_INFO:
         prev_status = inquiry.status
         inquiry.status = "PENDING_CUSTOMER"
@@ -581,7 +572,6 @@ async def post_inquiry_message(
     await db.flush()
     await db.refresh(msg)
 
-    # Dispatch real outbound email notification if customer-facing (REPLY or REQUEST_INFO)
     if not is_internal and payload.action in [MessageActionEnum.REPLY, MessageActionEnum.REQUEST_INFO]:
         try:
             email_svc = get_email_service()
@@ -619,7 +609,6 @@ async def post_customer_reply(
     if not inquiry:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Inquiry not found")
 
-    # If ticket was in PENDING_CUSTOMER, unpause and extend SLA deadline by paused duration
     if inquiry.status == "PENDING_CUSTOMER":
         paused_at = inquiry.sla_paused_at or inquiry.updated_at
         if paused_at.tzinfo is None:

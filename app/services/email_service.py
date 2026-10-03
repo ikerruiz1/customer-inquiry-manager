@@ -177,12 +177,10 @@ class EmailService:
             "body": plain_text,
         }
 
-        # 1. Try Amazon SES v2 (non-blocking thread execution with timeout guardrails).
         #    SES v2 is required because the SES v1 SendEmail API cannot emit custom RFC 5322 headers.
         ses_client = self._get_ses_client()
         if ses_client:
             try:
-                # Use dynamically resolved verified identity for Amazon SES envelope sender
                 active_sender = self._resolve_verified_sender()
                 loop = asyncio.get_running_loop()
                 ses_res = await loop.run_in_executor(
