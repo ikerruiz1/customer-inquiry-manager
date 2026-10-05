@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 C_RESET="\033[0m"
 C_BOLD="\033[1m"
 C_GREEN="\033[32m"
@@ -125,26 +127,32 @@ PY
 # destroyed and its outputs are unknown, abort the whole graph. Falling back to a targeted
 # destroy of whatever the state still holds keeps the teardown finishable.
 managed_resource_addresses() {
-    python3 - <<'PY'
-import json
-try:
-    state = json.load(open("terraform/environments/dev/terraform.tfstate"))
-except (OSError, ValueError):
-    raise SystemExit(0)
-for resource in state.get("resources", []):
-    if resource.get("mode") != "managed":
-        continue
-    for instance in resource.get("instances", []):
-        address = "%s.%s.%s" % (resource["module"], resource["type"], resource["name"])
-        key = instance.get("index_key")
-        if key is not None:
-            # count instances address as [0], for_each instances require the quoted ["key"] form.
-            if isinstance(key, bool) or not isinstance(key, int):
-                address += '["%s"]' % key
-            else:
-                address += "[%s]" % key
-        print(address)
-PY
+    # terraform state list resolves through whichever backend is configured. Parsing the local
+    # terraform.tfstate returns nothing once the state is remote.
+    (cd "${REPO_ROOT}/terraform/environments/dev" && terraform state list 2>/dev/null) || true
+}
+
+# Returns the -backend-config arguments for the environment state bucket, or prints nothing when
+# terraform/bootstrap has never been applied and no remote backend exists yet.
+remote_state_backend_args() {
+    local region="$1"
+    local bucket key
+
+    [ -d "${REPO_ROOT}/terraform/bootstrap" ] || return 0
+
+    (cd "${REPO_ROOT}/terraform/bootstrap" && terraform init -input=false -reconfigure >/dev/null 2>&1) || return 0
+
+    bucket=$(cd "${REPO_ROOT}/terraform/bootstrap" && terraform output -raw bucket_name 2>/dev/null || echo "")
+    key=$(cd "${REPO_ROOT}/terraform/bootstrap" && terraform output -raw state_key 2>/dev/null || echo "")
+
+    if [ -z "${bucket}" ] || [ -z "${key}" ]; then
+        return 0
+    fi
+
+    printf '%s\n' \
+        "-backend-config=bucket=${bucket}" \
+        "-backend-config=key=${key}" \
+        "-backend-config=region=${region}"
 }
 
 echo -e "${C_BOLD}1. Emptying project S3 buckets...${C_RESET}"
@@ -186,7 +194,16 @@ if [ -f "company_profile.json" ]; then
     if [ -n "$S_MAIL" ]; then EXTRA_VARS+=("-var=support_email=$S_MAIL"); fi
 fi
 
-cd terraform/environments/dev
+cd "${REPO_ROOT}/terraform/environments/dev"
+
+# The environment state lives in the remote S3 backend, so teardown must attach to that backend
+# before destroying. A destroy run against an unconfigured local backend would report success
+# without touching the real resources.
+mapfile -t BACKEND_CONFIG < <(remote_state_backend_args "${AWS_REGION}")
+if [ "${#BACKEND_CONFIG[@]}" -gt 0 ]; then
+    terraform init -reconfigure -input=false "${BACKEND_CONFIG[@]}"
+fi
+
 if terraform destroy -auto-approve "${EXTRA_VARS[@]}"; then
     echo -e "  ${C_GREEN}terraform destroy completed.${C_RESET}"
 else
@@ -199,7 +216,7 @@ else
         fi
     done < <(managed_resource_addresses)
 fi
-cd ../../..
+cd "${REPO_ROOT}"
 
 echo ""
 echo -e "${C_BOLD}4. Verifying no billable residue...${C_RESET}"
@@ -210,6 +227,27 @@ if [ -n "${REMAINING// /}" ]; then
     record_failure "Terraform state still tracks managed resources"
 else
     echo -e "  ${C_GREEN}Terraform state tracks 0 managed resources.${C_RESET}"
+fi
+
+# The state bucket is destroyed only after the environment is empty, because deleting it first
+# would orphan the state that still describes the resources. Object versions and delete markers
+# are purged beforehand so the bucket destroy is not blocked by its own noncurrent versions.
+if [ -d "${REPO_ROOT}/terraform/bootstrap" ]; then
+    if (cd "${REPO_ROOT}/terraform/bootstrap" && terraform init -input=false -reconfigure >/dev/null 2>&1); then
+        STATE_BUCKET=$(cd "${REPO_ROOT}/terraform/bootstrap" && terraform output -raw bucket_name 2>/dev/null || echo "")
+        if [ -n "${STATE_BUCKET}" ]; then
+            echo -e "  Removing Terraform state bucket '${STATE_BUCKET}'..."
+            purge_bucket "${STATE_BUCKET}"
+        fi
+
+        if (cd "${REPO_ROOT}/terraform/bootstrap" && terraform destroy -auto-approve -input=false); then
+            echo -e "  ${C_GREEN}Remote state backend destroyed.${C_RESET}"
+        else
+            record_failure "terraform bootstrap destroy failed, the state bucket may still exist"
+        fi
+    else
+        record_failure "terraform bootstrap init failed, the state bucket may still exist"
+    fi
 fi
 
 # Log groups created implicitly by CodeBuild and Container Insights are not tracked by

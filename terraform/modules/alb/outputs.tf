@@ -47,3 +47,7 @@ output "target_group_blue_arn_suffix" {
   description = "ARN suffix of the Blue Target Group for ALB RequestCountPerTarget auto-scaling"
   value       = aws_lb_target_group.blue.arn_suffix
 }
+output "zone_id" {
+  description = "Hosted zone ID of the ALB, required for a Route 53 alias record"
+  value       = aws_lb.main.zone_id
+}

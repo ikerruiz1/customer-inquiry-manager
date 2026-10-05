@@ -45,3 +45,9 @@ variable "ses_verified_sender_email" {
   description = "SES-verified email address or identity used for outbound customer notifications. Defaults to support_email if not overridden."
   default     = ""
 }
+
+variable "manage_app_record" {
+  type        = bool
+  description = "Let Terraform manage the app.<domain> alias record pointing at the load balancer. Set to false if the same record already exists outside Terraform."
+  default     = true
+}

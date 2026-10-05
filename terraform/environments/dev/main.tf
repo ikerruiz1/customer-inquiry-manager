@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.7.0"
+  required_version = ">= 1.10.0"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -131,10 +131,14 @@ module "cicd" {
 
 
 module "route53" {
-  source       = "../../modules/route53"
-  project_name = var.project_name
-  environment  = var.environment
-  domain_name  = var.domain_name
+  source            = "../../modules/route53"
+  project_name      = var.project_name
+  environment       = var.environment
+  domain_name       = var.domain_name
+  alb_dns_name      = module.alb.dns_name
+  alb_zone_id       = module.alb.zone_id
+  app_record_name   = "app.${var.domain_name}."
+  manage_app_record = var.manage_app_record
 }
 
 module "ses" {

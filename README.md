@@ -64,11 +64,11 @@ Dashed links in the diagrams are cryptographic and policy transitions (KMS, WAF,
 
 | # | Flow | What happens |
 | :--- | :--- | :--- |
-| 1 | `Developer → Conftest (OPA Rego)` | `conftest test` evaluates HCL against Rego policies: 3-tier subnet isolation, no NAT Gateways, mandatory KMS CMK, FinOps tags. Fails fast before anything else runs. |
+| 1 | `Developer → Conftest (OPA Rego)` | `conftest test` evaluates HCL against Rego policies: 3-tier subnet isolation, no NAT Gateways, mandatory KMS CMK, Multi-AZ enforcement, FinOps tags. Fails fast before anything else runs. |
 | 2 | `Developer → KICS (Checkmarx)` | `kics scan -p terraform/` runs 2,000+ security queries against CIS AWS, SOC 2 and PCI-DSS misconfigurations. |
-| 3 | `Developer → Terraform` | `init/plan/apply` with federated IAM credentials provisions the VPC, ECS, RDS, SQS, Cognito and the 11 endpoints. |
-| 4 | `Terraform → S3 (Remote Backend)` | State is stored over HTTPS in S3 with DynamoDB distributed locking, eliminating concurrent-apply races. |
-| 5 | `Terraform → KMS` | *(dashed)* State is envelope-encrypted at rest with a Customer Managed Key on annual rotation. |
+| 3 | `Developer → Terraform` | `terraform/bootstrap` provisions the remote state bucket first, then `init/plan/apply` with federated IAM credentials provisions the VPC, ECS, RDS, SQS, Cognito and the 11 endpoints. |
+| 4 | `Terraform → S3 (Remote Backend)` | State is stored over HTTPS in S3 with S3-native conditional-write locking (`use_lockfile = true`), eliminating concurrent-apply races without provisioning a separate lock table. |
+| 5 | `Terraform → KMS` | *(dashed)* State is envelope-encrypted at rest with the AWS managed `aws/s3` key, which avoids the per-month cost of a customer managed key. |
 
 ### Block 2 — CI/CD & DevSecOps (6–15)
 
@@ -183,10 +183,12 @@ customer-inquiry-manager/
 │   ├── public/themes/           # 8 background themes
 │   └── package.json
 ├── terraform/
+│   ├── bootstrap/               # S3 remote state bucket, applied before the environment
 │   ├── environments/dev/        # root composition
 │   ├── modules/                 # alb, cicd, cognito, ecs, iam, monitoring, rds,
 │   │                            # route53, s3, security_groups, ses, sqs, vpc (13)
-│   └── policy/                  # 6 Conftest Rego policies (no NAT, private DB, S3, IAM, ingress, container)
+│   └── policy/                  # 7 Conftest Rego policies (no NAT, private DB, S3, IAM, ingress,
+│                                # container, high availability)
 ├── scripts/                     # setup-dev, deploy-infra, teardown-infra (.ps1/.sh),
 │                                # package_source, provision_operator, seed_inquiries,
 │                                # k6-load-test, test_concurrency_race, test_fargate_performance
@@ -319,6 +321,8 @@ Resolve-DnsName -Name "your-company.tech" -Type NS -Server 8.8.8.8
 
 The deployment reads `company_profile.json` for the domain and support address, so edit that file before running this step. It applies the 13 Terraform modules, packages the source into `source.zip`, uploads it to S3 and triggers CodePipeline. CodeBuild runs the quality gates, builds the image and pushes to ECR, then CodePipeline performs the ECS rolling update.
 
+Both entry points apply `terraform/bootstrap` first and wire `terraform/environments/dev` to that bucket through `-backend-config`, so state survives an interrupted run and concurrent applies serialise on the S3 lock file.
+
 ACM and SES both validate DNS records, so the pre-flight step must complete before the full deploy or certificate issuance will time out.
 
 ## Teardown
@@ -327,7 +331,7 @@ ACM and SES both validate DNS records, so the pre-flight step must complete befo
 .\scripts\teardown-infra.ps1               # ./scripts/teardown-infra.sh
 ```
 
-The script empties S3 buckets and ECR repositories, drains running tasks and destroys the stack in dependency order. Teardown leaves no billable residue: no NAT gateways, no EC2, no ECR, no RDS, no S3, no Cognito, no Lambda, and an empty Terraform state.
+The script empties S3 buckets and ECR repositories, drains running tasks and destroys the stack in dependency order. It attaches to the remote backend first so the destroy sees the real resources, and destroys `terraform/bootstrap` last, once the environment state is empty. Teardown leaves no billable residue: no NAT gateways, no EC2, no ECR, no RDS, no S3, no Cognito, no Lambda, and no state bucket.
 
 Verify:
 
@@ -338,6 +342,7 @@ aws ec2 describe-nat-gateways --region eu-west-1 --query "NatGateways[].NatGatew
 aws s3api list-buckets --region eu-west-1 --query "Buckets[?starts_with(Name,'customer-inquiry-manager')].Name"
 aws rds describe-db-instances --region eu-west-1 --query "DBInstances[?contains(DBInstanceIdentifier,'customer-inquiry')].DBInstanceIdentifier"
 terraform -chdir=terraform/environments/dev state list
+aws s3api head-bucket --bucket customer-inquiry-manager-dev-tfstate --region eu-west-1   # expect NotFound
 ```
 
 ## SLA engine

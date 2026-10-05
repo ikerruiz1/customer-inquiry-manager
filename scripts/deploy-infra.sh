@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 C_RESET="\033[0m"
 C_BOLD="\033[1m"
 C_GREEN="\033[32m"
@@ -136,16 +138,55 @@ support_email      = "${ACTIVE_EMAIL}"
 EOF
 echo -e "${C_GREEN}✓ Synchronized terraform/environments/dev/terraform.tfvars${C_RESET}\n"
 
+# The environment state is stored remotely so an interrupted run does not leave resources
+# untracked in a discarded local file. This provisions the state bucket first and populates
+# BACKEND_ARGS with the -backend-config arguments that wire terraform/environments/dev to it.
+# The bucket is versioned and encrypted with the AWS managed aws/s3 key, which costs nothing per
+# month, so the backend adds no residual cost once teardown removes it.
+BACKEND_ARGS=()
+
+provision_state_backend() {
+    local region="$1"
+
+    echo -e "\n${C_BOLD}${C_YELLOW}Provisioning remote Terraform state backend...${C_RESET}"
+
+    cd "${REPO_ROOT}/terraform/bootstrap"
+    terraform init -input=false
+    terraform apply -auto-approve -input=false \
+        -var="aws_region=${region}" \
+        -var="project_name=customer-inquiry-manager" \
+        -var="environment=dev"
+
+    local bucket key
+    bucket=$(terraform output -raw bucket_name)
+    key=$(terraform output -raw state_key)
+
+    if [[ -z "${bucket}" || -z "${key}" ]]; then
+        echo -e "${C_BOLD}${C_RED}terraform output returned no state bucket in terraform/bootstrap${C_RESET}" >&2
+        exit 1
+    fi
+
+    BACKEND_ARGS=(
+        "-backend-config=bucket=${bucket}"
+        "-backend-config=key=${key}"
+        "-backend-config=region=${region}"
+    )
+
+    echo -e "  ${C_GREEN}✓${C_RESET} remote state bucket '${C_CYAN}${bucket}${C_RESET}' is ready"
+    cd "${REPO_ROOT}"
+}
+
 # Pre-provisioning Route 53 breaks circular dependency between registrar delegation and ACM/SES validation timeouts
 if [ "$DNS_ONLY" = true ]; then
     echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
     echo -e "${C_BOLD}${C_CYAN}  Route 53 DNS Setup: Provisioning Public Hosted Zone...${C_RESET}"
     echo -e "${C_BOLD}${C_CYAN}==============================================================================${C_RESET}"
-    cd terraform/environments/dev
-    terraform init
+    provision_state_backend "${AWS_REGION}"
+    cd "${REPO_ROOT}/terraform/environments/dev"
+    terraform init -reconfigure -input=false "${BACKEND_ARGS[@]}"
     terraform apply "-target=module.route53" "-target=module.ses" -auto-approve -var="domain_name=${ACTIVE_DOMAIN}" -var="support_email=${ACTIVE_EMAIL}"
     RAW_NS=$(terraform output -json route53_name_servers)
-    cd ../../../
+    cd "${REPO_ROOT}"
 
     echo -e "\n${C_BOLD}${C_GREEN}==============================================================================${C_RESET}"
     echo -e "${C_BOLD}${C_GREEN}  Route 53 Hosted Zone Created${C_RESET}"
@@ -167,9 +208,10 @@ for i, s in enumerate(ns, 1):
 fi
 
 echo -e "${C_BOLD}3. Provisioning AWS infrastructure with Terraform...${C_RESET}"
-cd terraform/environments/dev
+provision_state_backend "${AWS_REGION}"
+cd "${REPO_ROOT}/terraform/environments/dev"
 
-terraform init
+terraform init -reconfigure -input=false "${BACKEND_ARGS[@]}"
 terraform validate
 terraform apply -auto-approve -var="domain_name=${ACTIVE_DOMAIN}" -var="support_email=${ACTIVE_EMAIL}"
 
@@ -180,7 +222,7 @@ PIPELINE_BUCKET=$(terraform output -raw pipeline_artifacts_bucket_name)
 PIPELINE_NAME=$(terraform output -raw codepipeline_name)
 RAW_NS=$(terraform output -json route53_name_servers)
 
-cd ../../../
+cd "${REPO_ROOT}"
 
 echo -e "\n${C_GREEN}✓ Infrastructure provisioned successfully.${C_RESET}"
 echo -e "  - ALB Public DNS:  ${C_CYAN}http://${ALB_DNS}${C_RESET}"

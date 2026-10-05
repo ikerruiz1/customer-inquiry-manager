@@ -26,6 +26,12 @@ variable "instance_class" {
   default     = "db.t4g.micro"
 }
 
+variable "multi_az" {
+  type        = bool
+  description = "Deploy a synchronous standby instance in a second Availability Zone"
+  default     = true
+}
+
 variable "db_name" {
   type        = string
   description = "Default PostgreSQL database name"

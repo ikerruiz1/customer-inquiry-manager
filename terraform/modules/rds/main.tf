@@ -61,7 +61,11 @@ resource "aws_db_instance" "main" {
   parameter_group_name   = aws_db_parameter_group.main.name
 
   publicly_accessible = false
-  multi_az            = false
+
+  # Synchronous standby in a second Availability Zone. `false` permits a single-AZ instance,
+  # which is only acceptable for throwaway demo environments: a zone failure then becomes a
+  # 45 to 60 second outage on a workload whose SLA targets are P1/P2.
+  multi_az = var.multi_az
 
   auto_minor_version_upgrade = true
   copy_tags_to_snapshot      = true

@@ -11,6 +11,9 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Captured before any Push-Location so nested calls can resolve repository relative paths.
+$RepoRoot = (Get-Location).Path
+
 $companyName = "Customer Inquiry Manager"
 if (Test-Path "company_profile.json") {
     try {
@@ -41,6 +44,54 @@ if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command terraform -ErrorAction SilentlyContinue)) {
     Write-Host "Error: Terraform is not installed or not in PATH." -ForegroundColor Red
     exit 1
+}
+
+# The environment state is stored remotely so an interrupted run does not leave resources
+# untracked in a discarded local file. This provisions the state bucket first, then returns the
+# -backend-config arguments that wire terraform/environments/dev to it. The bucket is versioned
+# and encrypted with the AWS managed aws/s3 key, which costs nothing per month, so the backend
+# adds no residual cost once teardown removes it.
+function Initialize-RemoteStateBackend {
+    param(
+        [Parameter(Mandatory = $true)][string]$Region,
+        [string]$Project = "customer-inquiry-manager",
+        [string]$Tier = "dev"
+    )
+
+    Write-Host ""
+    Write-Host "Provisioning remote Terraform state backend..." -ForegroundColor Yellow
+
+    Push-Location (Join-Path $RepoRoot "terraform/bootstrap")
+    try {
+        terraform init -input=false
+        if ($LASTEXITCODE -ne 0) {
+            throw "terraform init failed in terraform/bootstrap with exit code $LASTEXITCODE"
+        }
+
+        terraform apply -auto-approve -input=false `
+            -var="aws_region=$Region" `
+            -var="project_name=$Project" `
+            -var="environment=$Tier"
+        if ($LASTEXITCODE -ne 0) {
+            throw "terraform apply failed in terraform/bootstrap with exit code $LASTEXITCODE"
+        }
+
+        $cfg = terraform output -json backend_config | ConvertFrom-Json
+        if (-not $cfg -or [string]::IsNullOrWhiteSpace($cfg.bucket)) {
+            throw "terraform output backend_config returned no bucket name in terraform/bootstrap"
+        }
+
+        Write-Host "  OK: remote state bucket '$($cfg.bucket)' is ready" -ForegroundColor Green
+
+        return @(
+            "-backend-config=bucket=$($cfg.bucket)",
+            "-backend-config=key=$($cfg.key)",
+            "-backend-config=region=$($cfg.region)"
+        )
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 $awsAccount = (aws sts get-caller-identity --query "Account" --output text).Trim()
@@ -184,7 +235,8 @@ if ($DnsOnly) {
     Write-Host "==============================================================================" -ForegroundColor Cyan
     Push-Location "terraform/environments/dev"
     try {
-        terraform init
+        $backendArgs = Initialize-RemoteStateBackend -Region $targetRegion
+        terraform init -reconfigure -input=false @backendArgs
         if ($LASTEXITCODE -ne 0) {
             throw "terraform init failed with exit code $LASTEXITCODE"
         }
@@ -260,7 +312,8 @@ if ($DnsOnly) {
 Write-Host "3. Provisioning AWS infrastructure with Terraform..." -ForegroundColor Yellow
 Push-Location "terraform/environments/dev"
 try {
-    terraform init
+    $backendArgs = Initialize-RemoteStateBackend -Region $targetRegion
+    terraform init -reconfigure -input=false @backendArgs
     if ($LASTEXITCODE -ne 0) { throw "terraform init failed with exit code $LASTEXITCODE" }
 
     terraform validate

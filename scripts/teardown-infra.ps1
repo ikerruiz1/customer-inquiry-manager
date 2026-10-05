@@ -1,5 +1,8 @@
 $ErrorActionPreference = "Continue"
 
+# Captured before any Push-Location so nested calls resolve repository relative paths.
+$RepoRoot = (Get-Location).Path
+
 $companyName = "Customer Inquiry Manager"
 if (Test-Path "company_profile.json") {
     try {
@@ -191,16 +194,67 @@ function Get-ManagedResourceAddresses {
     return $addresses
 }
 
+# Reads the managed resource addresses from terraform state list, which resolves the state
+# through whatever backend is currently configured. Parsing terraform.tfstate directly would
+# return nothing once the state is remote.
+function Get-ManagedResourceAddressesFromStateList {
+    $addresses = @()
+    $listed = terraform state list 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $listed) { return $addresses }
+    foreach ($line in $listed) {
+        if (-not [string]::IsNullOrWhiteSpace($line)) { $addresses += $line.Trim() }
+    }
+    return $addresses
+}
+
+# Returns the -backend-config arguments for the environment state bucket, or an empty array when
+# terraform/bootstrap has never been applied and no remote backend exists yet.
+function Get-RemoteStateBackendArgs {
+    param([Parameter(Mandatory = $true)][string]$Region)
+
+    $bootstrapPath = Join-Path $RepoRoot "terraform/bootstrap"
+    if (-not (Test-Path $bootstrapPath)) { return @() }
+
+    Push-Location $bootstrapPath
+    try {
+        terraform init -input=false -reconfigure 2>$null
+        if ($LASTEXITCODE -ne 0) { return @() }
+
+        $cfg = terraform output -json backend_config 2>$null | ConvertFrom-Json
+        if (-not $cfg -or [string]::IsNullOrWhiteSpace($cfg.bucket)) { return @() }
+
+        return @(
+            "-backend-config=bucket=$($cfg.bucket)",
+            "-backend-config=key=$($cfg.key)",
+            "-backend-config=region=$($cfg.region)"
+        )
+    }
+    catch {
+        return @()
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+# The environment state lives in the remote S3 backend, so teardown must attach to that backend
+# before destroying. A destroy run against an unconfigured local backend would report success
+# without touching the real resources.
 Push-Location "terraform/environments/dev"
 try {
+    $envBackendArgs = Get-RemoteStateBackendArgs -Region $awsRegion
+    if ($envBackendArgs.Count -gt 0) {
+        terraform init -reconfigure -input=false @envBackendArgs
+        if ($LASTEXITCODE -ne 0) { throw "terraform init against the remote backend failed with exit code $LASTEXITCODE" }
+    }
+
     terraform destroy -auto-approve @extraVars
     $destroyExitCode = $LASTEXITCODE
 
     if ($destroyExitCode -ne 0) {
         Write-Host ""
         Write-Host "  terraform destroy failed, retrying the remaining resources individually." -ForegroundColor Yellow
-        $statePath = Join-Path (Get-Location) "terraform.tfstate"
-        $pending = Get-ManagedResourceAddresses -StatePath $statePath
+        $pending = Get-ManagedResourceAddressesFromStateList
         foreach ($address in $pending) {
             Write-Host "    Targeting $address" -ForegroundColor Cyan
             terraform destroy -auto-approve -refresh=false -input=false -target="$address" @extraVars 2>&1 |
@@ -217,13 +271,44 @@ Write-Host ""
 Write-Host "4. Verifying no billable residue..." -ForegroundColor Yellow
 Push-Location "terraform/environments/dev"
 try {
-    $remaining = Get-ManagedResourceAddresses -StatePath (Join-Path (Get-Location) "terraform.tfstate")
+    $remaining = Get-ManagedResourceAddressesFromStateList
     if ($remaining.Count -gt 0) {
         Write-Host "  $($remaining.Count) managed resources still tracked:" -ForegroundColor Red
         foreach ($address in $remaining) { Write-Host "    $address" -ForegroundColor Red }
         $failures.Add("Terraform state still tracks $($remaining.Count) managed resources")
     } else {
         Write-Host "  Terraform state tracks 0 managed resources." -ForegroundColor Green
+    }
+}
+finally {
+    Pop-Location
+}
+
+# The state bucket is destroyed only after the environment is empty, because deleting it first
+# would orphan the state that still describes the resources. Versions and delete markers are
+# purged beforehand so the bucket destroy is not blocked by its own noncurrent versions.
+Push-Location (Join-Path $RepoRoot "terraform/bootstrap")
+try {
+    terraform init -input=false -reconfigure
+    if ($LASTEXITCODE -eq 0) {
+        $stateBucket = (terraform output -raw bucket_name 2>$null)
+        if (-not [string]::IsNullOrWhiteSpace($stateBucket)) {
+            Write-Host "  Removing Terraform state bucket '$stateBucket'..." -ForegroundColor Yellow
+            Remove-BucketContents -Bucket $stateBucket -Region $awsRegion
+        }
+
+        terraform destroy -auto-approve -input=false
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  Terraform bootstrap destroy reported an error." -ForegroundColor Red
+            $failures.Add("terraform bootstrap destroy failed, the state bucket may still exist")
+        }
+        else {
+            Write-Host "  Remote state backend destroyed." -ForegroundColor Green
+        }
+    }
+    else {
+        Write-Host "  terraform bootstrap init failed, skipping state bucket removal." -ForegroundColor Red
+        $failures.Add("terraform bootstrap init failed, the state bucket may still exist")
     }
 }
 finally {
