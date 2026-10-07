@@ -36,6 +36,7 @@ EXCLUDE_FILES = {
     "source.zip",
     "terraform.tfstate",
     "terraform.tfstate.backup",
+    "terraform.tfvars",
     ".env",
     ".env.local",
     ".env.production",

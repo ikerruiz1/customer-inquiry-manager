@@ -6,13 +6,6 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-try:
-    from app.services.cognito_service import get_cognito_service, _OPERATOR_REGISTRY
-except ImportError as err:
-    print(f"Error loading application services: {err}")
-    sys.exit(1)
-
-
 def generate_secure_password(length: int = 14) -> str:
     lower = "abcdefghijkmnopqrstuvwxyz"
     upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -33,6 +26,12 @@ def generate_secure_password(length: int = 14) -> str:
 
 
 def provision_local_operator(name: str, email: str, role: str, custom_password: str = None):
+    try:
+        from app.services.cognito_service import get_cognito_service, _OPERATOR_REGISTRY
+    except ImportError as err:
+        print(f"Error loading application services: {err}")
+        sys.exit(1)
+
     password = custom_password or generate_secure_password()
     cognito = get_cognito_service()
     

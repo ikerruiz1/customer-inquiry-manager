@@ -41,6 +41,7 @@ def packaged_entries(tmp_path_factory):
         "AGENTS.md",
         "customer_inquiries.db",
         "source.zip",
+        "terraform/environments/dev/terraform.tfvars",
     ],
 )
 def test_local_secrets_are_not_packaged(packaged_entries, excluded):

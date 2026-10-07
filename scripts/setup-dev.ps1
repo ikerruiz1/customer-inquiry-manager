@@ -63,7 +63,12 @@ if (-not (Test-Path "company_profile.json") -and (Test-Path "company_profile.exa
 }
 
 Write-Host ""
-Write-Host "3. Configuring environment and administrator..." -ForegroundColor Yellow
+Write-Host "3. Installing backend dependencies..." -ForegroundColor Yellow
+.\.venv\Scripts\python.exe -m pip install -q -r requirements.txt
+Write-Host "  OK: Dependencies installed." -ForegroundColor Green
+
+Write-Host ""
+Write-Host "4. Configuring environment and administrator..." -ForegroundColor Yellow
 if (-not (Test-Path ".env") -and (Test-Path ".env.example")) {
     Copy-Item ".env.example" ".env"
     Write-Host "  OK: Created .env configuration from .env.example template." -ForegroundColor Green
@@ -135,11 +140,6 @@ if (Test-Path ".env") {
 
 .\.venv\Scripts\python.exe scripts/provision_operator.py --name $activeOpName --email $activeOpEmail --role $activeOpRole --password $activeOpPassword > $null
 Write-Host "  OK: Created local administrator account '$activeOpEmail' ($activeOpRole)." -ForegroundColor Green
-
-Write-Host ""
-Write-Host "4. Installing backend dependencies..." -ForegroundColor Yellow
-.\.venv\Scripts\python.exe -m pip install -q -r requirements.txt
-Write-Host "  OK: Dependencies installed." -ForegroundColor Green
 
 Write-Host ""
 Write-Host "5. Running automated tests..." -ForegroundColor Yellow

@@ -61,7 +61,12 @@ if [ ! -f "company_profile.json" ] && [ -f "company_profile.example.json" ]; the
     echo -e "  ${C_GREEN}✓ Initialized company_profile.json from company_profile.example.json${C_RESET}"
 fi
 
-echo -e "\n${C_BOLD}${C_YELLOW}3. Configuring environment and administrator...${C_RESET}"
+echo -e "\n${C_BOLD}${C_YELLOW}3. Installing backend dependencies...${C_RESET}"
+./.venv/bin/pip install -q --upgrade pip
+./.venv/bin/pip install -q -r requirements.txt
+echo -e "  ${C_GREEN}  OK: Dependencies installed.${C_RESET}"
+
+echo -e "\n${C_BOLD}${C_YELLOW}4. Configuring environment and administrator...${C_RESET}"
 if [ ! -f ".env" ] && [ -f ".env.example" ]; then
     cp .env.example .env
     echo -e "  ${C_GREEN}✓ Created .env configuration from .env.example template.${C_RESET}"
@@ -112,11 +117,6 @@ fi
 
 ./.venv/bin/python scripts/provision_operator.py --name "${ACTIVE_OP_NAME}" --email "${ACTIVE_OP_EMAIL}" --role "${ACTIVE_OP_ROLE}" --password "${ACTIVE_OP_PASSWORD}" >/dev/null
 echo -e "  ${C_GREEN}  OK: Created local administrator account '${ACTIVE_OP_EMAIL}' (${ACTIVE_OP_ROLE}).${C_RESET}"
-
-echo -e "\n${C_BOLD}${C_YELLOW}4. Installing backend dependencies...${C_RESET}"
-./.venv/bin/pip install -q --upgrade pip
-./.venv/bin/pip install -q -r requirements.txt
-echo -e "  ${C_GREEN}  OK: Dependencies installed.${C_RESET}"
 
 echo -e "\n${C_BOLD}${C_YELLOW}5. Running automated tests...${C_RESET}"
 ./.venv/bin/pytest app/tests/ -q
