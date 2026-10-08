@@ -1,6 +1,6 @@
 # Customer Inquiry Manager
 
-Customer inquiry ingestion, AI triage and human-in-the-loop ticket resolution on AWS. FastAPI backend, React operations console, ECS Fargate, RDS PostgreSQL, Bedrock.
+Automatically routes and triages customer inquiries from emails, web forms, and webhooks. Uses AWS Bedrock to extract urgency, sentiment, and key details, calculates SLA deadlines deterministically, and prepares response drafts for agents to review before sending.
 
 ## Architecture
 
